@@ -21,6 +21,8 @@ There was no existing code in this repository to preserve. The scaffold preserve
 - `src/dataService.js`: all Supabase/local-demo persistence and analytics assembly.
 - `src/weeklyGeneratorService.js`: deterministic weekly programme generator.
 - `src/questions.js`: initial static TARA/TSA question-bank seed.
+- `src/questionBank.generated.js`: generated 800-question TSA/TARA bank used by practice.
+- `src/questionBankManifest.generated.js`: generated counts, years, types and patterns for filters.
 - `src/methodologies.js`: reusable coaching methodologies by official question type.
 - `src/supabaseClient.js`: Supabase client bootstrap.
 - `supabase/migrations/001_initial_schema.sql`: database schema, indexes, triggers and RLS.

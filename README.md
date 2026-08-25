@@ -24,7 +24,10 @@ Do not commit service-role keys or other secrets.
 The first version includes:
 
 - email magic-link sign-in
-- 5-question TARA mini-sets
+- 800 imported TSA/TARA Section 1 questions from 2008-2022 plus specimen
+- 5-question TARA mini-sets with paper-year/type/pattern filters
+- smart coverage practice prioritising unseen and weak questions
+- lazy-loaded visual crops for diagram/table/chart questions
 - methodology-first coaching reports
 - persistent attempts/responses
 - TARA analytics

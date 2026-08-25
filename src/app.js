@@ -1,5 +1,6 @@
 import { bootstrap, getSession, signIn, signOut, saveAttempt, updateTask, createProgramme, addAcademicResult, addJournalEntry, addReasoningSession, saveWeeklyReview, addInterviewSession, updateProfile, saveTaraErrorAnalysis } from './dataService.js';
 import { questions } from './questions.js';
+import { questionBankManifest } from './questionBankManifest.generated.js';
 import { methodologyFor } from './methodologies.js';
 import { createProgrammeDraft } from './weeklyGeneratorService.js';
 
@@ -12,7 +13,7 @@ const state = {
   practice: null,
   draft: null,
   reviewAttemptId: null,
-  taraFilters: { family: 'all', type: 'all', pattern: 'all' },
+  taraFilters: { year: 'all', family: 'all', type: 'all', pattern: 'all' },
   preferences: { minutes: 180, workload: 'standard', schoolWeek: 'normal', priority: 'none' }
 };
 
@@ -96,7 +97,7 @@ function dashboardHtml() {
     </header>
     <section class="grid six">
       ${card('This Week', `${percent(done, tasks.length)}% complete`, `${data.programme?.weekly_focus || 'No programme yet.'}<br>${remaining.slice(0,2).map((t) => `<b>${t.title}</b>`).join('<br>') || 'Generate a programme to begin.'}`)}
-      ${card('TARA Mastery', `${data.tara.overallAccuracy}% accuracy`, `Coverage: ${coveragePercent()}% of bank<br>Strongest: ${data.tara.strongestType?.name || 'Not enough data'}<br>Weakest: ${data.tara.weakestType?.name || 'Not enough data'}<br><button data-action="start-smart" title="Prioritise unseen questions, then weak questions">Smart coverage set</button>`)}
+      ${card('TARA Mastery', `${data.tara.overallAccuracy}% accuracy`, `${questionBankManifest.totalQuestions} questions · ${questionBankManifest.visualQuestionCount} with visuals<br>Coverage: ${coveragePercent()}% of bank<br>Strongest: ${data.tara.strongestType?.name || 'Not enough data'}<br>Weakest: ${data.tara.weakestType?.name || 'Not enough data'}<br><button data-action="start-smart" title="Prioritise unseen questions, then weak questions">Smart coverage set</button>`)}
       ${card('A-Level Progress', `${data.subjects.length} subjects`, data.subjects.map((s) => `${s.name}: ${s.predicted_grade || 'Not set'}`).join('<br>'))}
       ${card('E&M Exploration', `${data.journal.length} entries`, data.journal[0]?.title || 'Add a structured journal entry.')}
       ${card('Oxford Readiness', '', Object.entries(data.readiness).map(([k,v]) => `${k}: <b>${v.label}</b>`).join('<br>'))}
@@ -147,7 +148,7 @@ function taraHtml() {
   if (!state.practice) return `<header class="top"><div><p class="eyebrow">TARA Practice</p><h2>5-question methodology set</h2></div><div class="actions"><button data-action="start-smart" title="Prioritise unseen questions, then weak questions">Smart coverage set</button><button class="ghost" data-action="start-tara" title="Start a filtered 5-question practice set">Filtered random set</button></div></header>${taraFilterHtml()}<section class="grid">${card('Question bank coverage', `${coveragePercent()}%`, `${answeredQuestionKeys().size}/${questions.length} questions seen at least once`)}${card('Current filter match', `${filteredQuestions().length}`, 'Questions available for the selected filters')}</section><section class="panel"><h3>How smart coverage works</h3><p class="muted">Smart coverage chooses unseen questions first, then questions from weak types and patterns, then mastered questions only when needed.</p></section>`;
   if (state.practice.report) return reportHtml();
   const q = state.practice.set[state.practice.index];
-  return `<section class="panel question"><p class="eyebrow">${q.paper_year} Q${q.question_number} · ${q.official_question_type} · ${q.reasoning_pattern}</p><h2>${highlight(q.question_text, q.relevant_question_highlights)}</h2>${Object.entries(q.answer_options).map(([k,v])=>`<button class="option ${state.practice.answers[q.id]===k?'selected':''}" data-answer="${k}"><b>${k}</b> ${v}</button>`).join('')}<div class="actions"><button class="ghost" data-action="prev-question">Previous</button><button class="ghost" data-action="next-question">Next</button><button data-action="submit-tara">Submit set</button></div></section>`;
+  return `<section class="panel question"><p class="eyebrow">${q.paper_year} Q${q.question_number} · ${q.official_question_type} · ${q.reasoning_pattern}</p><h2>${highlight(q.question_text, q.relevant_question_highlights)}</h2>${visualHtml(q)}${Object.entries(q.answer_options).map(([k,v])=>`<button class="option ${state.practice.answers[q.id]===k?'selected':''}" data-answer="${k}"><b>${k}</b> ${v}</button>`).join('')}<div class="actions"><button class="ghost" data-action="prev-question">Previous</button><button class="ghost" data-action="next-question">Next</button><button data-action="submit-tara">Submit set</button></div></section>`;
 }
 
 function reportHtml() {
@@ -158,7 +159,7 @@ function reportHtml() {
 
 function coachingHtml(q, selected) {
   const correct = selected === q.correct_answer;
-  return `<article class="panel coaching"><p class="eyebrow">Question ${q.question_number} · ${q.official_question_type} · ${q.reasoning_pattern}</p><h3>${correct ? 'Correct' : 'Incorrect'} · Your answer ${selected || 'blank'} · Official answer ${q.correct_answer}</h3><h4>A. Standard methodology</h4><ol>${methodologyFor(q.official_question_type).map((m)=>`<li>${m}</li>`).join('')}</ol><h4>B. Full original question</h4><p>${highlight(q.question_text, q.relevant_question_highlights)}</p><h4>C. Highlight decisive wording</h4><p>${q.relevant_question_highlights.map((h)=>`<mark>${h}</mark>`).join(' ')}</p><h4>D. What the wording should trigger</h4><p>${triggerFor(q)}</p><h4>E. Apply the method</h4><p>${q.methodology} ${q.explanation}</p><h4>F. Trap to avoid</h4><p>Do not choose an option that sounds related but fails the exact task: ${q.official_question_type}.</p><h4>G. Method to carry forward</h4><p>Carry the pattern forward: ${q.reasoning_pattern} means you should slow down and name the logical job before calculating or choosing.</p></article>`;
+  return `<article class="panel coaching"><p class="eyebrow">Question ${q.question_number} · ${q.official_question_type} · ${q.reasoning_pattern}</p><h3>${correct ? 'Correct' : 'Incorrect'} · Your answer ${selected || 'blank'} · Official answer ${q.correct_answer}</h3><h4>A. Standard methodology</h4><ol>${methodologyFor(q.official_question_type).map((m)=>`<li>${m}</li>`).join('')}</ol><h4>B. Full original question</h4><p>${highlight(q.question_text, q.relevant_question_highlights)}</p>${visualHtml(q)}<h4>C. Highlight decisive wording</h4><p>${q.relevant_question_highlights.map((h)=>`<mark>${h}</mark>`).join(' ') || '<span class="muted">No extracted highlight yet. Use the question stem and numerical constraints as the first clues.</span>'}</p><h4>D. What the wording should trigger</h4><p>${triggerFor(q)}</p><h4>E. Apply the method</h4><p>${q.methodology} ${q.explanation}</p><h4>F. Trap to avoid</h4><p>Do not choose an option that sounds related but fails the exact task: ${q.official_question_type}.</p><h4>G. Method to carry forward</h4><p>Carry the pattern forward: ${q.reasoning_pattern} means you should slow down and name the logical job before calculating or choosing.</p></article>`;
 }
 
 function analyticsHtml() {
@@ -204,7 +205,7 @@ function profileHtml() {
 function taraFilterHtml() {
   const types = unique(questions.map((q) => q.official_question_type));
   const patterns = unique(questions.map((q) => q.reasoning_pattern));
-  return `<section class="panel"><h3>Build a focused set</h3><form class="form-grid" data-action="tara-filters"><label>Area<select name="family"><option value="all">All</option><option value="Critical Reasoning" ${sel(state.taraFilters.family,'Critical Reasoning')}>Critical Reasoning</option><option value="Problem Solving" ${sel(state.taraFilters.family,'Problem Solving')}>Problem Solving</option></select></label><label>Official type<select name="type"><option value="all">All types</option>${types.map((type)=>`<option value="${escapeAttr(type)}" ${sel(state.taraFilters.type,type)}>${type}</option>`).join('')}</select></label><label>Reasoning pattern<select name="pattern"><option value="all">All patterns</option>${patterns.map((pattern)=>`<option value="${escapeAttr(pattern)}" ${sel(state.taraFilters.pattern,pattern)}>${pattern}</option>`).join('')}</select></label><button>Apply filters</button></form></section>`;
+  return `<section class="panel"><h3>Build a focused set</h3><form class="form-grid" data-action="tara-filters"><label>Paper year<select name="year"><option value="all">All years</option>${questionBankManifest.years.map((year)=>`<option value="${escapeAttr(year)}" ${sel(state.taraFilters.year,year)}>${year}</option>`).join('')}</select></label><label>Area<select name="family"><option value="all">All</option><option value="Critical Reasoning" ${sel(state.taraFilters.family,'Critical Reasoning')}>Critical Reasoning</option><option value="Problem Solving" ${sel(state.taraFilters.family,'Problem Solving')}>Problem Solving</option></select></label><label>Official type<select name="type"><option value="all">All types</option>${types.map((type)=>`<option value="${escapeAttr(type)}" ${sel(state.taraFilters.type,type)}>${type}</option>`).join('')}</select></label><label>Reasoning pattern<select name="pattern"><option value="all">All patterns</option>${patterns.map((pattern)=>`<option value="${escapeAttr(pattern)}" ${sel(state.taraFilters.pattern,pattern)}>${pattern}</option>`).join('')}</select></label><button>Apply filters</button></form></section>`;
 }
 
 function sessionHistoryHtml() {
@@ -240,6 +241,11 @@ function bars(rows) {
   return rows.length ? rows.map((r)=>`<div class="bar-row"><span>${r.name}</span><b>${r.accuracy}%</b><div class="bar"><span style="width:${r.accuracy}%"></span></div></div>`).join('') : '<p class="muted">Complete practice to build this view.</p>';
 }
 
+function visualHtml(q) {
+  if (!q.visuals?.length) return '';
+  return `<div class="question-visuals">${q.visuals.map((visual)=>`<figure><img src="${visual.src}" alt="${escapeAttr(visual.alt)}" loading="lazy"><figcaption>${visual.alt}</figcaption></figure>`).join('')}</div>`;
+}
+
 function trend(rows) {
   return rows.length ? `<div class="trend">${rows.map((row)=>`<div><span style="height:${Math.max(8,row.value)}%"></span><small>${row.value}%</small></div>`).join('')}</div>` : '<p class="muted">Complete several sessions to see the trend.</p>';
 }
@@ -263,6 +269,7 @@ function startSmartTara() {
 
 function filteredQuestions() {
   return questions.filter((q) =>
+    (state.taraFilters.year === 'all' || String(q.paper_year) === state.taraFilters.year) &&
     (state.taraFilters.family === 'all' || q.family === state.taraFilters.family) &&
     (state.taraFilters.type === 'all' || q.official_question_type === state.taraFilters.type) &&
     (state.taraFilters.pattern === 'all' || q.reasoning_pattern === state.taraFilters.pattern)

@@ -19,6 +19,10 @@ Open Supabase SQL Editor and run:
 
 The migration creates the app tables, indexes, updated-at triggers, grants and Row Level Security policies.
 
+If `001_initial_schema.sql` has already been run, run only the incremental migrations added later, in order. At the moment that means:
+
+`supabase/migrations/002_question_bank_and_parent_links.sql`
+
 ## 3. Configure Auth URLs
 
 In Supabase:

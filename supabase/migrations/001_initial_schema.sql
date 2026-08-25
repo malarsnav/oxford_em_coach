@@ -45,7 +45,7 @@ create table if not exists public.student_parent_links (
 create table if not exists public.attempts (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references auth.users(id) on delete cascade,
-  paper_year integer,
+  paper_year text,
   set_name text,
   score integer not null,
   total integer not null,
@@ -59,7 +59,7 @@ create table if not exists public.responses (
   id uuid primary key default gen_random_uuid(),
   attempt_id uuid not null references public.attempts(id) on delete cascade,
   user_id uuid not null references auth.users(id) on delete cascade,
-  paper_year integer,
+  paper_year text,
   question_number integer,
   section text,
   question_type text,
@@ -254,6 +254,9 @@ create table if not exists public.tara_error_analysis (
   created_at timestamptz default now(),
   updated_at timestamptz default now()
 );
+
+alter table public.attempts alter column paper_year type text using paper_year::text;
+alter table public.responses alter column paper_year type text using paper_year::text;
 
 create index if not exists idx_attempts_user_completed on public.attempts(user_id, completed_at desc);
 create index if not exists idx_account_roles_user on public.account_roles(user_id, role);
