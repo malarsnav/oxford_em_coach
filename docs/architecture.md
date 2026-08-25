@@ -20,10 +20,12 @@ There was no existing code in this repository to preserve. The scaffold preserve
 - `src/app.js`: UI composition, navigation and event handling.
 - `src/dataService.js`: all Supabase/local-demo persistence and analytics assembly.
 - `src/weeklyGeneratorService.js`: deterministic weekly programme generator.
+- `src/aLevelTopicPlan.js`: rotating and weakness-aware A-Level topic plan used by weekly programmes.
 - `src/questions.js`: initial static TARA/TSA question-bank seed.
 - `src/questionBank.generated.js`: generated 800-question TSA/TARA bank used by practice.
 - `src/questionBankManifest.generated.js`: generated counts, years, types and patterns for filters.
-- `src/methodologies.js`: reusable coaching methodologies by official question type.
+- `src/methodologies.js`: reusable coaching methodologies by TARA sub-type.
+- `src/tagTaxonomy.js`: normalized TARA type/sub-type taxonomy.
 - `src/supabaseClient.js`: Supabase client bootstrap.
 - `supabase/migrations/001_initial_schema.sql`: database schema, indexes, triggers and RLS.
 
@@ -44,6 +46,8 @@ The migration creates persistent tables for:
 - role and student-parent link tables for a future parent/coach login
 
 The current app still treats the signed-in user as the active student. Parent/coach access is intentionally staged: `student_parent_links` records who may eventually view a student's summary data, while private reflections remain excluded unless `can_view_reflections` is explicitly enabled.
+
+`academic_topics` powers the A-Level topic mastery tracker. Students can mark topics as weak, developing, secure or strong; weak/developing topics feed the weekly programme generator.
 
 ## Readiness Model
 

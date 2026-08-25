@@ -100,3 +100,6 @@ Current production-safe state:
 - No scheduled email is sent yet.
 
 Scheduled 6am email delivery should be added with a Supabase Edge Function or another trusted scheduled backend. GitHub Pages cannot run scheduled jobs by itself.
+
+The first Edge Function scaffold is in `supabase/functions/daily-parent-digest/index.ts`.
+Setup notes are in `docs/parent-digest-edge-function.md`.

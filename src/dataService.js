@@ -1,4 +1,4 @@
-import { hasSupabaseConfig, supabase } from './supabaseClient.js';
+import { supabase } from './supabaseClient.js';
 import { normalizeResponseTags } from './tagTaxonomy.js';
 
 const localKey = 'oxford-em-coach-demo';
@@ -22,7 +22,7 @@ export async function signOut() {
 }
 
 export async function bootstrap(user) {
-  if (!hasSupabaseConfig) return localBootstrap();
+  if (!supabase) return localBootstrap();
   await ensureProfile(user);
   await seedSubjects(user.id);
   await seedMilestones(user.id);
@@ -42,7 +42,7 @@ export async function bootstrap(user) {
 
 export async function saveAttempt(user, set, responses, startedAt) {
   const score = responses.filter((r) => r.is_correct).length;
-  if (!hasSupabaseConfig) {
+  if (!supabase) {
     const db = readLocal();
     const attempt = {
       id: crypto.randomUUID(),
@@ -77,7 +77,7 @@ export async function saveAttempt(user, set, responses, startedAt) {
 export async function updateTask(user, task, patch) {
   const completedAt = patch.status === 'completed' ? new Date().toISOString() : patch.status ? null : task.completed_at;
   const updatedAt = new Date().toISOString();
-  if (!hasSupabaseConfig) {
+  if (!supabase) {
     const db = readLocal();
     db.weekly_tasks = db.weekly_tasks.map((item) => item.id === task.id ? { ...item, ...patch, completed_at: completedAt, updated_at: updatedAt } : item);
     writeLocal(db);
@@ -89,7 +89,7 @@ export async function updateTask(user, task, patch) {
 
 export async function updateProfile(user, patch) {
   const row = { ...patch, user_id: user.id };
-  if (!hasSupabaseConfig) {
+  if (!supabase) {
     const db = readLocal();
     db.user_profiles = [{ ...(db.user_profiles?.[0] || {}), ...row, id: db.user_profiles?.[0]?.id || crypto.randomUUID() }];
     writeLocal(db);
@@ -105,7 +105,7 @@ export async function updateProfile(user, patch) {
 }
 
 export async function createProgramme(user, draft, replaceCurrent = false) {
-  if (!hasSupabaseConfig) {
+  if (!supabase) {
     const db = readLocal();
     if (replaceCurrent) db.weekly_programmes = db.weekly_programmes.map((p) => p.is_active ? { ...p, is_active: false, archived_at: new Date().toISOString() } : p);
     const programme = { ...draft.programme, id: crypto.randomUUID(), user_id: user.id, is_active: true, version: 1 };
@@ -128,7 +128,7 @@ export async function addAcademicResult(user, payload) {
   const score = Number(payload.score || 0);
   const maxScore = Number(payload.max_score || 100);
   const row = { ...payload, user_id: user.id, percentage: maxScore ? Math.round((score / maxScore) * 100) : 0 };
-  if (!hasSupabaseConfig) {
+  if (!supabase) {
     const db = readLocal();
     db.academic_results.push({ ...row, id: crypto.randomUUID() });
     writeLocal(db);
@@ -138,9 +138,45 @@ export async function addAcademicResult(user, payload) {
   if (error) throw error;
 }
 
+export async function addAcademicTopic(user, payload) {
+  const row = {
+    user_id: user.id,
+    subject_id: payload.subject_id,
+    topic_name: payload.topic_name,
+    mastery_status: payload.mastery_status || 'developing',
+    confidence: Number(payload.confidence || 3),
+    notes: payload.notes || null,
+    last_assessed_at: payload.last_assessed_at || today()
+  };
+  if (!supabase) {
+    const db = readLocal();
+    db.academic_topics.push({ ...row, id: crypto.randomUUID(), created_at: new Date().toISOString(), updated_at: new Date().toISOString() });
+    writeLocal(db);
+    return;
+  }
+  const { error } = await supabase.from('academic_topics').insert(row);
+  if (error) throw error;
+}
+
+export async function updateAcademicTopic(user, topic, patch) {
+  const row = {
+    ...patch,
+    confidence: patch.confidence ? Number(patch.confidence) : topic.confidence,
+    last_assessed_at: patch.mastery_status || patch.confidence ? today() : topic.last_assessed_at
+  };
+  if (!supabase) {
+    const db = readLocal();
+    db.academic_topics = db.academic_topics.map((item) => item.id === topic.id ? { ...item, ...row, updated_at: new Date().toISOString() } : item);
+    writeLocal(db);
+    return;
+  }
+  const { error } = await supabase.from('academic_topics').update(row).eq('id', topic.id).eq('user_id', user.id);
+  if (error) throw error;
+}
+
 export async function addJournalEntry(user, payload) {
   const row = { ...payload, user_id: user.id, topic_tags: splitTags(payload.topic_tags) };
-  if (!hasSupabaseConfig) {
+  if (!supabase) {
     const db = readLocal();
     db.journal_entries.push({ ...row, id: crypto.randomUUID(), date_completed: payload.date_completed || today() });
     writeLocal(db);
@@ -152,7 +188,7 @@ export async function addJournalEntry(user, payload) {
 
 export async function addReasoningSession(user, payload) {
   const row = { ...payload, user_id: user.id, date: today() };
-  if (!hasSupabaseConfig) {
+  if (!supabase) {
     const db = readLocal();
     db.oxford_reasoning_sessions.push({ ...row, id: crypto.randomUUID() });
     writeLocal(db);
@@ -164,7 +200,7 @@ export async function addReasoningSession(user, payload) {
 
 export async function saveWeeklyReview(user, payload) {
   const row = { ...payload, user_id: user.id, week_start: currentWeek().week_start };
-  if (!hasSupabaseConfig) {
+  if (!supabase) {
     const db = readLocal();
     db.weekly_reviews.push({ ...row, id: crypto.randomUUID() });
     writeLocal(db);
@@ -176,7 +212,7 @@ export async function saveWeeklyReview(user, payload) {
 
 export async function addInterviewSession(user, payload) {
   const row = { ...payload, user_id: user.id, session_date: payload.session_date || today(), questions: splitLines(payload.questions) };
-  if (!hasSupabaseConfig) {
+  if (!supabase) {
     const db = readLocal();
     db.interview_sessions.push({ ...row, id: crypto.randomUUID() });
     writeLocal(db);
@@ -188,7 +224,7 @@ export async function addInterviewSession(user, payload) {
 
 export async function saveTaraErrorAnalysis(user, payload) {
   const row = { ...payload, user_id: user.id };
-  if (!hasSupabaseConfig) {
+  if (!supabase) {
     const db = readLocal();
     const existing = db.tara_error_analysis.find((item) => item.response_id === payload.response_id);
     if (existing) Object.assign(existing, row, { updated_at: new Date().toISOString() });
@@ -289,7 +325,7 @@ async function list(table, userId, order, nullsFirst = false) {
 
 function localBootstrap() {
   const db = readLocal();
-  if (!db.weekly_programmes.length) seedLocal(db);
+  if (!db.subjects.length) seedLocal(db);
   writeLocal(db);
   const user = demoUser();
   const subjects = db.subjects.map((subject) => ({

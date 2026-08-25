@@ -1,4 +1,4 @@
-import { bootstrap, getSession, signIn, signOut, saveAttempt, updateTask, createProgramme, addAcademicResult, addJournalEntry, addReasoningSession, saveWeeklyReview, addInterviewSession, updateProfile, saveTaraErrorAnalysis } from './dataService.js';
+import { bootstrap, getSession, signIn, signOut, saveAttempt, updateTask, createProgramme, addAcademicResult, addAcademicTopic, updateAcademicTopic, addJournalEntry, addReasoningSession, saveWeeklyReview, addInterviewSession, updateProfile, saveTaraErrorAnalysis } from './dataService.js';
 import { questions } from './questions.js';
 import { questionBankManifest } from './questionBankManifest.generated.js';
 import { methodologyFor } from './methodologies.js';
@@ -185,7 +185,7 @@ function optionClass(q, key, selected) {
 function instantFeedbackHtml(q, selected) {
   if (!selected) return '<p class="muted instant-hint">Choose an answer to see instant marking and coaching before moving on.</p>';
   const correct = selected === q.correct_answer;
-  return `<aside class="instant-feedback ${correct ? 'correct' : 'incorrect'}"><h3>${correct ? 'Correct' : 'Not quite'} · Official answer ${q.correct_answer}</h3><p><b>Method trigger:</b> ${triggerFor(q)}</p><p><b>How to approach it:</b> ${methodologyFor(q.sub_type).slice(0, 3).join(' ')}</p><p><b>Carry forward:</b> ${q.sub_type} questions reward naming the task before choosing an option.</p></aside>`;
+  return `<aside class="instant-feedback ${correct ? 'correct' : 'incorrect'}"><h3>${correct ? 'Correct' : 'Not quite'} · Official answer ${q.correct_answer}</h3><p><b>Method trigger:</b> ${triggerFor(q)}</p><p><b>How to approach it:</b> ${methodologyFor(q.sub_type).slice(0, 3).join(' ')}</p><p><b>Common trap:</b> ${trapFor(q)}</p><p><b>Carry forward:</b> ${carryForwardFor(q)}</p></aside>`;
 }
 
 function reportHtml() {
@@ -196,11 +196,37 @@ function reportHtml() {
 
 function coachingHtml(q, selected) {
   const correct = selected === q.correct_answer;
-  return `<article class="panel coaching"><p class="eyebrow">Question ${q.question_number} · ${q.type} · ${q.sub_type}</p><h3>${correct ? 'Correct' : 'Incorrect'} · Your answer ${selected || 'blank'} · Official answer ${q.correct_answer}</h3><h4>A. Standard methodology</h4><ol>${methodologyFor(q.sub_type).map((m)=>`<li>${m}</li>`).join('')}</ol><h4>B. Full original question</h4><p>${highlight(q.question_text, q.relevant_question_highlights)}</p>${visualHtml(q)}<h4>C. Highlight decisive wording</h4><p>${q.relevant_question_highlights.map((h)=>`<mark>${h}</mark>`).join(' ') || '<span class="muted">No extracted highlight yet. Use the question stem and numerical constraints as the first clues.</span>'}</p><h4>D. What the wording should trigger</h4><p>${triggerFor(q)}</p><h4>E. Apply the method</h4><p>${coachingExplanation(q)}</p><h4>F. Trap to avoid</h4><p>Do not choose an option that sounds related but fails the exact task: ${q.sub_type}.</p><h4>G. Method to carry forward</h4><p>Carry the method forward: ${q.sub_type} means you should slow down and name the required thinking move before calculating or choosing.</p></article>`;
+  return `<article class="panel coaching"><p class="eyebrow">Question ${q.question_number} · ${q.type} · ${q.sub_type}</p><h3>${correct ? 'Correct' : 'Incorrect'} · Your answer ${selected || 'blank'} · Official answer ${q.correct_answer}</h3><h4>A. Standard methodology</h4><ol>${methodologyFor(q.sub_type).map((m)=>`<li>${m}</li>`).join('')}</ol><h4>B. Full original question</h4><p>${highlight(q.question_text, q.relevant_question_highlights)}</p>${visualHtml(q)}<h4>C. Highlight decisive wording</h4><p>${q.relevant_question_highlights.map((h)=>`<mark>${h}</mark>`).join(' ') || '<span class="muted">No extracted highlight yet. Use the question stem and numerical constraints as the first clues.</span>'}</p><h4>D. What the wording should trigger</h4><p>${triggerFor(q)}</p><h4>E. Apply the method</h4><p>${coachingExplanation(q)}</p><h4>F. Trap to avoid</h4><p>${trapFor(q)}</p><h4>G. Method to carry forward</h4><p>${carryForwardFor(q)}</p></article>`;
 }
 
 function coachingExplanation(q) {
   return `This is a ${q.type} question, sub-type ${q.sub_type}. Start by applying the standard methodology above, then use the highlighted wording to identify exactly what the question asks. The official answer is ${q.correct_answer}; treat it as the option that satisfies the task with the fewest extra assumptions.`;
+}
+
+function trapFor(q) {
+  const traps = {
+    'Identifying the Main Conclusion': 'A tempting option may be true or mentioned, but it is wrong if it is only evidence, background or an example rather than the author’s main claim.',
+    'Drawing a Conclusion': 'Avoid answers that go beyond what must follow. The correct answer is usually narrower than the most interesting-sounding option.',
+    'Identifying Assumptions': 'Do not choose a statement that merely helps the argument. The assumption must be something the argument depends on.',
+    'Detecting Reasoning Errors (Flaws)': 'A vague criticism is not enough. The right option attacks the exact move from evidence to conclusion.',
+    'Assessing Additional Evidence': 'Do not pick evidence that is just related to the topic. It must strengthen or weaken the argument’s conclusion.',
+    'Applying Principles': 'Avoid matching surface details. Extract the rule first, then test which option follows that rule.',
+    'Matching Arguments (Parallel Reasoning)': 'Ignore topic similarity. Match the logical structure, including whether the original reasoning is flawed.',
+    'Basic Arithmetic Operations': 'The common slip is doing the right arithmetic on the wrong quantity. Label each number before calculating.',
+    'Percentages and Ratios': 'The trap is using the wrong base or confusing part-to-part with part-to-whole.',
+    'Real-Life Measurements': 'The trap is mixing units or missing a fixed charge, boundary condition or conversion step.',
+    'Data Interpretation': 'The trap is reading the wrong row, column, chart label or timetable direction.',
+    'Spatial and Logical Problem-Solving': 'The trap is trusting a visual impression instead of checking every constraint.'
+  };
+  return traps[q.sub_type] || 'Do not choose an option that sounds related but fails the exact task.';
+}
+
+function carryForwardFor(q) {
+  const lessons = {
+    'Critical Thinking': 'For future critical thinking questions, always name the conclusion, evidence and required logical move before looking at options.',
+    'Numerical Reasoning & Problem-Solving': 'For future numerical questions, write the target quantity, relevant data and units before doing arithmetic.'
+  };
+  return lessons[q.type] || `${q.sub_type} questions reward naming the required thinking move before choosing.`;
 }
 
 function analyticsHtml() {
@@ -209,7 +235,32 @@ function analyticsHtml() {
 }
 
 function academicsHtml() {
-  return `<header class="top"><div><p class="eyebrow">A-Level Progress</p><h2>Protect academic strength</h2></div></header><section class="grid">${state.data.subjects.map((s)=>card(s.name, `Target ${s.target_grade || 'A*'}`, `Predicted: ${s.predicted_grade || 'Not set'}<br>Latest: ${s.academic_results?.[0]?.percentage || 'No result'}%`)).join('')}</section><section class="panel"><h3>Add assessment</h3><form data-action="add-result" class="form-grid">${subjectSelect()}<input name="assessment_name" placeholder="Assessment name"><input name="topic" placeholder="Topic"><input name="score" type="number" placeholder="Score"><input name="max_score" type="number" value="100"><input name="grade" placeholder="Grade"><button>Save result</button></form></section>`;
+  return `<header class="top"><div><p class="eyebrow">A-Level Progress</p><h2>Protect academic strength</h2></div></header>${needsAttentionHtml()}<section class="grid">${state.data.subjects.map(subjectCardHtml).join('')}</section><section class="panel"><h3>Add topic to track</h3><form data-action="add-topic" class="form-grid">${subjectSelect()}<input name="topic_name" placeholder="Topic, e.g. Integration by substitution" required><label>Mastery<select name="mastery_status">${masteryOptions('developing')}</select></label><label>Confidence 1-5<input name="confidence" type="number" min="1" max="5" value="3"></label><input name="notes" placeholder="Notes or next action"><button>Save topic</button></form></section><section class="panel"><h3>Add assessment</h3><form data-action="add-result" class="form-grid">${subjectSelect()}<input name="assessment_name" placeholder="Assessment name" required><input name="topic" placeholder="Topic"><input name="score" type="number" placeholder="Score"><input name="max_score" type="number" value="100"><input name="grade" placeholder="Grade"><button>Save result</button></form></section>`;
+}
+
+function needsAttentionHtml() {
+  const topics = state.data.subjects.flatMap((subject) =>
+    (subject.academic_topics || [])
+      .filter((topic) => ['weak', 'developing'].includes(topic.mastery_status))
+      .map((topic) => ({ ...topic, subject_name: subject.name }))
+  );
+  if (!topics.length) return `<section class="panel"><h3>Needs Attention</h3><p class="muted">No weak or developing A-Level topics recorded yet. Add topics below so the weekly programme can target them.</p></section>`;
+  return `<section class="panel"><h3>Needs Attention</h3><div class="topic-list">${topics.map((topic) => `<article><b>${escapeHtml(topic.subject_name)}</b><p>${escapeHtml(topic.topic_name)}</p><small>${label(topic.mastery_status)} · confidence ${topic.confidence || 3}/5</small></article>`).join('')}</div></section>`;
+}
+
+function subjectCardHtml(subject) {
+  const latest = subject.academic_results?.[0];
+  const topics = subject.academic_topics || [];
+  const weakCount = topics.filter((topic) => ['weak', 'developing'].includes(topic.mastery_status)).length;
+  return `<section class="panel subject-card"><h3>${escapeHtml(subject.name)}</h3><p class="metric">${subject.predicted_grade || 'Not set'}</p><p class="muted">Target ${subject.target_grade || 'A*'} · latest ${latest?.percentage ?? 'No result'}${latest?.percentage ? '%' : ''} · ${weakCount} topic${weakCount === 1 ? '' : 's'} need attention</p>${topics.length ? `<div class="topic-stack">${topics.map(topicRowHtml).join('')}</div>` : '<p class="muted">No tracked topics yet.</p>'}</section>`;
+}
+
+function topicRowHtml(topic) {
+  return `<article class="topic-row"><div><b>${escapeHtml(topic.topic_name)}</b><small>${label(topic.mastery_status)} · confidence ${topic.confidence || 3}/5</small></div><div class="row"><select data-topic-status="${topic.id}" title="Update mastery">${['weak','developing','secure','strong'].map((status) => `<option value="${status}" ${sel(topic.mastery_status,status)}>${label(status)}</option>`).join('')}</select><select data-topic-confidence="${topic.id}" title="Update confidence">${[1,2,3,4,5].map((score) => `<option value="${score}" ${sel(String(topic.confidence || 3),String(score))}>${score}/5</option>`).join('')}</select></div><textarea data-topic-notes="${topic.id}" placeholder="Notes or next action">${topic.notes || ''}</textarea></article>`;
+}
+
+function masteryOptions(selected) {
+  return ['weak','developing','secure','strong'].map((status) => `<option value="${status}" ${sel(selected,status)}>${label(status)}</option>`).join('');
 }
 
 function journalHtml() {
@@ -420,12 +471,30 @@ app.addEventListener('change', async (event) => {
     state.data = await bootstrap(state.user);
     render();
   }
+  if (event.target.dataset.topicStatus) {
+    const topic = findAcademicTopic(event.target.dataset.topicStatus);
+    await updateAcademicTopic(state.user, topic, { mastery_status: event.target.value });
+    state.data = await bootstrap(state.user);
+    render();
+  }
+  if (event.target.dataset.topicConfidence) {
+    const topic = findAcademicTopic(event.target.dataset.topicConfidence);
+    await updateAcademicTopic(state.user, topic, { confidence: event.target.value });
+    state.data = await bootstrap(state.user);
+    render();
+  }
   if (event.target.dataset.draft) {
     state.draft.tasks[Number(event.target.dataset.draft)][event.target.dataset.field] = event.target.type === 'number' ? Number(event.target.value) : event.target.value;
   }
 });
 
 app.addEventListener('blur', async (event) => {
+  if (event.target.dataset.topicNotes) {
+    const topic = findAcademicTopic(event.target.dataset.topicNotes);
+    await updateAcademicTopic(state.user, topic, { notes: event.target.value });
+    state.data = await bootstrap(state.user);
+    return;
+  }
   if (!event.target.dataset.taskField) return;
   const task = state.data.tasks.find((t) => t.id === event.target.dataset.taskField);
   const field = event.target.dataset.field;
@@ -458,6 +527,7 @@ app.addEventListener('submit', async (event) => {
     if (action === 'tara-filters') { state.taraFilters = values; state.notice = { type: 'success', message: `${filteredQuestions().length} questions match the selected filters.` }; render(); return; }
     if (button) button.disabled = true;
     if (action === 'add-result') await addAcademicResult(state.user, values);
+    if (action === 'add-topic') await addAcademicTopic(state.user, values);
     if (action === 'add-journal') await addJournalEntry(state.user, values);
     if (action === 'add-reasoning') await addReasoningSession(state.user, values);
     if (action === 'add-interview') await addInterviewSession(state.user, values);
@@ -481,6 +551,10 @@ function triggerFor(q) {
   if (q.sub_type === 'Real-Life Measurements') return 'Measurement wording should trigger unit conversion before calculation.';
   if (q.sub_type === 'Spatial and Logical Problem-Solving') return 'Diagram or pattern wording should trigger constraint tracking and elimination.';
   return 'The wording should trigger the named method before looking at attractive answer choices.';
+}
+
+function findAcademicTopic(id) {
+  return state.data.subjects.flatMap((subject) => subject.academic_topics || []).find((topic) => topic.id === id);
 }
 
 function highlight(text, parts = []) {
