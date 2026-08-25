@@ -58,11 +58,13 @@ async function init() {
 }
 
 function renderError(error) {
+  app.className = 'auth-screen';
   app.innerHTML = `<main class="login"><section class="panel hero"><p class="eyebrow">Setup needed</p><h1>Supabase is connected, but the app could not load its tables.</h1><p>${escapeHtml(error.message || error)}</p><p class="callout">Run the SQL migration in Supabase SQL Editor, then refresh this page.</p><button onclick="location.reload()">Refresh</button></section></main>`;
 }
 
 function render() {
   if (!state.user) return renderLogin();
+  app.className = 'app-shell';
   app.innerHTML = `
     <aside class="sidebar">
       <div>
@@ -77,6 +79,7 @@ function render() {
 }
 
 function renderLogin() {
+  app.className = 'auth-screen';
   app.innerHTML = `
     <main class="login">
       <section class="panel hero">

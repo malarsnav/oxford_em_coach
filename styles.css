@@ -78,6 +78,10 @@ input[type="checkbox"] {
   min-height: 100dvh;
 }
 
+#app.auth-screen {
+  display: block;
+}
+
 .login {
   min-height: 100dvh;
   display: grid;
@@ -86,6 +90,7 @@ input[type="checkbox"] {
 }
 
 .hero {
+  width: min(100%, 680px);
   max-width: 680px;
 }
 
@@ -793,9 +798,17 @@ button:disabled {
 }
 
 @media (min-width: 760px) {
-  #app {
+  #app.app-shell {
     display: grid;
     grid-template-columns: 260px 1fr;
+  }
+
+  .login {
+    padding: 2rem;
+  }
+
+  .login .hero {
+    padding: 1.4rem;
   }
 
   .sidebar {
