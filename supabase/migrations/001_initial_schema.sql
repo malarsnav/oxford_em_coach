@@ -18,6 +18,10 @@ create table if not exists public.user_profiles (
   current_school_year text default 'Year 12',
   application_year integer,
   parent_email text,
+  parent_digest_enabled boolean default false,
+  parent_digest_time time default '06:00',
+  parent_digest_timezone text default 'Europe/London',
+  parent_digest_include_no_activity boolean default false,
   created_at timestamptz default now(),
   updated_at timestamptz default now()
 );

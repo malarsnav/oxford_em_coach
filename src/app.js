@@ -3,6 +3,7 @@ import { questions } from './questions.js';
 import { questionBankManifest } from './questionBankManifest.generated.js';
 import { methodologyFor } from './methodologies.js';
 import { createProgrammeDraft } from './weeklyGeneratorService.js';
+import { buildDailyDigest, previousLocalDate } from './dailyDigestService.js';
 
 const app = document.querySelector('#app');
 const MAGIC_LINK_THROTTLE_MINUTES = 30;
@@ -68,7 +69,7 @@ function renderLogin() {
           <button type="submit">Send magic link</button>
           <p class="form-status" data-login-status aria-live="polite"></p>
         </form>
-        <p class="muted">A secure sign-in link will be emailed to this address. Open the link on the same device if possible.</p>
+        <p class="muted">A secure sign-in link will be emailed to this address. To protect the Supabase email limit, this app sends only one magic link per email every ${MAGIC_LINK_THROTTLE_MINUTES} minutes on this device. If you already requested one, open the latest email from your inbox or spam/junk folder.</p>
       </section>
     </main>`;
 }
@@ -201,12 +202,33 @@ function interviewHtml() {
 function parentHtml() {
   const tasks = state.data.tasks || [];
   const t = state.data.tara;
-  return `<header class="top"><div><p class="eyebrow">Parent / Coach View</p><h2>Progress summary without private reflections</h2></div></header><section class="grid six">${card('This week', `${percent(tasks.filter((task)=>task.status==='completed').length, tasks.length)}%`, `${tasks.filter((task)=>task.status !== 'completed').length} tasks still open`)}${card('TARA', `${t.overallAccuracy}%`, `Weakest: ${t.weakestType?.name || 'Not enough data'}<br>Questions: ${t.totalQuestions}`)}${card('A-Level', '', state.data.subjects.map((s)=>`${s.name}: ${s.predicted_grade || 'Not set'}`).join('<br>'))}${card('E&M consistency', `${state.data.journal.length} entries`, state.data.journal[0]?.title || 'No journal entries yet')}${card('Milestones', `${state.data.milestones.filter((m)=>m.status==='completed').length}/${state.data.milestones.length}`, 'Completed admissions milestones')}${card('Recommendations', '', state.data.recommendations.slice(0,2).join('<br>') || 'No recommendation yet')}</section><section class="panel"><h3>Privacy note</h3><p class="muted">This view deliberately summarises progress. Student reflections are not shown here by default.</p></section>`;
+  return `<header class="top"><div><p class="eyebrow">Parent / Coach View</p><h2>Progress summary without private reflections</h2></div></header><section class="grid six">${card('This week', `${percent(tasks.filter((task)=>task.status==='completed').length, tasks.length)}%`, `${tasks.filter((task)=>task.status !== 'completed').length} tasks still open`)}${card('TARA', `${t.overallAccuracy}%`, `Weakest: ${t.weakestType?.name || 'Not enough data'}<br>Questions: ${t.totalQuestions}`)}${card('A-Level', '', state.data.subjects.map((s)=>`${s.name}: ${s.predicted_grade || 'Not set'}`).join('<br>'))}${card('E&M consistency', `${state.data.journal.length} entries`, state.data.journal[0]?.title || 'No journal entries yet')}${card('Milestones', `${state.data.milestones.filter((m)=>m.status==='completed').length}/${state.data.milestones.length}`, 'Completed admissions milestones')}${card('Recommendations', '', state.data.recommendations.slice(0,2).join('<br>') || 'No recommendation yet')}</section>${digestPreviewHtml()}<section class="panel"><h3>Privacy note</h3><p class="muted">This view deliberately summarises progress. Student reflections are not shown here by default.</p></section>`;
 }
 
 function profileHtml() {
   const p = state.data.profile || {};
-  return `<header class="top"><div><p class="eyebrow">Profile</p><h2>Student setup</h2></div></header><section class="panel"><form data-action="save-profile" class="form-grid"><label>Display name<input name="display_name" value="${escapeAttr(p.display_name || '')}"></label><label>School<input name="school" value="${escapeAttr(p.school || '')}"></label><label>Student email<input value="${escapeAttr(state.user.email || '')}" disabled></label><label>Parent email<input name="parent_email" type="email" value="${escapeAttr(p.parent_email || '')}"></label><label>School year<input name="current_school_year" value="${escapeAttr(p.current_school_year || 'Year 12')}"></label><label>Application year<input name="application_year" type="number" value="${escapeAttr(p.application_year || '')}"></label><label>Target course<input name="target_course" value="${escapeAttr(p.target_course || 'Oxford Economics & Management')}"></label><label>Target university<input name="target_university" value="${escapeAttr(p.target_university || 'University of Oxford')}"></label><button>Save profile</button></form></section>`;
+  return `<header class="top"><div><p class="eyebrow">Profile</p><h2>Student setup</h2></div></header><section class="panel"><form data-action="save-profile" class="form-grid"><label>Display name<input name="display_name" value="${escapeAttr(p.display_name || '')}"></label><label>School<input name="school" value="${escapeAttr(p.school || '')}"></label><label>Student email<input value="${escapeAttr(state.user.email || '')}" disabled></label><label>Parent email<input name="parent_email" type="email" value="${escapeAttr(p.parent_email || '')}" placeholder="parent@example.com"></label><label>School year<input name="current_school_year" value="${escapeAttr(p.current_school_year || 'Year 12')}"></label><label>Application year<input name="application_year" type="number" value="${escapeAttr(p.application_year || '')}"></label><label>Target course<input name="target_course" value="${escapeAttr(p.target_course || 'Oxford Economics & Management')}"></label><label>Target university<input name="target_university" value="${escapeAttr(p.target_university || 'University of Oxford')}"></label><label>Daily parent digest time<input name="parent_digest_time" type="time" value="${escapeAttr(p.parent_digest_time || '06:00')}"></label><label class="checkline"><input name="parent_digest_enabled" type="checkbox" value="true" ${p.parent_digest_enabled ? 'checked' : ''}> Send daily parent digest</label><p class="muted span-all">The digest summarises the previous calendar day. Scheduled email delivery needs the later Supabase Edge Function/email-provider step; the preview below is available now.</p><button>Save profile</button></form></section>${digestPreviewHtml()}`;
+}
+
+function digestPreviewHtml() {
+  const p = state.data.profile || {};
+  const digest = buildDailyDigest(state.data, previousLocalDate());
+  return `<section class="panel digest-preview"><div class="top mini"><div><p class="eyebrow">Parent Daily Digest Preview</p><h3>${formatLongDate(digest.date)} summary</h3></div><span class="pill ${p.parent_digest_enabled ? 'high' : 'low'}">${p.parent_digest_enabled ? 'Enabled' : 'Off'}</span></div><p class="muted">${p.parent_email ? `Would be sent to ${escapeHtml(p.parent_email)} around ${escapeHtml(p.parent_digest_time || '06:00')}.` : 'Add a parent email in Profile before scheduled digest emails can be sent.'}</p>${digest.hasActivity ? digestSummaryHtml(digest) : '<p class="callout">No activity was recorded for the previous day, so the production digest would normally send nothing.</p>'}</section>`;
+}
+
+function digestSummaryHtml(digest) {
+  return `<div class="digest-grid">
+    ${digestBlock('TARA', digest.tara.totalSets ? `${digest.tara.totalSets} set${digest.tara.totalSets === 1 ? '' : 's'} · ${digest.tara.correct}/${digest.tara.totalQuestions} correct · ${digest.tara.accuracy}%` : 'No TARA set completed.')}
+    ${digestBlock('Weakest Type', digest.tara.weakTypes[0] ? `${escapeHtml(digest.tara.weakTypes[0].name)} · ${digest.tara.weakTypes[0].accuracy}%` : 'No weak type identified yesterday.')}
+    ${digestBlock('Weekly Programme', `${digest.weeklyProgramme.completedTasks.length} completed · ${digest.weeklyProgramme.skippedTasks.length} skipped · ${digest.weeklyProgramme.completedMinutes} minutes`)}
+    ${digestBlock('Academics', digest.academics.length ? digest.academics.map((item) => `${escapeHtml(item.subject_name)}: ${escapeHtml(item.assessment_name || item.topic || 'assessment')} ${escapeHtml(item.percentage || '')}%`).join('<br>') : 'No academic result added.')}
+    ${digestBlock('E&M / Reasoning', `${digest.journal.length} journal entr${digest.journal.length === 1 ? 'y' : 'ies'} · ${digest.reasoning.length} reasoning session${digest.reasoning.length === 1 ? '' : 's'}`)}
+    ${digestBlock('Suggested Focus', digest.recommendations.map((item) => escapeHtml(item)).join('<br>') || 'Keep the current weekly programme moving.')}
+  </div>`;
+}
+
+function digestBlock(title, body) {
+  return `<article class="digest-block"><b>${title}</b><p>${body}</p></article>`;
 }
 
 function taraFilterHtml() {
@@ -386,7 +408,7 @@ app.addEventListener('submit', async (event) => {
     if (action === 'add-reasoning') await addReasoningSession(state.user, values);
     if (action === 'add-interview') await addInterviewSession(state.user, values);
     if (action === 'save-review') await saveWeeklyReview(state.user, values);
-    if (action === 'save-profile') await updateProfile(state.user, values);
+    if (action === 'save-profile') await updateProfile(state.user, normalizeProfilePayload(values));
     if (action === 'save-error') await saveTaraErrorAnalysis(state.user, values);
     state.data = await bootstrap(state.user);
     form.reset();
@@ -435,6 +457,10 @@ function formatDate(value) {
 
 function formatDateTime(value) {
   return value ? new Date(value).toLocaleString(undefined, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : 'Date unset';
+}
+
+function formatLongDate(value) {
+  return value ? new Date(`${value}T12:00:00`).toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' }) : 'Date unset';
 }
 
 function sel(value, expected) {
@@ -520,6 +546,14 @@ function writeMagicLinkRecords(records) {
   } catch {
     // If localStorage is unavailable, Supabase still enforces its own server-side limits.
   }
+}
+
+function normalizeProfilePayload(values) {
+  return {
+    ...values,
+    parent_email: normalizeEmail(values.parent_email),
+    parent_digest_enabled: values.parent_digest_enabled === 'true'
+  };
 }
 
 function friendlyError(error) {

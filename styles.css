@@ -69,6 +69,11 @@ textarea {
   resize: vertical;
 }
 
+input[type="checkbox"] {
+  width: auto;
+  min-height: auto;
+}
+
 #app {
   min-height: 100dvh;
 }
@@ -157,6 +162,10 @@ textarea {
   gap: 0.8rem;
 }
 
+.span-all {
+  grid-column: 1 / -1;
+}
+
 .panel {
   background: var(--panel);
   border: 1px solid var(--line);
@@ -175,6 +184,14 @@ textarea {
   font-size: 0.85rem;
   color: var(--accent);
   text-transform: uppercase;
+}
+
+.checkline {
+  display: flex;
+  gap: 0.65rem;
+  align-items: center;
+  min-height: 42px;
+  padding: 0.65rem 0;
 }
 
 .card p,
@@ -218,6 +235,23 @@ textarea {
 
 .bar-row .bar {
   grid-column: 1 / -1;
+}
+
+.digest-grid {
+  display: grid;
+  gap: 0.7rem;
+  margin-top: 0.9rem;
+}
+
+.digest-block {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 0.85rem;
+  background: #fbfcfd;
+}
+
+.digest-block p {
+  margin: 0.35rem 0 0;
 }
 
 .trend {
@@ -497,6 +531,10 @@ button:disabled {
   }
 
   .form-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .digest-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 

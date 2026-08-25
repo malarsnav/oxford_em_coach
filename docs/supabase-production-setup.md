@@ -23,6 +23,8 @@ If `001_initial_schema.sql` has already been run, run only the incremental migra
 
 `supabase/migrations/002_question_bank_and_parent_links.sql`
 
+`supabase/migrations/003_parent_daily_digest.sql`
+
 ## 3. Configure Auth URLs
 
 In Supabase:
@@ -76,6 +78,7 @@ GitHub Pages will redeploy automatically from the workflow.
 6. Complete a 5-question TARA set.
 7. Refresh the page and confirm progress persists.
 8. Sign in from a second device with the same email and confirm the same data appears.
+9. Open Profile, add a parent email, enable the daily digest preference, save, and confirm the Parent View shows a digest preview.
 
 ## 8. Security Checks
 
@@ -84,3 +87,16 @@ GitHub Pages will redeploy automatically from the workflow.
 - Policies use `auth.uid()` to restrict rows to the signed-in user.
 - No delete grants are enabled in the first version.
 - No service-role key is used in the frontend.
+
+## 9. Parent Daily Digest
+
+The app now stores parent digest preferences and can preview the previous day's summary in the browser.
+
+Current production-safe state:
+
+- Parent email is stored on `user_profiles`.
+- Daily digest enabled/time/timezone preferences are stored on `user_profiles`.
+- Parent View shows a preview of the previous day's activity.
+- No scheduled email is sent yet.
+
+Scheduled 6am email delivery should be added with a Supabase Edge Function or another trusted scheduled backend. GitHub Pages cannot run scheduled jobs by itself.

@@ -75,9 +75,10 @@ export async function saveAttempt(user, set, responses, startedAt) {
 
 export async function updateTask(user, task, patch) {
   const completedAt = patch.status === 'completed' ? new Date().toISOString() : patch.status ? null : task.completed_at;
+  const updatedAt = new Date().toISOString();
   if (!hasSupabaseConfig) {
     const db = readLocal();
-    db.weekly_tasks = db.weekly_tasks.map((item) => item.id === task.id ? { ...item, ...patch, completed_at: completedAt } : item);
+    db.weekly_tasks = db.weekly_tasks.map((item) => item.id === task.id ? { ...item, ...patch, completed_at: completedAt, updated_at: updatedAt } : item);
     writeLocal(db);
     return;
   }
@@ -94,6 +95,11 @@ export async function updateProfile(user, patch) {
     return;
   }
   const { error } = await supabase.from('user_profiles').upsert(row, { onConflict: 'user_id' });
+  if (isMissingDigestColumn(error)) {
+    const { error: retryError } = await supabase.from('user_profiles').upsert(stripDigestColumns(row), { onConflict: 'user_id' });
+    if (retryError) throw retryError;
+    return;
+  }
   if (error) throw error;
 }
 
@@ -224,13 +230,24 @@ async function getTaraAnalytics(userId) {
 }
 
 async function ensureProfile(user) {
-  await supabase.from('user_profiles').upsert({
+  const existing = await single('user_profiles', 'user_id', user.id);
+  if (existing) return;
+  const row = {
     user_id: user.id,
     display_name: user.email?.split('@')[0],
     target_course: 'Oxford Economics & Management',
     target_university: 'University of Oxford',
-    current_school_year: 'Year 12'
-  }, { onConflict: 'user_id' });
+    current_school_year: 'Year 12',
+    parent_digest_enabled: false,
+    parent_digest_time: '06:00'
+  };
+  const { error } = await supabase.from('user_profiles').insert(row);
+  if (isMissingDigestColumn(error)) {
+    const { error: retryError } = await supabase.from('user_profiles').insert(stripDigestColumns(row));
+    if (retryError) throw retryError;
+    return;
+  }
+  if (error) throw error;
 }
 
 async function seedSubjects(userId) {
@@ -386,11 +403,22 @@ function band(score) {
 }
 
 function readLocal() {
-  return JSON.parse(localStorage.getItem(localKey) || '{"user_profiles":[],"attempts":[],"responses":[],"weekly_programmes":[],"weekly_tasks":[],"subjects":[],"academic_results":[],"academic_topics":[],"journal_entries":[],"oxford_reasoning_sessions":[],"milestones":[],"weekly_reviews":[],"interview_sessions":[],"tara_error_analysis":[]}');
+  const db = JSON.parse(localStorage.getItem(localKey) || '{"user_profiles":[],"attempts":[],"responses":[],"weekly_programmes":[],"weekly_tasks":[],"subjects":[],"academic_results":[],"academic_topics":[],"journal_entries":[],"oxford_reasoning_sessions":[],"milestones":[],"weekly_reviews":[],"interview_sessions":[],"tara_error_analysis":[]}');
+  db.user_profiles = (db.user_profiles || []).map((profile) => ({ parent_digest_enabled: false, parent_digest_time: '06:00', ...profile }));
+  return db;
 }
 
 function writeLocal(db) {
   localStorage.setItem(localKey, JSON.stringify(db));
+}
+
+function isMissingDigestColumn(error) {
+  return Boolean(error?.message && error.message.includes('parent_digest_'));
+}
+
+function stripDigestColumns(row) {
+  const { parent_digest_enabled, parent_digest_time, parent_digest_timezone, parent_digest_include_no_activity, ...rest } = row;
+  return rest;
 }
 
 function seedLocal(db) {
