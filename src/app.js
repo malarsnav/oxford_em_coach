@@ -17,6 +17,7 @@ const state = {
   view: 'dashboard',
   practice: null,
   draft: null,
+  notice: null,
   reviewAttemptId: null,
   taraFilters: { year: 'all', family: 'all', type: 'all', pattern: 'all' },
   preferences: { minutes: 180, workload: 'standard', schoolWeek: 'normal', priority: 'none' }
@@ -123,6 +124,7 @@ function programmeHtml() {
   const completed = tasks.filter((t)=>t.status==='completed').reduce((s,t)=>s+(t.estimated_minutes||0),0);
   return `
     <header class="top"><div><p class="eyebrow">Weekly Programme</p><h2>${formatDate(p.week_start)} - ${formatDate(p.week_end)}</h2><p>${p.phase}: ${p.weekly_focus}</p></div><button data-action="show-generator">Generate Weekly Programme</button></header>
+    ${noticeHtml()}
     <section class="panel"><h3>${percent(tasks.filter(t=>t.status==='completed').length,tasks.length)}% complete</h3><div class="bar"><span style="width:${percent(tasks.filter(t=>t.status==='completed').length,tasks.length)}%"></span></div><p>${completed}/${total} minutes completed. ${total-completed} minutes remaining.</p><p>${p.coach_summary || ''}</p></section>
     ${aLevelTopicPlanHtml()}
     ${state.draft ? draftHtml() : ''}
@@ -146,6 +148,11 @@ function aLevelTopicPlanHtml() {
 
 function draftHtml() {
   return `<section class="panel draft"><h3>Draft programme review</h3><p>${state.draft.programme.weekly_focus}</p>${state.draft.tasks.map((t,i)=>`<article class="task"><input data-draft="${i}" data-field="title" value="${escapeAttr(t.title)}"><textarea data-draft="${i}" data-field="description">${t.description}</textarea><div class="row"><input data-draft="${i}" data-field="estimated_minutes" type="number" value="${t.estimated_minutes}"><select data-draft="${i}" data-field="priority"><option ${sel(t.priority,'high')}>high</option><option ${sel(t.priority,'medium')}>medium</option><option ${sel(t.priority,'low')}>low</option></select><button data-remove-draft="${i}" class="ghost">Remove</button></div></article>`).join('')}<div class="actions"><button data-action="accept-draft">Accept programme</button><button class="ghost" data-action="draft-programme">Regenerate</button></div></section>`;
+}
+
+function noticeHtml() {
+  if (!state.notice) return '';
+  return `<p class="form-status ${state.notice.type || 'success'} programme-notice">${escapeHtml(state.notice.message)}</p>`;
 }
 
 function groupTasks(tasks) {
@@ -359,10 +366,18 @@ app.addEventListener('click', async (event) => {
   if (action === 'show-generator') { state.draft = null; state.view = 'programme'; app.querySelector('.main').insertAdjacentHTML('afterbegin', generatorHtml()); }
   if (action === 'accept-draft') {
     if (state.data.programme && !confirm('Archive the current active programme and replace it with this draft? Completed historical data will be preserved.')) return;
-    await createProgramme(state.user, state.draft, Boolean(state.data.programme));
-    state.draft = null;
-    state.data = await bootstrap(state.user);
-    render();
+    target.disabled = true;
+    target.textContent = 'Saving programme...';
+    try {
+      await createProgramme(state.user, state.draft, Boolean(state.data.programme));
+      state.draft = null;
+      state.data = await bootstrap(state.user);
+      state.notice = { type: 'success', message: 'Programme saved. Your active weekly programme has been updated with the new tasks.' };
+      render();
+    } catch (error) {
+      state.notice = { type: 'error', message: friendlyError(error) };
+      render();
+    }
   }
 });
 
@@ -407,7 +422,7 @@ app.addEventListener('submit', async (event) => {
       setFormStatus(form, `Magic link sent to ${email}. Check inbox and spam/junk.`, 'success');
       return;
     }
-    if (action === 'draft-programme') { state.preferences = values; state.draft = createProgrammeDraft(state.data, values); render(); return; }
+    if (action === 'draft-programme') { state.preferences = values; state.draft = createProgrammeDraft(state.data, values); state.notice = null; render(); return; }
     if (action === 'tara-filters') { state.taraFilters = values; render(); return; }
     if (button) button.disabled = true;
     if (action === 'add-result') await addAcademicResult(state.user, values);
