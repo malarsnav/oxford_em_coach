@@ -9,6 +9,13 @@ const labels = {
   application: 'Application'
 };
 
+const PILLAR_ALLOCATION = {
+  a_level: 0.5,
+  tara: 0.25,
+  supercurricular: 0.15,
+  thinking: 0.1
+};
+
 export function getPhase(date = new Date()) {
   const month = date.getMonth();
   if (month >= 8 && month <= 11) return { name: 'Year 12 Foundation', focus: 'A-level foundations, light TARA Assessment, super-curricular breadth and reasoning habits.' };
@@ -25,7 +32,7 @@ export function createProgrammeDraft(state, preferences = {}) {
   const adjustedTarget = adjustedMinutes(targetMinutes, workload, preferences.schoolWeek);
   let tasks = baseTasks(state, preferences);
   tasks = carryForwardIncompleteTasks(tasks, state);
-  tasks = rebalance(tasks, adjustedTarget);
+  tasks = rebalanceByPillar(tasks, adjustedTarget);
   return {
     programme: {
       week_start: week.week_start,
@@ -47,8 +54,10 @@ function baseTasks(state, preferences) {
   const tasks = [
     ...aLevelTasks,
     task('tara', 'Complete a 5-question TARA Assessment set', 'Use TARA Assessment Practice to complete one bite-sized set and review the methodology report.', 25, 'medium', 'Admissions-test readiness needs steady low-friction practice so mistakes become visible early.'),
+    task('tara', 'Review every TARA mistake methodically', 'For each missed question, record the question type, why the chosen answer was tempting, the clue missed and the method to carry forward.', 20, 'high', 'TARA progress comes from repairing reasoning habits, not simply doing more questions.'),
     task('economics', 'Analyse one economics article', 'Record the main claim, mechanism, evidence, assumptions and one counterargument.', 35, 'medium', 'Oxford E&M preparation needs depth of thought, not just reading volume.'),
     task('management', 'Explain a strategic business choice', 'Answer: why might a company sell a product at a loss? Give at least three strategic reasons.', 20, 'low', 'Management thinking improves when strategy is linked to incentives and trade-offs.'),
+    task('economics', 'Connect one A-Level idea to E&M', crossSubjectPrompt(state), 20, 'medium', 'Cross-subject synthesis helps the student turn school knowledge into Oxford-style E&M thinking.'),
     task('oxford_reasoning', 'Solve one unfamiliar reasoning prompt', 'Write assumptions first, answer, revise after a hint, then reflect on what changed.', 20, 'medium', 'Interview-style reasoning rewards assumptions, clarity and adaptability.')
   ];
   if (state?.tara?.weakestSubtype?.accuracy < 65) {
@@ -93,17 +102,62 @@ function adjustedMinutes(targetMinutes, workload, schoolWeek) {
   return Math.round(minutes);
 }
 
-function rebalance(tasks, targetMinutes) {
+function rebalanceByPillar(tasks, targetMinutes) {
+  const carried = tasks.filter((item) => item.title.startsWith('Carry forward:'));
+  const planned = tasks.filter((item) => !item.title.startsWith('Carry forward:'));
+  const carriedMinutes = carried.reduce((sum, item) => sum + Number(item.estimated_minutes || 0), 0);
+  const available = Math.max(60, targetMinutes - carriedMinutes);
+  const chosen = [...carried];
+  for (const [pillar, share] of Object.entries(PILLAR_ALLOCATION)) {
+    const pillarTasks = planned.filter((item) => pillarFor(item.category) === pillar);
+    const target = Math.max(20, Math.round(available * share));
+    chosen.push(...chooseWithinBudget(pillarTasks, target));
+  }
+  const seen = new Set();
+  const unique = chosen.filter((item) => {
+    const key = `${item.category}:${item.title}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+  return trimToBudget(unique, targetMinutes);
+}
+
+function chooseWithinBudget(tasks, targetMinutes) {
   const ordered = [...tasks].sort((a, b) => priorityWeight(a.priority) - priorityWeight(b.priority));
   const chosen = [];
   let total = 0;
   for (const task of ordered) {
-    if (total + task.estimated_minutes <= targetMinutes || chosen.length < 4) {
+    if (total + task.estimated_minutes <= targetMinutes || !chosen.length) {
       chosen.push(task);
       total += task.estimated_minutes;
     }
   }
   return chosen;
+}
+
+function trimToBudget(tasks, targetMinutes) {
+  let total = tasks.reduce((sum, item) => sum + Number(item.estimated_minutes || 0), 0);
+  const chosen = [...tasks];
+  const flexibleLimit = Math.round(targetMinutes * 1.1);
+  while (total > flexibleLimit && chosen.length > 4) {
+    const removableIndex = [...chosen]
+      .map((item, index) => ({ item, index }))
+      .filter(({ item }) => item.priority !== 'high' && !item.title.startsWith('Carry forward:'))
+      .sort((a, b) => priorityWeight(b.item.priority) - priorityWeight(a.item.priority))[0]?.index;
+    if (removableIndex === undefined) break;
+    total -= Number(chosen[removableIndex].estimated_minutes || 0);
+    chosen.splice(removableIndex, 1);
+  }
+  return chosen;
+}
+
+function pillarFor(category) {
+  if (category === 'a_level') return 'a_level';
+  if (category === 'tara') return 'tara';
+  if (category === 'economics' || category === 'management') return 'supercurricular';
+  if (category === 'oxford_reasoning' || category === 'application') return 'thinking';
+  return 'thinking';
 }
 
 function focusFor(state, preferences, phase) {
@@ -116,7 +170,7 @@ function summaryFor(state, tasks, phase) {
   const minutes = tasks.reduce((sum, task) => sum + task.estimated_minutes, 0);
   const reason = state?.tara?.weakestSubtype?.accuracy < 65 ? ` TARA Assessment ${state.tara.weakestSubtype.name} is currently weak, so targeted practice is included.` : '';
   const carried = tasks.filter((task) => task.title.startsWith('Carry forward:')).length;
-  return `${phase.name}: ${minutes} minutes of focused work across ${new Set(tasks.map((task) => task.category)).size} preparation areas.${carried ? ` ${carried} high-priority task${carried === 1 ? '' : 's'} carried forward.` : ''}${reason}`;
+  return `${phase.name}: ${minutes} minutes using the Oxford E&M preparation split of roughly 50% A-Levels, 25% TARA Assessment, 15% Super-Curricular, and 10% Reading/Thinking.${carried ? ` ${carried} high-priority task${carried === 1 ? '' : 's'} carried forward.` : ''}${reason}`;
 }
 
 function priorityWeight(priority) {
@@ -131,4 +185,14 @@ function currentWeek() {
   const end = new Date(start);
   end.setDate(start.getDate() + 6);
   return { week_start: start.toISOString().slice(0, 10), week_end: end.toISOString().slice(0, 10) };
+}
+
+function crossSubjectPrompt(state) {
+  const weak = (state?.subjects || [])
+    .flatMap((subject) => (subject.academic_topics || [])
+      .filter((topic) => ['weak', 'developing'].includes(topic.mastery_status))
+      .map((topic) => ({ subject: subject.name, topic: topic.topic_name })))
+    [0];
+  if (weak) return `Write a short synthesis note: how could ${weak.subject} topic "${weak.topic}" help explain an Economics or Management decision? Include one limitation of the analogy.`;
+  return 'Write a short synthesis note connecting one current Maths, Physics, Economics or History topic to an E&M question. Include the mechanism, one assumption and one limitation.';
 }

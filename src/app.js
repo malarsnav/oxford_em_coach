@@ -103,8 +103,8 @@ function navButton(view, label) {
 function navigationHtml() {
   return `
     ${navSection('Start', [['dashboard','Dashboard'], ['programme','Weekly Programme']])}
-    ${navSection('Four Pillars', [['academics','A-Levels'], ['tara','TARA Assessment'], ['journal','Super-Curricular'], ['reasoning','Reading / Thinking']])}
-    ${navSection('Analytics', [['readiness','Overall Analytics'], ['analytics','TARA Detail']])}
+    ${navSection('Four Pillars', [['academics','A-Level Rigour'], ['tara','TARA Assessment'], ['journal','Super-Curricular'], ['reasoning','Reading / Thinking']])}
+    ${navSection('Analytics', [['readiness','Overall Analytics'], ['analytics','TARA Deep Dive']])}
     ${navSection('Journey', [['milestones','Milestones'], ['interview','Interview'], ['review','Weekly Review']])}
     ${navSection('Account', [['parent','Parent View'], ['profile','Profile']])}`;
 }
@@ -148,13 +148,28 @@ function dashboardHtml() {
       <div class="bar"><span style="width:${percent(done, tasks.length)}%"></span></div>
       <div class="next-actions">${remaining.slice(0,2).map((t) => `<article><b>${escapeHtml(t.title)}</b><small>${label(t.category)} · ${t.estimated_minutes || 0} min</small></article>`).join('') || '<p class="muted">Generate a programme to begin.</p>'}</div>
     </section>
+    ${dashboardSignalsHtml()}
     <section class="pillar-grid">
-      ${pillarCard('A-Levels', 'Subject goals and mastery', aLevelPillarHtml(), 'academics')}
+      ${pillarCard('A-Level Rigour', 'Subject goals and mastery', aLevelPillarHtml(), 'academics')}
       ${pillarCard('TARA Assessment', 'Accuracy, coverage and methodology', taraPillarHtml(), 'tara')}
-      ${pillarCard('Super-Curricular', 'Economics and management depth', supercurricularPillarHtml(), 'journal')}
+      ${pillarCard('Super-Curricular', 'Economics, management and competitions', supercurricularPillarHtml(), 'journal')}
       ${pillarCard('Reading / Thinking', 'Reasoning, reflection and interview habits', thinkingPillarHtml(), 'reasoning')}
     </section>
-    <section class="panel"><h3>Adaptive recommendations</h3>${data.recommendations.length ? data.recommendations.map((r) => `<p class="callout">${r}</p>`).join('') : '<p class="muted">Complete sessions and tasks to build recommendations.</p>'}</section>`;
+    <section class="panel"><h3>What should change next?</h3>${data.recommendations.length ? data.recommendations.map((r) => `<p class="callout">${r}</p>`).join('') : '<p class="muted">Complete sessions and tasks to build recommendations.</p>'}</section>`;
+}
+
+function dashboardSignalsHtml() {
+  const tasks = state.data.tasks || [];
+  const openHigh = tasks.filter((task) => task.priority === 'high' && !['completed', 'skipped'].includes(task.status));
+  const skipped = tasks.filter((task) => task.status === 'skipped');
+  const nextMilestone = nextOpenMilestone();
+  const latestReview = recentRows(state.data.weeklyReviews || [], 'week_start')[0];
+  const improving = latestReview?.biggest_improvement || (state.data.tara.totalQuestions ? `TARA overall accuracy is ${state.data.tara.overallAccuracy}%.` : 'Start with one small win this week.');
+  return `<section class="signal-grid">
+    <article class="panel signal-card"><p class="eyebrow">Slipping</p><h3>${openHigh.length + skipped.length}</h3><p>${openHigh.length} high-priority open · ${skipped.length} skipped</p><small>${openHigh[0] ? escapeHtml(openHigh[0].title) : 'Nothing urgent is currently slipping.'}</small></article>
+    <article class="panel signal-card"><p class="eyebrow">Improving</p><h3>Latest signal</h3><p>${escapeHtml(improving)}</p><small>Use Weekly Review to make this more precise.</small></article>
+    <article class="panel signal-card"><p class="eyebrow">Next Deadline</p><h3>${nextMilestone ? formatDate(nextMilestone.target_date) : 'Unset'}</h3><p>${nextMilestone ? escapeHtml(nextMilestone.title) : 'Add Oxford and school milestones.'}</p><small>${nextMilestone ? `${daysUntil(nextMilestone.target_date)} days to go` : 'Milestones keep the plan time-aware.'}</small></article>
+  </section>`;
 }
 
 function pillarCard(title, subtitle, body, view) {
@@ -194,14 +209,14 @@ function programmeHtml() {
   return `
     <header class="top"><div><p class="eyebrow">Weekly Programme</p><h2>${formatDate(p.week_start)} - ${formatDate(p.week_end)}</h2><p>${p.phase}: ${p.weekly_focus}</p></div><button data-action="show-generator">Generate Weekly Programme</button></header>
     ${noticeHtml()}
-    <section class="panel"><h3>${percent(tasks.filter(t=>t.status==='completed').length,tasks.length)}% complete</h3><div class="bar"><span style="width:${percent(tasks.filter(t=>t.status==='completed').length,tasks.length)}%"></span></div><p>${completed}/${total} minutes completed. ${total-completed} minutes remaining.</p><p>${p.coach_summary || ''}</p></section>
+    <section class="panel"><h3>${percent(tasks.filter(t=>t.status==='completed').length,tasks.length)}% complete</h3><div class="bar"><span style="width:${percent(tasks.filter(t=>t.status==='completed').length,tasks.length)}%"></span></div><p>${completed}/${total} minutes completed. ${total-completed} minutes remaining.</p><p>${p.coach_summary || ''}</p>${allocationStripHtml(tasks)}</section>
     ${aLevelTopicPlanHtml()}
     ${state.draft ? draftHtml() : ''}
     <section class="grid">${groupTasks(tasks)}</section>`;
 }
 
 function generatorHtml(message='Generate a personalised weekly programme') {
-  return `<section class="panel"><h2>${message}</h2><form data-action="draft-programme" class="form-grid">
+  return `<section class="panel"><h2>${message}</h2><p class="muted">The draft uses the Oxford E&M split: 50% A-Level Rigour, 25% TARA Assessment, 15% Super-Curricular, and 10% Reading/Thinking. It adapts around weak areas and open high-priority tasks.</p><form data-action="draft-programme" class="form-grid">
     <label>Available minutes<input name="minutes" type="number" value="${state.preferences.minutes}"></label>
     <label>Workload<select name="workload"><option value="light">Light</option><option value="standard" selected>Standard</option><option value="intensive">Intensive</option></select></label>
     <label>School week<select name="schoolWeek"><option value="normal">Normal</option><option value="exam">Exam-heavy</option><option value="holiday">Holiday</option></select></label>
@@ -384,7 +399,7 @@ function masteryOptions(selected) {
 }
 
 function journalHtml() {
-  return `<header class="top"><div><p class="eyebrow">E&M Journal</p><h2>Reading list and thinking journal</h2><p class="muted">Track what to read next, then convert completed reading into Oxford-style thinking: claim, mechanism, evidence, objection and response.</p></div></header><section class="panel compact-panel"><div class="segmented">${['reading','thinking'].map((mode) => `<button class="${state.journalMode === mode ? 'active' : ''}" data-journal-mode="${mode}" title="Open ${mode === 'reading' ? 'reading list tracker' : 'thinking journal'}">${mode === 'reading' ? 'Reading List' : 'Thinking Journal'}</button>`).join('')}</div></section>${state.journalMode === 'reading' ? readingListHtml() : thinkingJournalHtml()}`;
+  return `<header class="top"><div><p class="eyebrow">Super-Curricular & Competitions</p><h2>Build genuine E&M depth</h2><p class="muted">Track readings, lectures, essays and competitions, then convert them into claim, mechanism, evidence, objection and response.</p></div></header><section class="panel compact-panel"><div class="segmented">${['reading','thinking'].map((mode) => `<button class="${state.journalMode === mode ? 'active' : ''}" data-journal-mode="${mode}" title="Open ${mode === 'reading' ? 'reading list tracker' : 'thinking journal'}">${mode === 'reading' ? 'Reading Pipeline' : 'Thinking Notes'}</button>`).join('')}</div></section>${state.journalMode === 'reading' ? readingListHtml() : thinkingJournalHtml()}`;
 }
 
 function readingListHtml() {
@@ -445,7 +460,7 @@ function journalTypeOptions(selected) {
 }
 
 function reasoningHtml() {
-  return `<header class="top"><div><p class="eyebrow">Oxford Reasoning</p><h2>Practise thinking aloud</h2><p class="muted">The goal is not a perfect answer. It is to state assumptions, reason clearly, respond to hints and revise.</p></div></header>${promptBankHtml('Reasoning prompt bank', reasoningPrompts, 'reasoning-prompt')}<section class="panel"><form data-action="add-reasoning" class="stack reasoning-form"><textarea name="prompt" data-prompt-target="reasoning" placeholder="Unfamiliar prompt" required></textarea><textarea name="assumptions" placeholder="Assumptions I am making"></textarea><textarea name="initial_answer" placeholder="Initial answer"></textarea><textarea name="reasoning_steps" placeholder="Reasoning steps"></textarea><textarea name="hint_given" placeholder="Hint or challenge given"></textarea><textarea name="revised_answer" placeholder="Revised answer after hint"></textarea><textarea name="coach_feedback" placeholder="Coach feedback"></textarea><div class="score-grid">${scoreInput('score_reasoning','Logical reasoning')}${scoreInput('score_assumptions','Use of assumptions')}${scoreInput('score_adaptability','Adaptability')}${scoreInput('score_clarity','Clarity')}</div><textarea name="reflection" placeholder="Reflection: what changed and what should I practise next?"></textarea><button>Save reasoning session</button></form></section><section class="panel"><h3>Reasoning history</h3>${reasoningHistoryHtml()}</section>`;
+  return `<header class="top"><div><p class="eyebrow">Reading / Thinking / Interview Readiness</p><h2>Practise thinking aloud</h2><p class="muted">The goal is not a perfect answer. It is to state assumptions, reason clearly, respond to hints and revise.</p></div></header>${promptBankHtml('Reasoning prompt bank', reasoningPrompts, 'reasoning-prompt')}<section class="panel"><form data-action="add-reasoning" class="stack reasoning-form"><textarea name="prompt" data-prompt-target="reasoning" placeholder="Unfamiliar prompt" required></textarea><textarea name="assumptions" placeholder="Assumptions I am making"></textarea><textarea name="initial_answer" placeholder="Initial answer"></textarea><textarea name="reasoning_steps" placeholder="Reasoning steps"></textarea><textarea name="hint_given" placeholder="Hint or challenge given"></textarea><textarea name="revised_answer" placeholder="Revised answer after hint"></textarea><textarea name="coach_feedback" placeholder="Coach feedback"></textarea><div class="score-grid">${scoreInput('score_reasoning','Logical reasoning')}${scoreInput('score_assumptions','Use of assumptions')}${scoreInput('score_adaptability','Adaptability')}${scoreInput('score_clarity','Clarity')}</div><textarea name="reflection" placeholder="Reflection: what changed and what should I practise next?"></textarea><button>Save reasoning session</button></form></section><section class="panel"><h3>Reasoning history</h3>${reasoningHistoryHtml()}</section>`;
 }
 
 function reasoningHistoryHtml() {
@@ -455,7 +470,7 @@ function reasoningHistoryHtml() {
 }
 
 function readinessHtml() {
-  return `<header class="top"><div><p class="eyebrow">Overall Analytics</p><h2>Readiness indicators, missed targets and growth focus</h2><p class="muted">This is not a probability of admission. It is a preparation map across the four pillars: A-levels, TARA Assessment, Super-Curricular, and Reading/Thinking Readiness.</p></div></header>${overallAnalyticsSummaryHtml()}<section class="readiness-stack">${Object.entries(state.data.readiness).map(([name, value]) => readinessCardHtml(name, value)).join('')}</section><section class="panel"><h3>How to read this</h3><p class="muted">Not Started and Early mean the habit or evidence base is still thin. Developing means useful work exists but is not yet consistent. Strong and Very Strong require repeated evidence across weekly goals, practice, school results, reflections and milestones.</p></section>`;
+  return `<header class="top"><div><p class="eyebrow">Overall Analytics</p><h2>Readiness indicators, missed targets and growth focus</h2><p class="muted">This is not a probability of admission. It is a preparation map across the four pillars: A-Level Rigour, TARA Assessment, Super-Curricular, and Reading/Thinking Readiness.</p></div></header>${overallAnalyticsSummaryHtml()}${pillarAnalyticsHtml()}<section class="readiness-stack">${Object.entries(state.data.readiness).map(([name, value]) => readinessCardHtml(name, value)).join('')}</section><section class="panel"><h3>How to read this</h3><p class="muted">Not Started and Early mean the habit or evidence base is still thin. Developing means useful work exists but is not yet consistent. Strong and Very Strong require repeated evidence across weekly goals, practice, school results, reflections and milestones.</p></section>`;
 }
 
 function overallAnalyticsSummaryHtml() {
@@ -463,6 +478,11 @@ function overallAnalyticsSummaryHtml() {
   const missed = tasks.filter((task) => task.status === 'skipped').length;
   const incompleteHigh = tasks.filter((task) => task.priority === 'high' && !['completed', 'skipped'].includes(task.status)).length;
   return `<section class="grid six">${card('Weekly goals', `${percent(tasks.filter((task) => task.status === 'completed').length, tasks.length)}%`, `${missed} skipped · ${incompleteHigh} high-priority still open`)}${card('Growth focus', '', state.data.recommendations.slice(0, 2).join('<br>') || 'Complete more activity to generate growth focus.')}${card('Historical signal', `${state.data.weeklyReviews.length}`, 'weekly review records saved')}</section>`;
+}
+
+function pillarAnalyticsHtml() {
+  const rows = pillarRows(state.data.tasks || []);
+  return `<section class="panel"><div class="top mini"><div><p class="eyebrow">Four-Pillar Evidence</p><h3>Weekly balance and missed targets</h3></div><span class="pill medium">50 / 25 / 15 / 10</span></div><div class="pillar-analytics">${rows.map((row) => `<article><div><b>${row.name}</b><small>${row.completed}/${row.total} complete · ${row.minutes} min planned</small></div><div class="bar"><span style="width:${row.percent}%"></span></div></article>`).join('')}</div></section>`;
 }
 
 function readinessCardHtml(name, value) {
@@ -512,6 +532,33 @@ function readinessClass(labelText) {
   return 'low';
 }
 
+function allocationStripHtml(tasks) {
+  const rows = pillarRows(tasks);
+  return `<div class="allocation-strip">${rows.map((row) => `<article><span>${row.name}</span><b>${row.share}%</b><small>${row.minutes} min · ${row.completed}/${row.total} done</small></article>`).join('')}</div>`;
+}
+
+function pillarRows(tasks) {
+  const buckets = [
+    { key: 'a_level', name: 'A-Level Rigour', categories: ['a_level'], target: 50 },
+    { key: 'tara', name: 'TARA Assessment', categories: ['tara'], target: 25 },
+    { key: 'supercurricular', name: 'Super-Curricular', categories: ['economics', 'management'], target: 15 },
+    { key: 'thinking', name: 'Reading / Thinking', categories: ['oxford_reasoning', 'application'], target: 10 }
+  ];
+  const totalMinutes = tasks.reduce((sum, task) => sum + Number(task.estimated_minutes || 0), 0);
+  return buckets.map((bucket) => {
+    const rows = tasks.filter((task) => bucket.categories.includes(task.category));
+    const minutes = rows.reduce((sum, task) => sum + Number(task.estimated_minutes || 0), 0);
+    return {
+      ...bucket,
+      total: rows.length,
+      completed: rows.filter((task) => task.status === 'completed').length,
+      minutes,
+      share: percent(minutes, totalMinutes),
+      percent: percent(rows.filter((task) => task.status === 'completed').length, rows.length)
+    };
+  });
+}
+
 function milestonesHtml() {
   const milestones = sortedMilestones();
   return `<header class="top"><div><p class="eyebrow">Milestones</p><h2>Admissions timeline</h2><p class="muted">Dates are editable because Oxford and school deadlines should be confirmed each year rather than hard-coded.</p></div></header>${milestoneSummaryHtml(milestones)}<section class="panel"><h3>Add milestone</h3><form data-action="add-milestone" class="form-grid"><input name="title" placeholder="Milestone title" required><label>Category<select name="category">${milestoneCategoryOptions('application')}</select></label><input name="target_date" type="date"><label>Status<select name="status">${statusOptions('not_started')}</select></label><input class="span-all" name="notes" placeholder="Notes"><button>Add milestone</button></form></section><section class="grid">${milestones.map(milestoneCardHtml).join('')}</section>`;
@@ -542,6 +589,10 @@ function sortedMilestones() {
     const bd = b.target_date || '9999-12-31';
     return ad.localeCompare(bd) || String(a.title).localeCompare(String(b.title));
   });
+}
+
+function nextOpenMilestone() {
+  return sortedMilestones().find((milestone) => milestone.status !== 'completed' && milestone.target_date);
 }
 
 function milestoneUrgency(milestone) {

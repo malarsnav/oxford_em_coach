@@ -238,6 +238,26 @@ input[type="checkbox"] {
   margin-bottom: 0.85rem;
 }
 
+.signal-grid {
+  display: grid;
+  gap: 0.8rem;
+  margin-bottom: 0.85rem;
+}
+
+.signal-card {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.signal-card h3,
+.signal-card p {
+  margin: 0;
+}
+
+.signal-card small {
+  color: var(--muted);
+}
+
 .next-actions {
   display: grid;
   gap: 0.55rem;
@@ -277,6 +297,51 @@ input[type="checkbox"] {
 .pillar-body {
   display: grid;
   gap: 0.35rem;
+}
+
+.allocation-strip {
+  display: grid;
+  gap: 0.55rem;
+  margin-top: 0.9rem;
+}
+
+.allocation-strip article {
+  display: grid;
+  gap: 0.12rem;
+  padding: 0.75rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: #fbfcfd;
+}
+
+.allocation-strip span,
+.allocation-strip small {
+  color: var(--muted);
+}
+
+.allocation-strip b {
+  font-size: 1.25rem;
+}
+
+.pillar-analytics {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.pillar-analytics article {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.pillar-analytics article > div:first-child {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.pillar-analytics small {
+  color: var(--muted);
+  text-align: right;
 }
 
 .meta-strip {
@@ -963,7 +1028,15 @@ button:disabled {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
+  .signal-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
   .pillar-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .allocation-strip {
     grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 
