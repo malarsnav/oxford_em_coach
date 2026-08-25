@@ -232,6 +232,43 @@ export async function addReasoningSession(user, payload) {
   if (error) throw error;
 }
 
+export async function updateMilestone(user, milestone, patch) {
+  const row = {
+    title: patch.title || milestone.title,
+    category: patch.category || milestone.category,
+    target_date: patch.target_date || null,
+    status: patch.status || milestone.status,
+    notes: patch.notes || null
+  };
+  if (!supabase) {
+    const db = readLocal();
+    db.milestones = db.milestones.map((item) => item.id === milestone.id ? { ...item, ...row, updated_at: new Date().toISOString() } : item);
+    writeLocal(db);
+    return;
+  }
+  const { error } = await supabase.from('milestones').update(row).eq('id', milestone.id).eq('user_id', user.id);
+  if (error) throw error;
+}
+
+export async function addMilestone(user, payload) {
+  const row = {
+    user_id: user.id,
+    title: payload.title,
+    category: payload.category || 'application',
+    target_date: payload.target_date || null,
+    status: payload.status || 'not_started',
+    notes: payload.notes || null
+  };
+  if (!supabase) {
+    const db = readLocal();
+    db.milestones.push({ ...row, id: crypto.randomUUID(), created_at: new Date().toISOString(), updated_at: new Date().toISOString() });
+    writeLocal(db);
+    return;
+  }
+  const { error } = await supabase.from('milestones').insert(row);
+  if (error) throw error;
+}
+
 export async function saveWeeklyReview(user, payload) {
   const row = { ...payload, user_id: user.id, week_start: currentWeek().week_start };
   if (!supabase) {

@@ -1,4 +1,4 @@
-import { bootstrap, getSession, signIn, signOut, saveAttempt, updateTask, createProgramme, addAcademicResult, updateSubject, addAcademicTopic, updateAcademicTopic, addJournalEntry, addReasoningSession, saveWeeklyReview, addInterviewSession, updateProfile, saveTaraErrorAnalysis } from './dataService.js';
+import { bootstrap, getSession, signIn, signOut, saveAttempt, updateTask, createProgramme, addAcademicResult, updateSubject, addAcademicTopic, updateAcademicTopic, addJournalEntry, addReasoningSession, updateMilestone, addMilestone, saveWeeklyReview, addInterviewSession, updateProfile, saveTaraErrorAnalysis } from './dataService.js';
 import { questions } from './questions.js';
 import { questionBankManifest } from './questionBankManifest.generated.js';
 import { methodologyFor } from './methodologies.js';
@@ -56,7 +56,7 @@ function render() {
         <h1>${state.data?.profile?.target_course || 'Oxford Economics & Management'}</h1>
         <p class="muted">${state.user.email}</p>
       </div>
-      <nav>${navButton('dashboard','Dashboard')}${navButton('programme','Weekly Programme')}${navButton('tara','TARA Practice')}${navButton('analytics','TARA Analytics')}${navButton('academics','A-Level')}${navButton('journal','E&M Journal')}${navButton('reasoning','Oxford Reasoning')}${navButton('milestones','Milestones')}${navButton('interview','Interview Prep')}${navButton('review','Weekly Review')}${navButton('parent','Parent View')}${navButton('profile','Profile')}</nav>
+      <nav>${navButton('dashboard','Dashboard')}${navButton('programme','Weekly Programme')}${navButton('tara','TARA Practice')}${navButton('analytics','TARA Analytics')}${navButton('academics','A-Level')}${navButton('journal','E&M Journal')}${navButton('reasoning','Oxford Reasoning')}${navButton('readiness','Readiness')}${navButton('milestones','Milestones')}${navButton('interview','Interview Prep')}${navButton('review','Weekly Review')}${navButton('parent','Parent View')}${navButton('profile','Profile')}</nav>
       <button class="ghost" data-action="signout">Sign out</button>
     </aside>
     <main class="main">${viewHtml()}</main>`;
@@ -90,6 +90,7 @@ function viewHtml() {
   if (state.view === 'academics') return academicsHtml();
   if (state.view === 'journal') return journalHtml();
   if (state.view === 'reasoning') return reasoningHtml();
+  if (state.view === 'readiness') return readinessHtml();
   if (state.view === 'milestones') return milestonesHtml();
   if (state.view === 'interview') return interviewHtml();
   if (state.view === 'review') return weeklyReviewHtml();
@@ -374,8 +375,115 @@ function reasoningHtml() {
   return `<header class="top"><div><p class="eyebrow">Oxford Reasoning</p><h2>Practise thinking aloud</h2></div></header><section class="panel"><form data-action="add-reasoning" class="stack"><textarea name="prompt" placeholder="Unfamiliar prompt" required></textarea><textarea name="assumptions" placeholder="Assumptions"></textarea><textarea name="initial_answer" placeholder="Initial answer"></textarea><textarea name="reasoning_steps" placeholder="Reasoning steps"></textarea><textarea name="revised_answer" placeholder="Revised answer after hint"></textarea><textarea name="reflection" placeholder="Reflection"></textarea><button>Save reasoning session</button></form></section>`;
 }
 
+function readinessHtml() {
+  return `<header class="top"><div><p class="eyebrow">Oxford Readiness</p><h2>Progress without fake admissions odds</h2><p class="muted">This is not a probability of getting into Oxford. It is a preparation map showing where the student is building strength and what would move each area forward.</p></div></header><section class="readiness-stack">${Object.entries(state.data.readiness).map(([name, value]) => readinessCardHtml(name, value)).join('')}</section><section class="panel"><h3>How to read this</h3><p class="muted">Not Started and Early mean the habit or evidence base is still thin. Developing means useful work exists but is not yet consistent. Strong and Very Strong require repeated evidence across practice, school results, reflections and milestones.</p></section>`;
+}
+
+function readinessCardHtml(name, value) {
+  const advice = readinessAdvice(name, value);
+  return `<article class="panel readiness-card"><div class="top mini"><div><h3>${escapeHtml(name)}</h3><p class="muted">${escapeHtml(advice.summary)}</p></div><span class="pill ${readinessClass(value.label)}">${escapeHtml(value.label)}</span></div><div class="readiness-meter"><span style="width:${Math.max(4, value.score || 0)}%"></span></div><p class="why"><b>Move this up:</b> ${escapeHtml(advice.next)}</p><small class="muted">${escapeHtml(advice.formula)}</small></article>`;
+}
+
+function readinessAdvice(name, value) {
+  const map = {
+    'Academic Strength': {
+      summary: 'A-Level grades, recent assessment percentages and weak topic load.',
+      next: 'Record recent assessments, then move weak/developing topics into weekly tasks until predicted grades and latest results are secure.',
+      formula: 'Currently based on latest recorded assessment percentage across subjects.'
+    },
+    'TARA Readiness': {
+      summary: 'Overall TARA accuracy, consistency and weakness repair.',
+      next: state.data.tara.weakestSubtype ? `Practise ${state.data.tara.weakestSubtype.name} and retry missed questions until accuracy is consistently above 70%.` : 'Complete several 5-question sets so the app can identify reliable weak areas.',
+      formula: 'Currently based on overall recorded TARA question accuracy.'
+    },
+    'Supercurricular Depth': {
+      summary: 'Quantity and depth of E&M journal entries.',
+      next: 'Convert reading-list items into CLAIM-MECHANISM-EVIDENCE-OBJECTION-RESPONSE entries with economics and management links.',
+      formula: 'Currently rises with substantive journal entries and is capped until deeper quality measures are added.'
+    },
+    'Oxford Reasoning': {
+      summary: 'Practice thinking aloud, stating assumptions and revising answers.',
+      next: 'Save Oxford Reasoning sessions with assumptions, initial answer, revised answer and reflection.',
+      formula: 'Currently starts moving after recorded reasoning sessions.'
+    },
+    'Application Readiness': {
+      summary: 'Weekly task completion and admissions milestone progress.',
+      next: 'Set milestone dates, complete application tasks, and capture evidence from journal entries.',
+      formula: 'Currently uses the stronger of weekly completion and milestone completion.'
+    },
+    'Interview Readiness': {
+      summary: 'Interview-specific practice once the student enters the relevant phase.',
+      next: 'Begin interview sessions after core reasoning habits are underway, then track clarity, adaptability and quantitative feedback.',
+      formula: 'Currently stays low until reasoning practice and milestone progress exist.'
+    }
+  };
+  return map[name] || { summary: value.label, next: 'Keep collecting evidence in the relevant modules.', formula: 'Transparent readiness dimension.' };
+}
+
+function readinessClass(labelText) {
+  if (labelText === 'Very Strong' || labelText === 'Strong') return 'success';
+  if (labelText === 'Developing') return 'medium';
+  return 'low';
+}
+
 function milestonesHtml() {
-  return `<header class="top"><div><p class="eyebrow">Milestones</p><h2>Admissions timeline</h2></div></header><section class="grid">${state.data.milestones.map((m)=>card(m.title, m.target_date || 'Date unset', `${m.category} · ${m.status}`)).join('')}</section>`;
+  const milestones = sortedMilestones();
+  return `<header class="top"><div><p class="eyebrow">Milestones</p><h2>Admissions timeline</h2><p class="muted">Dates are editable because Oxford and school deadlines should be confirmed each year rather than hard-coded.</p></div></header>${milestoneSummaryHtml(milestones)}<section class="panel"><h3>Add milestone</h3><form data-action="add-milestone" class="form-grid"><input name="title" placeholder="Milestone title" required><label>Category<select name="category">${milestoneCategoryOptions('application')}</select></label><input name="target_date" type="date"><label>Status<select name="status">${statusOptions('not_started')}</select></label><input class="span-all" name="notes" placeholder="Notes"><button>Add milestone</button></form></section><section class="grid">${milestones.map(milestoneCardHtml).join('')}</section>`;
+}
+
+function milestoneSummaryHtml(milestones) {
+  const open = milestones.filter((m) => m.status !== 'completed');
+  const overdue = open.filter((m) => milestoneUrgency(m) === 'overdue');
+  const due30 = open.filter((m) => {
+    const days = daysUntil(m.target_date);
+    return days !== null && days >= 0 && days <= 30;
+  });
+  const due90 = open.filter((m) => {
+    const days = daysUntil(m.target_date);
+    return days !== null && days > 30 && days <= 90;
+  });
+  return `<section class="grid six">${card('Next 30 days', due30.length, due30.slice(0, 3).map((m) => escapeHtml(m.title)).join('<br>') || 'No dated milestones.')}${card('Next 90 days', due90.length, due90.slice(0, 3).map((m) => escapeHtml(m.title)).join('<br>') || 'No later milestones.')}${card('Overdue', overdue.length, overdue.slice(0, 3).map((m) => escapeHtml(m.title)).join('<br>') || 'Nothing overdue.')}</section>`;
+}
+
+function milestoneCardHtml(milestone) {
+  const urgency = milestoneUrgency(milestone);
+  return `<article class="panel milestone ${urgency}"><form data-action="update-milestone" class="stack"><input type="hidden" name="milestone_id" value="${milestone.id}"><div class="top mini"><div><input name="title" value="${escapeAttr(milestone.title)}" required><p class="muted">${milestone.target_date ? `${formatDate(milestone.target_date)} · ${urgencyLabel(urgency, milestone)}` : 'Date unset'}</p></div><span class="pill ${urgency === 'overdue' ? 'high' : urgency === 'soon' ? 'medium' : 'low'}">${escapeHtml(urgencyLabel(urgency, milestone))}</span></div><div class="form-grid"><label>Category<select name="category">${milestoneCategoryOptions(milestone.category)}</select></label><label>Status<select name="status">${statusOptions(milestone.status)}</select></label><label>Target date<input name="target_date" type="date" value="${escapeAttr(milestone.target_date || '')}"></label></div><input name="notes" value="${escapeAttr(milestone.notes || '')}" placeholder="Notes"><button>Save milestone</button></form></article>`;
+}
+
+function sortedMilestones() {
+  return [...state.data.milestones].sort((a, b) => {
+    const ad = a.target_date || '9999-12-31';
+    const bd = b.target_date || '9999-12-31';
+    return ad.localeCompare(bd) || String(a.title).localeCompare(String(b.title));
+  });
+}
+
+function milestoneUrgency(milestone) {
+  if (milestone.status === 'completed') return 'done';
+  const days = daysUntil(milestone.target_date);
+  if (days === null) return 'undated';
+  if (days < 0) return 'overdue';
+  if (days <= 30) return 'soon';
+  if (days <= 90) return 'upcoming';
+  return 'later';
+}
+
+function urgencyLabel(urgency, milestone) {
+  if (urgency === 'done') return 'Completed';
+  if (urgency === 'undated') return 'Set date';
+  const days = daysUntil(milestone.target_date);
+  if (urgency === 'overdue') return `${Math.abs(days)}d overdue`;
+  if (urgency === 'soon') return `${days}d left`;
+  if (urgency === 'upcoming') return 'Next 90d';
+  return 'Later';
+}
+
+function milestoneCategoryOptions(selected) {
+  return ['school','tara','application','interview','supercurricular'].map((category) => `<option value="${category}" ${sel(selected,category)}>${label(category)}</option>`).join('');
+}
+
+function statusOptions(selected) {
+  return ['not_started','in_progress','completed','skipped'].map((status) => `<option value="${status}" ${sel(selected,status)}>${label(status)}</option>`).join('');
 }
 
 function weeklyReviewHtml() {
@@ -712,6 +820,11 @@ app.addEventListener('submit', async (event) => {
     if (action === 'add-topic') await addAcademicTopic(state.user, values);
     if (action === 'add-journal') await addJournalEntry(state.user, values);
     if (action === 'add-reasoning') await addReasoningSession(state.user, values);
+    if (action === 'add-milestone') await addMilestone(state.user, values);
+    if (action === 'update-milestone') {
+      const milestone = findMilestone(values.milestone_id);
+      await updateMilestone(state.user, milestone, values);
+    }
     if (action === 'add-interview') await addInterviewSession(state.user, values);
     if (action === 'save-review') await saveWeeklyReview(state.user, values);
     if (action === 'save-profile') await updateProfile(state.user, normalizeProfilePayload(values));
@@ -741,6 +854,10 @@ function findAcademicTopic(id) {
 
 function findSubject(id) {
   return state.data.subjects.find((subject) => subject.id === id);
+}
+
+function findMilestone(id) {
+  return state.data.milestones.find((milestone) => milestone.id === id);
 }
 
 function highlight(text, parts = []) {
@@ -792,6 +909,13 @@ function weekStartDate() {
   const day = date.getDay() || 7;
   date.setDate(date.getDate() - day + 1);
   return date.toISOString().slice(0, 10);
+}
+
+function daysUntil(value) {
+  if (!value) return null;
+  const todayDate = new Date(`${todayInput()}T00:00:00`);
+  const targetDate = new Date(`${value}T00:00:00`);
+  return Math.ceil((targetDate.getTime() - todayDate.getTime()) / 86400000);
 }
 
 function sel(value, expected) {

@@ -246,6 +246,46 @@ input[type="checkbox"] {
   background: #e8edf0;
 }
 
+.readiness-stack {
+  display: grid;
+  gap: 0.8rem;
+}
+
+.readiness-card {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.readiness-meter {
+  height: 11px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #e8edf0;
+}
+
+.readiness-meter span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--accent);
+}
+
+.milestone {
+  border-left: 5px solid var(--line);
+}
+
+.milestone.soon {
+  border-left-color: var(--accent-2);
+}
+
+.milestone.overdue {
+  border-left-color: var(--danger);
+}
+
+.milestone.done {
+  border-left-color: var(--accent);
+}
+
 .bar span {
   display: block;
   height: 100%;
