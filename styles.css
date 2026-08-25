@@ -367,6 +367,11 @@ input[type="checkbox"] {
   background: var(--soft);
 }
 
+.pill.success {
+  color: var(--accent);
+  background: var(--soft);
+}
+
 .stack,
 .form-grid {
   display: grid;
