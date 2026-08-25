@@ -4,6 +4,7 @@ import { questionBankManifest } from './questionBankManifest.generated.js';
 import { methodologyFor } from './methodologies.js';
 import { createProgrammeDraft } from './weeklyGeneratorService.js';
 import { buildDailyDigest, previousLocalDate } from './dailyDigestService.js';
+import { getAlevelTopicPlan } from './aLevelTopicPlan.js';
 
 const app = document.querySelector('#app');
 const MAGIC_LINK_THROTTLE_MINUTES = 30;
@@ -123,6 +124,7 @@ function programmeHtml() {
   return `
     <header class="top"><div><p class="eyebrow">Weekly Programme</p><h2>${formatDate(p.week_start)} - ${formatDate(p.week_end)}</h2><p>${p.phase}: ${p.weekly_focus}</p></div><button data-action="show-generator">Generate Weekly Programme</button></header>
     <section class="panel"><h3>${percent(tasks.filter(t=>t.status==='completed').length,tasks.length)}% complete</h3><div class="bar"><span style="width:${percent(tasks.filter(t=>t.status==='completed').length,tasks.length)}%"></span></div><p>${completed}/${total} minutes completed. ${total-completed} minutes remaining.</p><p>${p.coach_summary || ''}</p></section>
+    ${aLevelTopicPlanHtml()}
     ${state.draft ? draftHtml() : ''}
     <section class="grid">${groupTasks(tasks)}</section>`;
 }
@@ -134,7 +136,12 @@ function generatorHtml(message='Generate a personalised weekly programme') {
     <label>School week<select name="schoolWeek"><option value="normal">Normal</option><option value="exam">Exam-heavy</option><option value="holiday">Holiday</option></select></label>
     <label>Priority<select name="priority"><option value="none">No preference</option><option value="tara">More TARA</option><option value="economics">More Economics</option><option value="management">More Management</option><option value="a_level">More A-Level</option><option value="oxford_reasoning">More Oxford Reasoning</option><option value="application">More Application/Interview</option></select></label>
     <button>Generate draft</button>
-  </form></section>${state.draft ? draftHtml() : ''}`;
+  </form></section>${aLevelTopicPlanHtml()}${state.draft ? draftHtml() : ''}`;
+}
+
+function aLevelTopicPlanHtml() {
+  const topics = getAlevelTopicPlan(state.data);
+  return `<section class="panel topic-plan"><div class="top mini"><div><p class="eyebrow">A-Level Topics To Master</p><h3>This week's academic focus</h3></div><span class="pill high">${topics.length} topics</span></div><div class="topic-list">${topics.map((item) => `<article><b>${escapeHtml(item.subject)}</b><p>${escapeHtml(item.topic)}</p><small>${escapeHtml(item.reason)}</small></article>`).join('')}</div></section>`;
 }
 
 function draftHtml() {

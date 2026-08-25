@@ -1,3 +1,5 @@
+import { getAlevelTopicPlan, topicTaskFor } from './aLevelTopicPlan.js';
+
 const labels = {
   a_level: 'A-Level',
   tara: 'TARA',
@@ -36,9 +38,12 @@ export function createProgrammeDraft(state, preferences = {}) {
 }
 
 function baseTasks(state, preferences) {
+  const aLevelTasks = getAlevelTopicPlan(state).map((item) => {
+    const planned = topicTaskFor(item);
+    return task(planned.category, planned.title, planned.description, planned.estimated_minutes, planned.priority);
+  });
   const tasks = [
-    task('a_level', 'Review the week’s most difficult Maths topic', 'Identify one Maths concept from school this week that felt least secure. Rework examples until you can solve the problem without notes.', 45, 'high'),
-    task('a_level', 'Explain one Economics concept from memory', 'Write a clear five-sentence explanation without notes, then check your textbook and correct any gaps.', 25, 'high'),
+    ...aLevelTasks,
     task('tara', 'Complete a 5-question TARA set', 'Use TARA Practice to complete one bite-sized set and review the methodology report.', 25, 'medium'),
     task('economics', 'Analyse one economics article', 'Record the main claim, mechanism, evidence, assumptions and one counterargument.', 35, 'medium'),
     task('management', 'Explain a strategic business choice', 'Answer: why might a company sell a product at a loss? Give at least three strategic reasons.', 20, 'low'),

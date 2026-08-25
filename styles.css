@@ -254,6 +254,27 @@ input[type="checkbox"] {
   margin: 0.35rem 0 0;
 }
 
+.topic-list {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.topic-list article {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 0.8rem;
+  background: #fbfcfd;
+}
+
+.topic-list p {
+  margin: 0.3rem 0;
+  font-weight: 700;
+}
+
+.topic-list small {
+  color: var(--muted);
+}
+
 .trend {
   display: flex;
   align-items: end;
@@ -535,6 +556,10 @@ button:disabled {
   }
 
   .digest-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .topic-list {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
