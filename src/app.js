@@ -21,6 +21,7 @@ const state = {
   notice: null,
   reviewAttemptId: null,
   academicTopicFilter: 'all',
+  journalMode: 'reading',
   taraFilters: { year: 'all', family: 'all', type: 'all', pattern: 'all' },
   preferences: { minutes: 180, workload: 'standard', schoolWeek: 'normal', priority: 'none' }
 };
@@ -240,7 +241,8 @@ function taraRecommendationHtml(t) {
   if (!t.totalQuestions) return `<section class="panel"><h3>What to practise next</h3><p class="muted">Complete one set first. The app will then recommend practice from the weakest type or sub-type.</p></section>`;
   const weak = t.weakestSubtype || t.weakestType;
   const reason = weak?.total ? `${weak.name} is currently ${weak.accuracy}% across ${weak.total} question${weak.total === 1 ? '' : 's'}.` : 'There is not enough detail yet, so use smart coverage to keep seeing unseen questions.';
-  return `<section class="panel recommendation"><div class="top mini"><div><h3>What to practise next</h3><p>${escapeHtml(reason)}</p></div><span class="pill high">${weak?.accuracy ?? t.overallAccuracy}%</span></div><p class="callout">Recommended action: ${weak?.name ? `start a focused 5-question set for ${escapeHtml(weak.name)}, then review every trap and carry-forward method.` : 'start a smart coverage set.'}</p></section>`;
+  const missed = missedQuestionPool().length;
+  return `<section class="panel recommendation"><div class="top mini"><div><h3>What to practise next</h3><p>${escapeHtml(reason)}</p></div><span class="pill high">${weak?.accuracy ?? t.overallAccuracy}%</span></div><p class="callout">Recommended action: ${weak?.name ? `start a focused 5-question set for ${escapeHtml(weak.name)}, then review every trap and carry-forward method.` : 'start a smart coverage set.'}</p>${missed ? `<button class="ghost" data-action="start-retry-tara" title="Practise questions previously answered incorrectly">Retry ${missed} missed question${missed === 1 ? '' : 's'}</button>` : ''}</section>`;
 }
 
 function repeatMistakesHtml(t) {
@@ -308,7 +310,64 @@ function masteryOptions(selected) {
 }
 
 function journalHtml() {
-  return `<header class="top"><div><p class="eyebrow">E&M Journal</p><h2>CLAIM · MECHANISM · EVIDENCE · OBJECTION · RESPONSE</h2></div></header><section class="panel"><form data-action="add-journal" class="stack"><input name="title" placeholder="Title" required><input name="topic_tags" placeholder="Economics, Strategy, Public Policy"><textarea name="main_claim" placeholder="Main claim"></textarea><textarea name="mechanism" placeholder="Mechanism"></textarea><textarea name="evidence" placeholder="Evidence"></textarea><textarea name="assumptions" placeholder="Assumptions"></textarea><textarea name="counterargument" placeholder="Counterargument"></textarea><textarea name="response" placeholder="Response"></textarea><textarea name="reflection" placeholder="Reflection"></textarea><button>Save journal entry</button></form></section><section class="grid">${state.data.journal.map((j)=>card(j.title,'',j.main_claim || j.reflection || '')).join('')}</section>`;
+  return `<header class="top"><div><p class="eyebrow">E&M Journal</p><h2>Reading list and thinking journal</h2><p class="muted">Track what to read next, then convert completed reading into Oxford-style thinking: claim, mechanism, evidence, objection and response.</p></div></header><section class="panel compact-panel"><div class="segmented">${['reading','thinking'].map((mode) => `<button class="${state.journalMode === mode ? 'active' : ''}" data-journal-mode="${mode}" title="Open ${mode === 'reading' ? 'reading list tracker' : 'thinking journal'}">${mode === 'reading' ? 'Reading List' : 'Thinking Journal'}</button>`).join('')}</div></section>${state.journalMode === 'reading' ? readingListHtml() : thinkingJournalHtml()}`;
+}
+
+function readingListHtml() {
+  const items = state.data.journal;
+  const statuses = ['planned','reading','completed'];
+  return `<section class="grid six">${statuses.map((status) => card(label(status), readingItems(status).length, statusHint(status))).join('')}</section><section class="panel"><h3>Add reading item</h3><form data-action="add-journal" class="form-grid"><input name="title" placeholder="Title" required><input name="author" placeholder="Author / speaker"><input name="source" placeholder="Book, article, lecture, podcast"><input name="url" type="url" placeholder="Link"><label>Type<select name="entry_type">${journalTypeOptions('article')}</select></label><label>Status<select name="reading_status"><option value="planned">Planned</option><option value="reading">Currently reading</option><option value="completed">Completed</option></select></label><input name="topic_tags" placeholder="Economics, Strategy, Public Policy"><textarea class="span-all" name="reflection" placeholder="Why this belongs on the E&M list"></textarea><button>Add to reading list</button></form></section><section class="grid">${items.length ? statuses.map(readingColumnHtml).join('') : '<section class="panel"><p class="muted">Add readings, lectures, podcasts or reports to start building a proper E&M reading pipeline.</p></section>'}</section>`;
+}
+
+function thinkingJournalHtml() {
+  return `<section class="panel framework"><h3>CLAIM · MECHANISM · EVIDENCE · OBJECTION · RESPONSE</h3><p class="muted">A strong entry should explain not only what the source says, but how the mechanism works, what evidence supports it, and what could be wrong.</p></section><section class="panel"><form data-action="add-journal" class="stack"><input name="title" placeholder="Title" required><div class="form-grid"><input name="source" placeholder="Source"><input name="author" placeholder="Author"><input name="url" type="url" placeholder="Link"><label>Type<select name="entry_type">${journalTypeOptions('article')}</select></label><input name="date_completed" type="date" value="${todayInput()}"><input name="topic_tags" placeholder="Economics, Strategy, Public Policy"></div><textarea name="main_claim" placeholder="Main claim"></textarea><textarea name="mechanism" placeholder="Mechanism"></textarea><textarea name="evidence" placeholder="Evidence"></textarea><textarea name="assumptions" placeholder="Assumptions"></textarea><textarea name="counterargument" placeholder="Counterargument"></textarea><textarea name="response" placeholder="Response"></textarea><textarea name="what_changed_my_mind" placeholder="What changed my mind"></textarea><textarea name="how_it_links_to_economics" placeholder="How it links to Economics"></textarea><textarea name="how_it_links_to_management" placeholder="How it links to Management"></textarea><textarea name="interview_relevance" placeholder="Interview relevance"></textarea><textarea name="application_relevance" placeholder="Application relevance"></textarea><textarea name="reflection" placeholder="Reflection"></textarea><input type="hidden" name="reading_status" value="completed"><button>Save thinking entry</button></form></section><section class="grid">${state.data.journal.map(journalCardHtml).join('') || '<section class="panel"><p class="muted">No journal entries yet.</p></section>'}</section>`;
+}
+
+function readingColumnHtml(status) {
+  const items = readingItems(status);
+  return `<section class="panel"><h3>${label(status)}</h3>${items.map(readingItemHtml).join('') || '<p class="muted">No items here yet.</p>'}</section>`;
+}
+
+function readingItemHtml(item) {
+  return `<article class="reading-item"><b>${escapeHtml(item.title)}</b><p>${escapeHtml(item.author || item.source || item.entry_type || 'Source not set')}</p><small>${journalTags(item).filter((tag) => !tag.startsWith('status:')).slice(0, 4).map(escapeHtml).join(' · ') || 'No topic tags yet'}</small>${item.url ? `<a href="${escapeAttr(item.url)}" target="_blank" rel="noreferrer">Open source</a>` : ''}</article>`;
+}
+
+function journalCardHtml(item) {
+  const depth = journalDepth(item);
+  return `<article class="panel card"><div class="top mini"><div><h3>${escapeHtml(item.title)}</h3><p class="muted">${escapeHtml(item.source || item.entry_type || 'Journal entry')}</p></div><span class="pill ${depth >= 70 ? 'success' : depth >= 40 ? 'medium' : 'low'}">${depth}% depth</span></div><p>${escapeHtml(item.main_claim || item.reflection || 'No claim recorded yet.')}</p><div class="mini-checks">${['main_claim','mechanism','evidence','counterargument','response'].map((field) => `<span class="${item[field] ? 'done' : ''}">${field.replaceAll('_',' ')}</span>`).join('')}</div></article>`;
+}
+
+function readingItems(status) {
+  return state.data.journal.filter((item) => readingStatus(item) === status);
+}
+
+function readingStatus(item) {
+  const statusTag = journalTags(item).find((tag) => tag.startsWith('status:'));
+  if (statusTag) return statusTag.replace('status:', '');
+  return item.date_completed ? 'completed' : 'planned';
+}
+
+function journalTags(item) {
+  if (Array.isArray(item.topic_tags)) return item.topic_tags;
+  return String(item.topic_tags || '').split(',').map((tag) => tag.trim()).filter(Boolean);
+}
+
+function journalDepth(item) {
+  const fields = ['main_claim','mechanism','evidence','assumptions','counterargument','response','how_it_links_to_economics','how_it_links_to_management','reflection'];
+  return Math.round((fields.filter((field) => String(item[field] || '').trim()).length / fields.length) * 100);
+}
+
+function statusHint(status) {
+  const hints = {
+    planned: 'Ideas to read, watch or listen to next.',
+    reading: 'Items currently in progress.',
+    completed: 'Completed items ready for deeper reflection.'
+  };
+  return hints[status];
+}
+
+function journalTypeOptions(selected) {
+  return ['book','article','lecture','podcast','essay','competition','research_project','debate','dataset','other'].map((type) => `<option value="${type}" ${sel(selected,type)}>${label(type)}</option>`).join('');
 }
 
 function reasoningHtml() {
@@ -320,7 +379,33 @@ function milestonesHtml() {
 }
 
 function weeklyReviewHtml() {
-  return `<header class="top"><div><p class="eyebrow">Weekly Review</p><h2>What should change next week?</h2></div></header><section class="panel"><form data-action="save-review" class="stack">${['completed_summary','skipped_summary','hardest_area','biggest_improvement','biggest_weakness','most_valuable_task','student_reflection','next_week_focus'].map((name)=>`<textarea name="${name}" placeholder="${name.replaceAll('_',' ')}"></textarea>`).join('')}<button>Save review</button></form></section>`;
+  const draft = weeklyReviewDraft();
+  return `<header class="top"><div><p class="eyebrow">Weekly Review</p><h2>What should change next week?</h2><p class="muted">The app pre-fills the measurable parts. The student adds judgement and reflection.</p></div></header><section class="grid six">${card('Tasks completed', draft.completedCount, `${draft.totalCount} total tasks`)}${card('Tasks skipped', draft.skippedCount, 'Skipped is tracked separately from completed.')}${card('TARA focus', draft.taraFocus, 'Based on latest weak sub-type.')}</section><section class="panel"><form data-action="save-review" class="stack">${weeklyReviewField('completed_summary', draft.completed_summary)}${weeklyReviewField('skipped_summary', draft.skipped_summary)}${weeklyReviewField('hardest_area', draft.hardest_area)}${weeklyReviewField('biggest_improvement', '')}${weeklyReviewField('biggest_weakness', draft.biggest_weakness)}${weeklyReviewField('most_valuable_task', '')}${weeklyReviewField('student_reflection', '')}${weeklyReviewField('next_week_focus', draft.next_week_focus)}<button>Save review</button></form></section>`;
+}
+
+function weeklyReviewDraft() {
+  const tasks = state.data.tasks || [];
+  const completed = tasks.filter((task) => task.status === 'completed');
+  const skipped = tasks.filter((task) => task.status === 'skipped');
+  const weakTopics = state.data.subjects.flatMap((subject) => (subject.academic_topics || [])
+    .filter((topic) => ['weak', 'developing'].includes(topic.mastery_status))
+    .map((topic) => `${subject.name}: ${topic.topic_name}`));
+  const taraWeak = state.data.tara.weakestSubtype?.name || 'Not enough TARA data yet';
+  return {
+    completedCount: completed.length,
+    skippedCount: skipped.length,
+    totalCount: tasks.length,
+    taraFocus: taraWeak,
+    completed_summary: completed.map((task) => `${label(task.category)}: ${task.title}`).join('\n') || 'No tasks completed yet.',
+    skipped_summary: skipped.map((task) => `${label(task.category)}: ${task.title}`).join('\n') || 'No tasks skipped.',
+    hardest_area: weakTopics[0] || taraWeak,
+    biggest_weakness: weakTopics.slice(0, 3).join('\n') || taraWeak,
+    next_week_focus: state.data.recommendations[0] || 'Keep workload realistic and complete the highest-value weekly tasks first.'
+  };
+}
+
+function weeklyReviewField(name, value) {
+  return `<label>${label(name)}<textarea name="${name}" placeholder="${name.replaceAll('_',' ')}">${escapeHtml(value || '')}</textarea></label>`;
 }
 
 function interviewHtml() {
@@ -457,6 +542,26 @@ function startRecommendedTara() {
   startTara();
 }
 
+function startRetryTara() {
+  const pool = missedQuestionPool();
+  if (!pool.length) {
+    state.notice = { type: 'info', message: 'No missed questions are available for retry yet.' };
+    state.view = 'tara';
+    return;
+  }
+  state.practice = { set: shuffle(pool).slice(0, Math.min(5, pool.length)), index: 0, answers: {}, startedAt: new Date().toISOString(), report: false };
+  state.notice = { type: 'success', message: `Retrying ${Math.min(5, pool.length)} previously missed question${Math.min(5, pool.length) === 1 ? '' : 's'}.` };
+  state.view = 'tara';
+}
+
+function missedQuestionPool() {
+  const missed = (state.data?.tara?.responses || []).filter((response) => !response.is_correct);
+  return missed
+    .map((response) => questions.find((question) => String(question.paper_year) === String(response.paper_year) && Number(question.question_number) === Number(response.question_number)))
+    .filter(Boolean)
+    .filter(uniqueQuestion);
+}
+
 function filteredQuestions() {
   return questions.filter((q) =>
     (state.taraFilters.year === 'all' || String(q.paper_year) === state.taraFilters.year) &&
@@ -506,6 +611,7 @@ app.addEventListener('click', async (event) => {
   if (target.dataset.view) { state.view = target.dataset.view; render(); return; }
   if (target.dataset.answer) { state.practice.answers[state.practice.set[state.practice.index].id] = target.dataset.answer; render(); return; }
   if (target.dataset.topicFilter) { state.academicTopicFilter = target.dataset.topicFilter; render(); return; }
+  if (target.dataset.journalMode) { state.journalMode = target.dataset.journalMode; render(); return; }
   if (target.dataset.removeDraft) { state.draft.tasks.splice(Number(target.dataset.removeDraft), 1); render(); return; }
   if (target.dataset.reviewAttempt) { state.reviewAttemptId = target.dataset.reviewAttempt; state.view = 'analytics'; render(); return; }
   const action = target.dataset.action;
@@ -513,6 +619,7 @@ app.addEventListener('click', async (event) => {
   if (action === 'start-tara') { startTara(); render(); }
   if (action === 'start-smart') { startSmartTara(); render(); }
   if (action === 'start-recommended-tara') { startRecommendedTara(); render(); }
+  if (action === 'start-retry-tara') { startRetryTara(); render(); }
   if (action === 'prev-question') { state.practice.index = Math.max(0, state.practice.index - 1); render(); }
   if (action === 'next-question') { state.practice.index = Math.min(state.practice.set.length - 1, state.practice.index + 1); render(); }
   if (action === 'submit-tara') await submitTara();

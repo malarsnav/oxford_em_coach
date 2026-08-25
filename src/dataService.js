@@ -201,10 +201,18 @@ export async function updateAcademicTopic(user, topic, patch) {
 }
 
 export async function addJournalEntry(user, payload) {
-  const row = { ...payload, user_id: user.id, topic_tags: splitTags(payload.topic_tags) };
+  const tags = splitTags(payload.topic_tags);
+  if (payload.reading_status) tags.push(`status:${payload.reading_status}`);
+  const { reading_status, ...cleanPayload } = payload;
+  const row = {
+    ...cleanPayload,
+    user_id: user.id,
+    topic_tags: [...new Set(tags)],
+    date_completed: cleanPayload.date_completed || (payload.reading_status === 'completed' ? today() : null)
+  };
   if (!supabase) {
     const db = readLocal();
-    db.journal_entries.push({ ...row, id: crypto.randomUUID(), date_completed: payload.date_completed || today() });
+    db.journal_entries.push({ ...row, id: crypto.randomUUID(), created_at: new Date().toISOString(), updated_at: new Date().toISOString() });
     writeLocal(db);
     return;
   }
