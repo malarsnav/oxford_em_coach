@@ -2,8 +2,10 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') || '';
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
-const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY') || '';
+const EMAIL_API_URL = Deno.env.get('EMAIL_API_URL') || '';
+const EMAIL_API_KEY = Deno.env.get('EMAIL_API_KEY') || '';
 const DIGEST_FROM_EMAIL = Deno.env.get('DIGEST_FROM_EMAIL') || '';
+const EMAIL_PROVIDER_PAYLOAD_TEMPLATE = Deno.env.get('EMAIL_PROVIDER_PAYLOAD_TEMPLATE') || '';
 const CRON_SECRET = Deno.env.get('DAILY_DIGEST_CRON_SECRET') || '';
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
@@ -81,16 +83,25 @@ function weakestGroup(rows: Array<Record<string, unknown>>, key: string) {
 }
 
 async function sendEmail(to: string, subject: string, html: string) {
-  if (!RESEND_API_KEY || !DIGEST_FROM_EMAIL) throw new Error('Missing email provider environment variables');
-  const response = await fetch('https://api.resend.com/emails', {
+  if (!EMAIL_API_URL || !EMAIL_API_KEY || !DIGEST_FROM_EMAIL) throw new Error('Missing provider-neutral email environment variables');
+  const response = await fetch(EMAIL_API_URL, {
     method: 'POST',
     headers: {
-      Authorization: `Bearer ${RESEND_API_KEY}`,
+      Authorization: `Bearer ${EMAIL_API_KEY}`,
       'Content-Type': 'application/json'
     },
-    body: JSON.stringify({ from: DIGEST_FROM_EMAIL, to, subject, html })
+    body: JSON.stringify(buildEmailPayload({ from: DIGEST_FROM_EMAIL, to, subject, html }))
   });
   if (!response.ok) throw new Error(await response.text());
+}
+
+function buildEmailPayload(values: Record<string, string>) {
+  if (!EMAIL_PROVIDER_PAYLOAD_TEMPLATE) return values;
+  const rendered = Object.entries(values).reduce(
+    (text, [key, value]) => text.replaceAll(`{{${key}}}`, value),
+    EMAIL_PROVIDER_PAYLOAD_TEMPLATE
+  );
+  return JSON.parse(rendered);
 }
 
 function emailHtml(profile: Record<string, string>, digest: Record<string, any>, date: string) {
