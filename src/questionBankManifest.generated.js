@@ -20,41 +20,64 @@ export const questionBankManifest = {
     "specimen"
   ],
   "visualQuestionCount": 172,
-  "families": [
-    "Critical Reasoning",
-    "Problem Solving"
+  "broadTypes": [
+    "Critical Thinking",
+    "Numerical Reasoning & Problem-Solving"
   ],
-  "officialTypes": [
-    "Additional Evidence / Strengthen / Weaken",
-    "Assumption",
+  "subTypes": [
+    "Applying Principles",
+    "Assessing Additional Evidence",
+    "Detecting Reasoning Errors (Flaws)",
     "Drawing a Conclusion",
     "Finding Procedures",
-    "Flaw",
-    "Identifying Similarity",
-    "Main Conclusion",
-    "Matching Principles",
-    "Parallel Reasoning",
-    "Selecting Relevant Information"
+    "Identifying Assumptions",
+    "Identifying the Main Conclusion",
+    "Matching Arguments (Parallel Reasoning)",
+    "Relevant Selection",
+    "Spatial Reasoning & Pattern Analysis"
   ],
-  "patterns": [
-    "Argument Structure Match",
-    "Averages and Totals",
-    "Conclusion vs Reasons",
-    "Correlation vs Causation",
-    "Data Selection from Tables or Graphs",
-    "Explaining or Testing Evidence",
-    "General Rule Application",
-    "Hidden Procedure Selection",
-    "Inference From Given Facts",
-    "Invalid Logical Leap",
-    "Missing Link Assumption",
-    "Optimization / Bottleneck Pattern",
-    "Overgeneralisation",
-    "Queues, Schedules, and Overlaps",
-    "Rate and Resource Conversions",
-    "Ratios and Percentages",
-    "Spatial and Net Rotations",
-    "Strengthening New Evidence",
-    "Weakening New Evidence"
+  "topicTags": [
+    "3D Net Folding & Block Rotating",
+    "Applying Principles",
+    "Assessing Additional Evidence",
+    "Cost-Optimization & Combinatorics",
+    "Data Filtering & Table Extraction",
+    "Detecting Reasoning Errors (Flaws)",
+    "Drawing a Conclusion",
+    "Identifying Assumptions",
+    "Identifying Missing Constraints",
+    "Identifying the Main Conclusion",
+    "Matching Arguments (Parallel Reasoning)",
+    "Rate, Ratio & Multi-step Arithmetic",
+    "Timetable & Gantt/Schedule Optimization",
+    "Work Rates & Motion Dynamics"
+  ],
+  "difficultyTiers": [
+    {
+      "tier": 1,
+      "label": "Easy"
+    },
+    {
+      "tier": 2,
+      "label": "Moderately Easy"
+    },
+    {
+      "tier": 3,
+      "label": "Moderately Difficult"
+    },
+    {
+      "tier": 4,
+      "label": "Hard"
+    }
+  ],
+  "criticalThinkingObjectives": [
+    "Applied Logic",
+    "Evaluative Analysis",
+    "Structural Analysis"
+  ],
+  "problemSolvingModes": [
+    "Finding Procedures",
+    "Relevant Selection",
+    "Spatial Reasoning & Pattern Analysis"
   ]
 };

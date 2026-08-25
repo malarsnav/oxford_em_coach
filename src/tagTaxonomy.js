@@ -1,7 +1,9 @@
-export const TOP_LEVEL_TYPES = [
+export const BROAD_TYPES = [
   'Critical Thinking',
   'Numerical Reasoning & Problem-Solving'
 ];
+
+export const TOP_LEVEL_TYPES = BROAD_TYPES;
 
 export const CRITICAL_THINKING_SUBTYPES = [
   'Identifying the Main Conclusion',
@@ -13,28 +15,81 @@ export const CRITICAL_THINKING_SUBTYPES = [
   'Matching Arguments (Parallel Reasoning)'
 ];
 
-export const NUMERICAL_REASONING_SUBTYPES = [
-  'Basic Arithmetic Operations',
-  'Percentages and Ratios',
-  'Real-Life Measurements',
-  'Data Interpretation',
-  'Spatial and Logical Problem-Solving'
+export const CRITICAL_THINKING_OBJECTIVES = {
+  'Structural Analysis': [
+    'Identifying the Main Conclusion',
+    'Identifying Assumptions',
+    'Matching Arguments (Parallel Reasoning)'
+  ],
+  'Evaluative Analysis': [
+    'Detecting Reasoning Errors (Flaws)',
+    'Assessing Additional Evidence',
+    'Drawing a Conclusion'
+  ],
+  'Applied Logic': [
+    'Applying Principles'
+  ]
+};
+
+export const PROBLEM_SOLVING_SUBTYPES = [
+  'Relevant Selection',
+  'Finding Procedures',
+  'Spatial Reasoning & Pattern Analysis'
+];
+
+export const PROBLEM_SOLVING_TOPIC_TAGS = [
+  'Data Filtering & Table Extraction',
+  'Identifying Missing Constraints',
+  'Rate, Ratio & Multi-step Arithmetic',
+  'Cost-Optimization & Combinatorics',
+  'Work Rates & Motion Dynamics',
+  '3D Net Folding & Block Rotating',
+  'Timetable & Gantt/Schedule Optimization',
+  'Abstract Pattern Logic'
 ];
 
 export const ALL_SUBTYPES = [
   ...CRITICAL_THINKING_SUBTYPES,
-  ...NUMERICAL_REASONING_SUBTYPES
+  ...PROBLEM_SOLVING_SUBTYPES
 ];
 
 export function normalizeQuestionTags(question) {
   const tags = classifyTags(question);
-  return {
+  const normalized = {
     ...question,
-    type: tags.type,
+    type: tags.broadType,
     sub_type: tags.subType,
-    family: tags.type,
-    official_question_type: tags.subType,
-    reasoning_pattern: tags.subType
+    broad_type: tags.broadType,
+    topic_tag: tags.topicTag,
+    critical_objective: tags.criticalObjective,
+    estimated_difficulty_tier: estimatedDifficultyTier(question, tags),
+    estimated_difficulty_label: difficultyLabel(estimatedDifficultyTier(question, tags)),
+    time_budget_seconds: timeBudgetSeconds(question, tags),
+    distractor_analysis: distractorAnalysis(question),
+    has_image: Boolean(question.visuals?.length),
+    requires_spatial_processing: tags.requiresSpatialProcessing,
+    em_concept_link: emConceptLink(tags)
+  };
+
+  return {
+    ...normalized,
+    metadata: {
+      question_id: question.id,
+      paper_year: question.paper_year,
+      paper_name: question.paper || 'TSA Section 1',
+      question_num: question.question_number,
+      broad_type: normalized.broad_type,
+      sub_type: normalized.sub_type,
+      topic_tag: normalized.topic_tag,
+      critical_objective: normalized.critical_objective,
+      estimated_difficulty_tier: normalized.estimated_difficulty_tier,
+      estimated_difficulty_label: normalized.estimated_difficulty_label,
+      time_budget_seconds: normalized.time_budget_seconds,
+      distractor_analysis: normalized.distractor_analysis,
+      has_image: normalized.has_image,
+      requires_spatial_processing: normalized.requires_spatial_processing,
+      em_concept_link: normalized.em_concept_link
+    }
   };
 }
 
@@ -47,34 +102,47 @@ export function normalizeResponseTags(response) {
   });
   return {
     ...response,
-    question_type: tags.type,
-    reasoning_pattern: tags.subType
+    question_type: tags.broadType,
+    reasoning_pattern: tags.subType,
+    topic_tag: response.topic_tag || tags.topicTag
   };
 }
 
 export function subtypesForType(type) {
   if (type === 'Critical Thinking') return CRITICAL_THINKING_SUBTYPES;
-  if (type === 'Numerical Reasoning & Problem-Solving') return NUMERICAL_REASONING_SUBTYPES;
+  if (type === 'Numerical Reasoning & Problem-Solving') return PROBLEM_SOLVING_SUBTYPES;
   return ALL_SUBTYPES;
 }
 
+export function objectiveForCriticalSubtype(subType) {
+  return Object.entries(CRITICAL_THINKING_OBJECTIVES)
+    .find(([, subTypes]) => subTypes.includes(subType))?.[0] || null;
+}
+
 function classifyTags(item) {
-  const rawType = clean(item.official_question_type || item.question_type || item.family);
-  const rawFamily = clean(item.family || item.question_type);
-  const rawPattern = clean(item.reasoning_pattern);
-  const text = clean(item.question_text);
+  const rawType = clean(item.official_question_type || item.question_type || item.family || item.type);
+  const rawFamily = clean(item.family || item.question_type || item.type);
+  const rawPattern = clean(item.reasoning_pattern || item.specificPattern || item.pattern || item.topic_tag);
+  const text = clean(item.question_text || item.question);
 
   const criticalSubtype = criticalSubtypeFrom(rawType) || criticalSubtypeFrom(rawPattern);
   if (criticalSubtype || rawFamily.includes('critical')) {
     return {
-      type: 'Critical Thinking',
-      subType: criticalSubtype || 'Drawing a Conclusion'
+      broadType: 'Critical Thinking',
+      subType: criticalSubtype || 'Drawing a Conclusion',
+      topicTag: criticalSubtype || 'Drawing a Conclusion',
+      criticalObjective: objectiveForCriticalSubtype(criticalSubtype || 'Drawing a Conclusion'),
+      requiresSpatialProcessing: false
     };
   }
 
+  const problem = problemSolvingTags(`${rawType} ${rawPattern} ${text}`);
   return {
-    type: 'Numerical Reasoning & Problem-Solving',
-    subType: numericalSubtypeFrom(`${rawType} ${rawPattern} ${text}`)
+    broadType: 'Numerical Reasoning & Problem-Solving',
+    subType: problem.subType,
+    topicTag: problem.topicTag,
+    criticalObjective: null,
+    requiresSpatialProcessing: problem.subType === 'Spatial Reasoning & Pattern Analysis' || /spatial|rotation|cube|net|grid|shape|diagram|adjacency|tile/.test(`${rawPattern} ${text}`)
   };
 }
 
@@ -90,12 +158,90 @@ function criticalSubtypeFrom(value) {
   return null;
 }
 
-function numericalSubtypeFrom(value) {
-  if (/\b(percent|percentage|ratio|proportion|discount|scale|fraction)\b/.test(value)) return 'Percentages and Ratios';
-  if (/\b(rate|resource|conversion|time|date|hour|minute|currency|money|pound|dollar|euro|metre|meter|litre|liter|weight|area|volume|speed|distance|unit)\b/.test(value)) return 'Real-Life Measurements';
-  if (/\b(table|chart|graph|schedule|timetable|data|row|column|extract|selection|relevant information|queue|overlap)\b/.test(value)) return 'Data Interpretation';
-  if (/\b(spatial|rotation|cube|net|grid|shape|diagram|pattern|logical|similarity|adjacency|tile)\b/.test(value)) return 'Spatial and Logical Problem-Solving';
-  return 'Basic Arithmetic Operations';
+function problemSolvingTags(value) {
+  if (/\b(table|chart|graph|data|row|column|extract|selection|relevant information)\b/.test(value)) {
+    return { subType: 'Relevant Selection', topicTag: 'Data Filtering & Table Extraction' };
+  }
+  if (/\b(constraint|condition|must|cannot|at least|at most|minimum|maximum|missing)\b/.test(value)) {
+    return { subType: 'Relevant Selection', topicTag: 'Identifying Missing Constraints' };
+  }
+  if (/\b(schedule|timetable|gantt|queue|overlap|hour|minute|date|calendar)\b/.test(value)) {
+    return { subType: 'Spatial Reasoning & Pattern Analysis', topicTag: 'Timetable & Gantt/Schedule Optimization' };
+  }
+  if (/\b(spatial|rotation|cube|net|block|3d|grid|shape|diagram|adjacency|tile)\b/.test(value)) {
+    return { subType: 'Spatial Reasoning & Pattern Analysis', topicTag: '3D Net Folding & Block Rotating' };
+  }
+  if (/\b(rate|speed|distance|work|motion|flow|per hour|per minute)\b/.test(value)) {
+    return { subType: 'Finding Procedures', topicTag: 'Work Rates & Motion Dynamics' };
+  }
+  if (/\b(cost|price|profit|cheap|expensive|optim|combination|combinatoric|bottleneck|maximum|minimum)\b/.test(value)) {
+    return { subType: 'Finding Procedures', topicTag: 'Cost-Optimization & Combinatorics' };
+  }
+  if (/\b(pattern|sequence|cycle|logic|similarity|abstract)\b/.test(value)) {
+    return { subType: 'Spatial Reasoning & Pattern Analysis', topicTag: 'Abstract Pattern Logic' };
+  }
+  return { subType: 'Finding Procedures', topicTag: 'Rate, Ratio & Multi-step Arithmetic' };
+}
+
+function estimatedDifficultyTier(question, tags) {
+  const rawDifficulty = clean(question.difficulty);
+  const textLength = String(question.question_text || '').length;
+  let base = rawDifficulty.includes('hard') ? 4 : rawDifficulty.includes('easy') ? 1 : 3;
+  if (!rawDifficulty.includes('hard') && !question.visuals?.length) {
+    if (tags.subType === 'Identifying the Main Conclusion' && textLength < 850) base = 1;
+    else if (tags.broadType === 'Critical Thinking' && textLength < 700) base = 2;
+    else if (tags.broadType === 'Numerical Reasoning & Problem-Solving' && textLength < 350) base = 2;
+  }
+  const visualBump = question.visuals?.length ? 1 : 0;
+  const spatialBump = tags.requiresSpatialProcessing ? 1 : 0;
+  const textBump = textLength > 900 ? 1 : 0;
+  const numericalEaseAdjustment = tags.broadType === 'Numerical Reasoning & Problem-Solving' && !tags.requiresSpatialProcessing ? -1 : 0;
+  return Math.max(1, Math.min(4, base + Math.max(visualBump, spatialBump, textBump) + numericalEaseAdjustment));
+}
+
+function difficultyLabel(tier) {
+  return {
+    1: 'Easy',
+    2: 'Moderately Easy',
+    3: 'Moderately Difficult',
+    4: 'Hard'
+  }[tier] || 'Moderately Difficult';
+}
+
+function timeBudgetSeconds(question, tags) {
+  if (tags.broadType === 'Critical Thinking') {
+    if (tags.subType === 'Identifying the Main Conclusion') return 55;
+    if (tags.subType === 'Matching Arguments (Parallel Reasoning)') return 105;
+    return 75;
+  }
+  if (tags.subType === 'Relevant Selection') return question.visuals?.length ? 115 : 95;
+  if (tags.subType === 'Spatial Reasoning & Pattern Analysis') return 140;
+  return 110;
+}
+
+function distractorAnalysis(question) {
+  const options = Object.keys(question.answer_options || {});
+  return Object.fromEntries(options.map((option) => [
+    `option_${option}`,
+    option === question.correct_answer ? 'Correct' : genericDistractorReason(option, question)
+  ]));
+}
+
+function genericDistractorReason(option, question) {
+  const text = clean(question.question_text);
+  if (text.includes('table') || text.includes('graph') || text.includes('chart')) return 'Likely uses the wrong row, column, chart label or extracted value.';
+  if (text.includes('must') || text.includes('cannot') || text.includes('at least')) return 'Likely violates or overlooks one of the constraints.';
+  if (text.includes('conclusion') || text.includes('flaw') || text.includes('assumption')) return 'Plausible distractor, but it does not perform the exact logical task asked.';
+  return `Plausible distractor ${option}; check the method steps to see which condition it fails.`;
+}
+
+function emConceptLink(tags) {
+  if (tags.topicTag === 'Cost-Optimization & Combinatorics') return 'Opportunity Cost / Resource Allocation';
+  if (tags.topicTag === 'Data Filtering & Table Extraction') return 'Evidence Selection / Data Use';
+  if (tags.topicTag === 'Rate, Ratio & Multi-step Arithmetic') return 'Marginal Change / Proportional Reasoning';
+  if (tags.subType === 'Relevant Selection') return 'Decision-Making Under Constraints';
+  if (tags.broadType === 'Critical Thinking') return 'Argument Evaluation / Evidence Quality';
+  return 'Structured Problem Solving';
 }
 
 function clean(value) {

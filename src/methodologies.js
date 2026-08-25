@@ -90,48 +90,6 @@ export const methodologies = {
     'Apply that same rule to each option.',
     'Choose the option governed by the same principle.'
   ],
-  'Basic Arithmetic Operations': [
-    'Identify the quantity the question asks for.',
-    'Write down the required arithmetic steps before calculating.',
-    'Keep units and labels attached to each number.',
-    'Estimate the size of the answer to catch slips.',
-    'Check the final option against the exact question asked.'
-  ],
-  'Percentages and Ratios': [
-    'Decide whether the relationship is part-to-whole, part-to-part or percentage change.',
-    'Convert percentages, fractions and ratios into a common form.',
-    'Use the correct base value for every percentage.',
-    'Scale ratios carefully before comparing options.',
-    'Check whether the answer should increase, decrease or remain proportional.'
-  ],
-  'Real-Life Measurements': [
-    'List every unit in the problem before calculating.',
-    'Convert time, money, length, area, volume or speed into consistent units.',
-    'Watch for fixed charges, step changes, dates or boundary conditions.',
-    'Do the calculation only after units match.',
-    'Return the answer in the unit requested by the question.'
-  ],
-  'Data Interpretation': [
-    'Read the final question first.',
-    'Locate the exact row, column, chart feature or timetable entry needed.',
-    'Ignore data that is not needed for the requested quantity.',
-    'Combine only the relevant values.',
-    'Check labels, headings and units before choosing.'
-  ],
-  'Spatial and Logical Problem-Solving': [
-    'Translate the diagram or pattern into constraints.',
-    'Track position, order, adjacency or rotation step by step.',
-    'Use impossible cases to eliminate options quickly.',
-    'Avoid relying on visual similarity alone.',
-    'Choose the option that satisfies every spatial or logical constraint.'
-  ],
-  'Selecting Relevant Information': [
-    'Read the final question first.',
-    'Identify the exact quantity required.',
-    'Extract only the needed values, labels and units.',
-    'Ignore distractor information.',
-    'Check that the answer uses the correct row, column or condition.'
-  ],
   'Finding Procedures': [
     'Translate every verbal condition into a constraint.',
     'Define simple variables.',
@@ -139,11 +97,19 @@ export const methodologies = {
     'Apply inequalities and units carefully.',
     'Eliminate any option violating even one condition.'
   ],
-  'Identifying Similarity': [
-    'Find the underlying relationship or pattern.',
-    'Ignore superficial presentation differences.',
-    'Map the same structure onto each option.',
-    'Reject options with a hidden mismatch in order, proportion or adjacency.'
+  'Relevant Selection': [
+    'Read the final question first and name the exact target quantity.',
+    'Mark only the values, labels, rows, columns or constraints needed for that target.',
+    'Ignore distraction data even if it looks mathematically useful.',
+    'Check whether any condition is missing, hidden or only implied.',
+    'Choose the option that uses all relevant information and no irrelevant information.'
+  ],
+  'Spatial Reasoning & Pattern Analysis': [
+    'Convert the visual, timetable or pattern into explicit constraints.',
+    'Track position, order, adjacency, timing or repetition step by step.',
+    'Use impossible cases to eliminate options quickly.',
+    'Check whether the same pattern is being shown in a different format.',
+    'Choose the option that satisfies every spatial, schedule or pattern constraint.'
   ]
 };
 

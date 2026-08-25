@@ -5,7 +5,7 @@ import { methodologyFor } from './methodologies.js';
 import { createProgrammeDraft } from './weeklyGeneratorService.js';
 import { buildDailyDigest, previousLocalDate } from './dailyDigestService.js';
 import { getAlevelTopicPlan } from './aLevelTopicPlan.js';
-import { ALL_SUBTYPES, TOP_LEVEL_TYPES } from './tagTaxonomy.js';
+import { ALL_SUBTYPES, PROBLEM_SOLVING_TOPIC_TAGS, TOP_LEVEL_TYPES } from './tagTaxonomy.js';
 
 const app = document.querySelector('#app');
 const MAGIC_LINK_THROTTLE_MINUTES = 30;
@@ -36,7 +36,7 @@ const state = {
   reviewAttemptId: null,
   academicTopicFilter: 'all',
   journalMode: 'reading',
-  taraFilters: { year: 'all', family: 'all', type: 'all', pattern: 'all' },
+  taraFilters: { year: 'all', family: 'all', type: 'all', topic: 'all', pattern: 'all' },
   preferences: { minutes: 180, workload: 'standard', schoolWeek: 'normal', priority: 'none' }
 };
 
@@ -72,7 +72,7 @@ function render() {
         <h1>${state.data?.profile?.target_course || 'Oxford Economics & Management'}</h1>
         <p class="muted">${state.user.email}</p>
       </div>
-      <nav>${navButton('dashboard','Dashboard')}${navButton('programme','Weekly Programme')}${navButton('tara','TARA Practice')}${navButton('analytics','TARA Analytics')}${navButton('academics','A-Level')}${navButton('journal','E&M Journal')}${navButton('reasoning','Oxford Reasoning')}${navButton('readiness','Readiness')}${navButton('milestones','Milestones')}${navButton('interview','Interview Prep')}${navButton('review','Weekly Review')}${navButton('parent','Parent View')}${navButton('profile','Profile')}</nav>
+      <nav>${navigationHtml()}</nav>
       <button class="ghost" data-action="signout">Sign out</button>
     </aside>
     <main class="main">${viewHtml()}</main>`;
@@ -84,8 +84,8 @@ function renderLogin() {
     <main class="login">
       <section class="panel hero">
         <p class="eyebrow">Oxford E&M Coach</p>
-        <h1>Plan the week. Practise TARA. Build genuine E&M depth.</h1>
-        <p>A mobile-first preparation coach for a 15-month Oxford Economics & Management journey.</p>
+        <h1>Track the indicators that matter for Oxford E&M.</h1>
+        <p>A coaching dashboard for A-Level strength, admissions-test readiness, E&M depth, reasoning, milestones and interview preparation.</p>
         <form data-action="login" class="stack">
           <input name="email" type="email" placeholder="Student email" autocomplete="email" inputmode="email" required />
           <button type="submit">Send magic link</button>
@@ -98,6 +98,19 @@ function renderLogin() {
 
 function navButton(view, label) {
   return `<button class="${state.view === view ? 'active' : ''}" data-view="${view}" title="Open ${label}">${label}</button>`;
+}
+
+function navigationHtml() {
+  return `
+    ${navSection('Start', [['dashboard','Dashboard'], ['programme','Weekly Programme']])}
+    ${navSection('Four Pillars', [['academics','A-Levels'], ['tara','TARA Assessment'], ['journal','Super-Curricular'], ['reasoning','Reading / Thinking']])}
+    ${navSection('Analytics', [['readiness','Overall Analytics'], ['analytics','TARA Detail']])}
+    ${navSection('Journey', [['milestones','Milestones'], ['interview','Interview'], ['review','Weekly Review']])}
+    ${navSection('Account', [['parent','Parent View'], ['profile','Profile']])}`;
+}
+
+function navSection(title, items) {
+  return `<section class="nav-section"><p>${title}</p><div>${items.map(([view, labelText]) => navButton(view, labelText)).join('')}</div></section>`;
 }
 
 function viewHtml() {
@@ -123,18 +136,53 @@ function dashboardHtml() {
   const remaining = tasks.filter((t) => !['completed', 'skipped'].includes(t.status));
   return `
     <header class="top">
-      <div><p class="eyebrow">Today / This Week</p><h2>What should I work on this week?</h2></div>
+      <div><p class="eyebrow">Oxford E&M Coaching Dashboard</p><h2>What needs attention now?</h2><p class="muted">Track four success indicators each week: A-levels, TARA Assessment, Super-Curricular depth, and Reading/Thinking Readiness.</p></div>
       <button data-view="programme">Open Weekly Programme</button>
     </header>
-    <section class="grid six">
-      ${card('This Week', `${percent(done, tasks.length)}% complete`, `${data.programme?.weekly_focus || 'No programme yet.'}<br>${remaining.slice(0,2).map((t) => `<b>${t.title}</b>`).join('<br>') || 'Generate a programme to begin.'}`)}
-      ${card('TARA Mastery', `${data.tara.overallAccuracy}% accuracy`, `${questionBankManifest.totalQuestions} questions · ${questionBankManifest.visualQuestionCount} with visuals<br>Coverage: ${coveragePercent()}% of bank<br>Strongest sub-type: ${data.tara.strongestSubtype?.name || 'Not enough data'}<br>Weakest sub-type: ${data.tara.weakestSubtype?.name || 'Not enough data'}<br><button data-action="start-smart" title="Prioritise unseen questions, then weak questions">Smart coverage set</button>`)}
-      ${card('A-Level Progress', `${data.subjects.length} subjects`, data.subjects.map((s) => `${s.name}: ${s.predicted_grade || 'Not set'}`).join('<br>'))}
-      ${card('E&M Exploration', `${data.journal.length} entries`, data.journal[0]?.title || 'Add a structured journal entry.')}
-      ${card('Oxford Readiness', '', Object.entries(data.readiness).map(([k,v]) => `${k}: <b>${v.label}</b>`).join('<br>'))}
-      ${card('Upcoming Milestones', '', data.milestones.slice(0,3).map((m) => `${m.title}: ${m.target_date || 'date unset'}`).join('<br>'))}
+    <section class="panel focus-card">
+      <div>
+        <p class="eyebrow">This Week</p>
+        <h3>${data.programme?.weekly_focus || 'No weekly programme yet'}</h3>
+        <p class="muted">${done}/${tasks.length} tasks completed · ${remaining.length} still open</p>
+      </div>
+      <div class="bar"><span style="width:${percent(done, tasks.length)}%"></span></div>
+      <div class="next-actions">${remaining.slice(0,2).map((t) => `<article><b>${escapeHtml(t.title)}</b><small>${label(t.category)} · ${t.estimated_minutes || 0} min</small></article>`).join('') || '<p class="muted">Generate a programme to begin.</p>'}</div>
+    </section>
+    <section class="pillar-grid">
+      ${pillarCard('A-Levels', 'Subject goals and mastery', aLevelPillarHtml(), 'academics')}
+      ${pillarCard('TARA Assessment', 'Accuracy, coverage and methodology', taraPillarHtml(), 'tara')}
+      ${pillarCard('Super-Curricular', 'Economics and management depth', supercurricularPillarHtml(), 'journal')}
+      ${pillarCard('Reading / Thinking', 'Reasoning, reflection and interview habits', thinkingPillarHtml(), 'reasoning')}
     </section>
     <section class="panel"><h3>Adaptive recommendations</h3>${data.recommendations.length ? data.recommendations.map((r) => `<p class="callout">${r}</p>`).join('') : '<p class="muted">Complete sessions and tasks to build recommendations.</p>'}</section>`;
+}
+
+function pillarCard(title, subtitle, body, view) {
+  return `<article class="panel pillar-card"><div><p class="eyebrow">${title}</p><h3>${subtitle}</h3></div><div class="pillar-body">${body}</div><button class="ghost" data-view="${view}" title="Open ${title}">Open</button></article>`;
+}
+
+function aLevelPillarHtml() {
+  const weakTopics = state.data.subjects.flatMap((subject) => (subject.academic_topics || [])
+    .filter((topic) => ['weak', 'developing'].includes(topic.mastery_status))
+    .map((topic) => `${subject.name}: ${topic.topic_name}`));
+  const aLevelTasks = state.data.tasks.filter((task) => task.category === 'a_level');
+  return `<p class="metric">${percent(aLevelTasks.filter((task) => task.status === 'completed').length, aLevelTasks.length)}%</p><p>${aLevelTasks.length} weekly goal${aLevelTasks.length === 1 ? '' : 's'} · ${weakTopics.length} topic${weakTopics.length === 1 ? '' : 's'} need attention</p><small>${weakTopics.slice(0, 2).map(escapeHtml).join('<br>') || 'Add topics to track mastery.'}</small>`;
+}
+
+function taraPillarHtml() {
+  return `<p class="metric">${state.data.tara.overallAccuracy}%</p><p>${state.data.tara.totalQuestions} questions answered · ${coveragePercent()}% bank covered</p><small>Weakest skill: ${escapeHtml(state.data.tara.weakestSubtype?.name || 'Not enough data')}</small>`;
+}
+
+function supercurricularPillarHtml() {
+  const recent = state.data.journal.filter((entry) => daysSince(entry.date_completed || entry.created_at) <= 30);
+  const depth = state.data.journal.length ? Math.round(state.data.journal.reduce((sum, entry) => sum + journalDepth(entry), 0) / state.data.journal.length) : 0;
+  return `<p class="metric">${recent.length}</p><p>entries in the last 30 days · ${depth}% average depth</p><small>${escapeHtml(state.data.journal[0]?.title || 'Add a reading or thinking entry.')}</small>`;
+}
+
+function thinkingPillarHtml() {
+  const reasoningScore = state.data.reasoning.length ? reasoningAverage(state.data.reasoning[0]) : 'not scored';
+  const openMilestones = state.data.milestones.filter((m) => m.status !== 'completed').length;
+  return `<p class="metric">${state.data.reasoning.length}</p><p>reasoning sessions · latest ${reasoningScore}</p><small>${openMilestones} milestone${openMilestones === 1 ? '' : 's'} still open</small>`;
 }
 
 function programmeHtml() {
@@ -157,7 +205,7 @@ function generatorHtml(message='Generate a personalised weekly programme') {
     <label>Available minutes<input name="minutes" type="number" value="${state.preferences.minutes}"></label>
     <label>Workload<select name="workload"><option value="light">Light</option><option value="standard" selected>Standard</option><option value="intensive">Intensive</option></select></label>
     <label>School week<select name="schoolWeek"><option value="normal">Normal</option><option value="exam">Exam-heavy</option><option value="holiday">Holiday</option></select></label>
-    <label>Priority<select name="priority"><option value="none">No preference</option><option value="tara">More TARA</option><option value="economics">More Economics</option><option value="management">More Management</option><option value="a_level">More A-Level</option><option value="oxford_reasoning">More Oxford Reasoning</option><option value="application">More Application/Interview</option></select></label>
+    <label>Priority<select name="priority"><option value="none">No preference</option><option value="tara">More admissions-test practice</option><option value="economics">More Economics</option><option value="management">More Management</option><option value="a_level">More A-Level</option><option value="oxford_reasoning">More Oxford Reasoning</option><option value="application">More Application/Interview</option></select></label>
     <button>Generate draft</button>
   </form></section>${aLevelTopicPlanHtml()}${state.draft ? draftHtml() : ''}`;
 }
@@ -189,11 +237,15 @@ function taskHtml(t) {
 }
 
 function taraHtml() {
-  if (!state.practice) return `<header class="top"><div><p class="eyebrow">TARA Practice</p><h2>5-question methodology set</h2></div><div class="actions"><button data-action="start-smart" title="Prioritise unseen questions, then weak questions">Smart coverage set</button><button class="ghost" data-action="start-tara" title="Start a filtered practice set using the filters below">Start filtered set</button></div></header>${noticeHtml()}${taraFilterHtml()}<section class="grid">${card('Question bank coverage', `${coveragePercent()}%`, `${answeredQuestionKeys().size}/${questions.length} questions seen at least once`)}${card('Current filter match', `${filteredQuestions().length}`, 'Questions available for the selected filters')}</section><section class="panel"><h3>How smart coverage works</h3><p class="muted">Smart coverage chooses unseen questions first, then questions from weak types and patterns, then mastered questions only when needed.</p></section>`;
+  if (!state.practice) return `<header class="top"><div><p class="eyebrow">TARA Assessment Practice</p><h2>5-question methodology set</h2><p class="muted">TARA/TSA-style practice is one of the four weekly indicators, alongside A-levels, super-curricular depth and reading/thinking readiness.</p></div><div class="actions"><button data-action="start-smart" title="Prioritise unseen questions, then weak questions">Smart coverage set</button><button class="ghost" data-action="start-tara" title="Start a filtered practice set using the filters below">Start filtered set</button></div></header>${noticeHtml()}${taraFilterHtml()}<section class="grid">${card('Question bank coverage', `${coveragePercent()}%`, `${answeredQuestionKeys().size}/${questions.length} questions seen at least once`)}${card('Current filter match', `${filteredQuestions().length}`, 'Questions available for the selected filters')}</section><section class="panel"><h3>How smart coverage works</h3><p class="muted">Smart coverage chooses unseen questions first, then questions from weak types and patterns, then mastered questions only when needed.</p></section>`;
   if (state.practice.report) return reportHtml();
   const q = state.practice.set[state.practice.index];
   const selected = state.practice.answers[q.id];
-  return `<section class="panel question"><p class="eyebrow">${q.paper_year} Q${q.question_number} · ${q.type} · ${q.sub_type}</p><h2>${highlight(q.question_text, q.relevant_question_highlights)}</h2>${visualHtml(q)}${Object.entries(q.answer_options).map(([k,v])=>`<button class="option ${optionClass(q, k, selected)}" data-answer="${k}"><b>${k}</b> ${v}</button>`).join('')}${instantFeedbackHtml(q, selected)}<div class="actions"><button class="ghost" data-action="prev-question">Previous</button><button class="ghost" data-action="next-question">Next</button><button data-action="submit-tara">Submit set</button></div></section>`;
+  return `<section class="panel question"><p class="eyebrow">${q.paper_year} Q${q.question_number} · ${q.type} · ${q.sub_type}</p>${questionMetaHtml(q)}<h2>${highlight(q.question_text, q.relevant_question_highlights)}</h2>${visualHtml(q)}${Object.entries(q.answer_options).map(([k,v])=>`<button class="option ${optionClass(q, k, selected)}" data-answer="${k}"><b>${k}</b> ${v}</button>`).join('')}${instantFeedbackHtml(q, selected)}<div class="actions"><button class="ghost" data-action="prev-question">Previous</button><button class="ghost" data-action="next-question">Next</button><button data-action="submit-tara">Submit set</button></div></section>`;
+}
+
+function questionMetaHtml(q) {
+  return `<div class="meta-strip"><span>${escapeHtml(q.topic_tag || 'No topic tag')}</span><span>Difficulty ${q.estimated_difficulty_tier || 3}/4 · ${escapeHtml(q.estimated_difficulty_label || 'Moderately Difficult')}</span><span>${q.time_budget_seconds || 90}s target</span>${q.requires_spatial_processing ? '<span>Spatial processing</span>' : ''}</div>`;
 }
 
 function optionClass(q, key, selected) {
@@ -217,7 +269,13 @@ function reportHtml() {
 
 function coachingHtml(q, selected) {
   const correct = selected === q.correct_answer;
-  return `<article class="panel coaching"><p class="eyebrow">Question ${q.question_number} · ${q.type} · ${q.sub_type}</p><h3>${correct ? 'Correct' : 'Incorrect'} · Your answer ${selected || 'blank'} · Official answer ${q.correct_answer}</h3><h4>A. Standard methodology</h4><ol>${methodologyFor(q.sub_type).map((m)=>`<li>${m}</li>`).join('')}</ol><h4>B. Full original question</h4><p>${highlight(q.question_text, q.relevant_question_highlights)}</p>${visualHtml(q)}<h4>C. Highlight decisive wording</h4><p>${q.relevant_question_highlights.map((h)=>`<mark>${h}</mark>`).join(' ') || '<span class="muted">No extracted highlight yet. Use the question stem and numerical constraints as the first clues.</span>'}</p><h4>D. What the wording should trigger</h4><p>${triggerFor(q)}</p><h4>E. Apply the method</h4><p>${coachingExplanation(q)}</p><h4>F. Trap to avoid</h4><p>${trapFor(q)}</p><h4>G. Method to carry forward</h4><p>${carryForwardFor(q)}</p></article>`;
+  return `<article class="panel coaching"><p class="eyebrow">Question ${q.question_number} · ${q.type} · ${q.sub_type}</p><h3>${correct ? 'Correct' : 'Incorrect'} · Your answer ${selected || 'blank'} · Official answer ${q.correct_answer}</h3>${questionMetaHtml(q)}<h4>A. Standard methodology</h4><ol>${methodologyFor(q.sub_type).map((m)=>`<li>${m}</li>`).join('')}</ol><h4>B. Full original question</h4><p>${highlight(q.question_text, q.relevant_question_highlights)}</p>${visualHtml(q)}<h4>C. Highlight decisive wording</h4><p>${q.relevant_question_highlights.map((h)=>`<mark>${h}</mark>`).join(' ') || '<span class="muted">No extracted highlight yet. Use the question stem and numerical constraints as the first clues.</span>'}</p><h4>D. What the wording should trigger</h4><p>${triggerFor(q)}</p><h4>E. Apply the method</h4><p>${coachingExplanation(q)}</p><h4>F. Trap to avoid</h4><p>${trapFor(q)}</p>${distractorAnalysisHtml(q)}<h4>G. Method to carry forward</h4><p>${carryForwardFor(q)}</p></article>`;
+}
+
+function distractorAnalysisHtml(q) {
+  const rows = Object.entries(q.distractor_analysis || {});
+  if (!rows.length) return '';
+  return `<h4>Option-by-option distractor check</h4><div class="distractor-list">${rows.map(([option, reason]) => `<article><b>${option.replace('option_', '')}</b><p>${escapeHtml(reason)}</p></article>`).join('')}</div>`;
 }
 
 function coachingExplanation(q) {
@@ -233,11 +291,9 @@ function trapFor(q) {
     'Assessing Additional Evidence': 'Do not pick evidence that is just related to the topic. It must strengthen or weaken the argument’s conclusion.',
     'Applying Principles': 'Avoid matching surface details. Extract the rule first, then test which option follows that rule.',
     'Matching Arguments (Parallel Reasoning)': 'Ignore topic similarity. Match the logical structure, including whether the original reasoning is flawed.',
-    'Basic Arithmetic Operations': 'The common slip is doing the right arithmetic on the wrong quantity. Label each number before calculating.',
-    'Percentages and Ratios': 'The trap is using the wrong base or confusing part-to-part with part-to-whole.',
-    'Real-Life Measurements': 'The trap is mixing units or missing a fixed charge, boundary condition or conversion step.',
-    'Data Interpretation': 'The trap is reading the wrong row, column, chart label or timetable direction.',
-    'Spatial and Logical Problem-Solving': 'The trap is trusting a visual impression instead of checking every constraint.'
+    'Relevant Selection': 'The trap is calculating with distraction data instead of first identifying the exact values and constraints needed.',
+    'Finding Procedures': 'The trap is trying arithmetic immediately before choosing the right strategy or setting up the hidden constraint.',
+    'Spatial Reasoning & Pattern Analysis': 'The trap is relying on visual similarity instead of tracking position, timing, adjacency or pattern rules.'
   };
   return traps[q.sub_type] || 'Do not choose an option that sounds related but fails the exact task.';
 }
@@ -252,7 +308,7 @@ function carryForwardFor(q) {
 
 function analyticsHtml() {
   const t = state.data.tara;
-  return `<header class="top"><div><p class="eyebrow">TARA Analytics</p><h2>${t.overallAccuracy}% overall accuracy</h2></div><button data-action="start-recommended-tara">Practise recommended area</button></header>${taraRecommendationHtml(t)}<section class="grid">${card('Total attempts', t.totalAttempts, `${t.totalQuestions} questions answered`)}${card('Average set score', t.averageSetScore, 'Mini-sets are not official scaled scores.')}${card('Critical Thinking', `${t.criticalAccuracy}%`, '')}${card('Numerical Reasoning', `${t.problemAccuracy}%`, '')}</section><section class="panel"><h3>Accuracy trend</h3>${trend(t.recentTrend)}</section><section class="grid"><section class="panel"><h3>By type</h3>${bars(t.byType)}</section><section class="panel"><h3>By sub-type</h3>${bars(t.byPattern)}</section></section><section class="panel"><h3>Repeat mistake signals</h3>${repeatMistakesHtml(t)}</section><section class="panel"><h3>Historical test sessions</h3>${sessionHistoryHtml()}</section>${state.reviewAttemptId ? reviewAttemptHtml(state.reviewAttemptId) : ''}`;
+  return `<header class="top"><div><p class="eyebrow">TARA Assessment Analytics</p><h2>${t.overallAccuracy}% overall accuracy</h2><p class="muted">This page is the detailed admissions-test view. Use Overall Analytics for the full Oxford E&M preparation picture.</p></div><button data-action="start-recommended-tara">Practise recommended area</button></header>${taraRecommendationHtml(t)}<section class="grid">${card('Total attempts', t.totalAttempts, `${t.totalQuestions} questions answered`)}${card('Average set score', t.averageSetScore, 'Mini-sets are not official scaled scores.')}${card('Critical Thinking', `${t.criticalAccuracy}%`, '')}${card('Numerical Reasoning', `${t.problemAccuracy}%`, '')}</section><section class="panel"><h3>Accuracy trend</h3>${trend(t.recentTrend)}</section><section class="grid"><section class="panel"><h3>By type</h3>${bars(t.byType)}</section><section class="panel"><h3>By sub-type</h3>${bars(t.byPattern)}</section></section><section class="panel"><h3>Repeat mistake signals</h3>${repeatMistakesHtml(t)}</section><section class="panel"><h3>Historical test sessions</h3>${sessionHistoryHtml()}</section>${state.reviewAttemptId ? reviewAttemptHtml(state.reviewAttemptId) : ''}`;
 }
 
 function taraRecommendationHtml(t) {
@@ -399,7 +455,14 @@ function reasoningHistoryHtml() {
 }
 
 function readinessHtml() {
-  return `<header class="top"><div><p class="eyebrow">Oxford Readiness</p><h2>Progress without fake admissions odds</h2><p class="muted">This is not a probability of getting into Oxford. It is a preparation map showing where the student is building strength and what would move each area forward.</p></div></header><section class="readiness-stack">${Object.entries(state.data.readiness).map(([name, value]) => readinessCardHtml(name, value)).join('')}</section><section class="panel"><h3>How to read this</h3><p class="muted">Not Started and Early mean the habit or evidence base is still thin. Developing means useful work exists but is not yet consistent. Strong and Very Strong require repeated evidence across practice, school results, reflections and milestones.</p></section>`;
+  return `<header class="top"><div><p class="eyebrow">Overall Analytics</p><h2>Readiness indicators, missed targets and growth focus</h2><p class="muted">This is not a probability of admission. It is a preparation map across the four pillars: A-levels, TARA Assessment, Super-Curricular, and Reading/Thinking Readiness.</p></div></header>${overallAnalyticsSummaryHtml()}<section class="readiness-stack">${Object.entries(state.data.readiness).map(([name, value]) => readinessCardHtml(name, value)).join('')}</section><section class="panel"><h3>How to read this</h3><p class="muted">Not Started and Early mean the habit or evidence base is still thin. Developing means useful work exists but is not yet consistent. Strong and Very Strong require repeated evidence across weekly goals, practice, school results, reflections and milestones.</p></section>`;
+}
+
+function overallAnalyticsSummaryHtml() {
+  const tasks = state.data.tasks || [];
+  const missed = tasks.filter((task) => task.status === 'skipped').length;
+  const incompleteHigh = tasks.filter((task) => task.priority === 'high' && !['completed', 'skipped'].includes(task.status)).length;
+  return `<section class="grid six">${card('Weekly goals', `${percent(tasks.filter((task) => task.status === 'completed').length, tasks.length)}%`, `${missed} skipped · ${incompleteHigh} high-priority still open`)}${card('Growth focus', '', state.data.recommendations.slice(0, 2).join('<br>') || 'Complete more activity to generate growth focus.')}${card('Historical signal', `${state.data.weeklyReviews.length}`, 'weekly review records saved')}</section>`;
 }
 
 function readinessCardHtml(name, value) {
@@ -414,19 +477,19 @@ function readinessAdvice(name, value) {
       next: 'Record recent assessments, then move weak/developing topics into weekly tasks until predicted grades and latest results are secure.',
       formula: 'Currently based on latest recorded assessment percentage across subjects.'
     },
-    'TARA Readiness': {
-      summary: 'Overall TARA accuracy, consistency and weakness repair.',
+    'TARA Assessment Readiness': {
+      summary: 'TARA/TSA-style accuracy, consistency and weakness repair.',
       next: state.data.tara.weakestSubtype ? `Practise ${state.data.tara.weakestSubtype.name} and retry missed questions until accuracy is consistently above 70%.` : 'Complete several 5-question sets so the app can identify reliable weak areas.',
-      formula: 'Currently based on overall recorded TARA question accuracy.'
+      formula: 'Currently based on overall recorded TARA Assessment question accuracy.'
     },
     'Supercurricular Depth': {
       summary: 'Quantity and depth of E&M journal entries.',
       next: 'Convert reading-list items into CLAIM-MECHANISM-EVIDENCE-OBJECTION-RESPONSE entries with economics and management links.',
       formula: 'Currently rises with substantive journal entries and is capped until deeper quality measures are added.'
     },
-    'Oxford Reasoning': {
-      summary: 'Practice thinking aloud, stating assumptions and revising answers.',
-      next: 'Save Oxford Reasoning sessions with assumptions, initial answer, revised answer and reflection.',
+    'Reading / Thinking Readiness': {
+      summary: 'Practice thinking aloud, stating assumptions, reading carefully and revising answers.',
+      next: 'Save Reading / Thinking sessions with assumptions, initial answer, revised answer and reflection.',
       formula: 'Currently starts moving after recorded reasoning sessions.'
     },
     'Application Readiness': {
@@ -511,7 +574,7 @@ function statusOptions(selected) {
 
 function weeklyReviewHtml() {
   const draft = weeklyReviewDraft();
-  return `<header class="top"><div><p class="eyebrow">Weekly Review</p><h2>What should change next week?</h2><p class="muted">The app pre-fills the measurable parts. The student adds judgement and reflection.</p></div></header><section class="grid six">${card('Tasks completed', draft.completedCount, `${draft.totalCount} total tasks`)}${card('Tasks skipped', draft.skippedCount, 'Skipped is tracked separately from completed.')}${card('TARA focus', draft.taraFocus, 'Based on latest weak sub-type.')}</section><section class="panel"><form data-action="save-review" class="stack">${weeklyReviewField('completed_summary', draft.completed_summary)}${weeklyReviewField('skipped_summary', draft.skipped_summary)}${weeklyReviewField('hardest_area', draft.hardest_area)}${weeklyReviewField('biggest_improvement', '')}${weeklyReviewField('biggest_weakness', draft.biggest_weakness)}${weeklyReviewField('most_valuable_task', '')}${weeklyReviewField('student_reflection', '')}${weeklyReviewField('next_week_focus', draft.next_week_focus)}<button>Save review</button></form></section>`;
+  return `<header class="top"><div><p class="eyebrow">Weekly Review</p><h2>What should change next week?</h2><p class="muted">The app pre-fills the measurable parts. The student adds judgement and reflection.</p></div></header><section class="grid six">${card('Tasks completed', draft.completedCount, `${draft.totalCount} total tasks`)}${card('Tasks skipped', draft.skippedCount, 'Skipped is tracked separately from completed.')}${card('TARA Assessment focus', draft.taraFocus, 'Based on latest weak sub-type.')}</section><section class="panel"><form data-action="save-review" class="stack">${weeklyReviewField('completed_summary', draft.completed_summary)}${weeklyReviewField('skipped_summary', draft.skipped_summary)}${weeklyReviewField('hardest_area', draft.hardest_area)}${weeklyReviewField('biggest_improvement', '')}${weeklyReviewField('biggest_weakness', draft.biggest_weakness)}${weeklyReviewField('most_valuable_task', '')}${weeklyReviewField('student_reflection', '')}${weeklyReviewField('next_week_focus', draft.next_week_focus)}<button>Save review</button></form></section>`;
 }
 
 function weeklyReviewDraft() {
@@ -521,7 +584,7 @@ function weeklyReviewDraft() {
   const weakTopics = state.data.subjects.flatMap((subject) => (subject.academic_topics || [])
     .filter((topic) => ['weak', 'developing'].includes(topic.mastery_status))
     .map((topic) => `${subject.name}: ${topic.topic_name}`));
-  const taraWeak = state.data.tara.weakestSubtype?.name || 'Not enough TARA data yet';
+  const taraWeak = state.data.tara.weakestSubtype?.name || 'Not enough admissions-test data yet';
   return {
     completedCount: completed.length,
     skippedCount: skipped.length,
@@ -570,7 +633,7 @@ function parentHtml() {
   if (state.data.parentStudents?.length) return parentLinkedStudentsHtml();
   const tasks = state.data.tasks || [];
   const t = state.data.tara;
-  return `<header class="top"><div><p class="eyebrow">Parent / Coach View</p><h2>Progress summary without private reflections</h2></div></header><section class="grid six">${card('This week', `${percent(tasks.filter((task)=>task.status==='completed').length, tasks.length)}%`, `${tasks.filter((task)=>task.status !== 'completed').length} tasks still open`)}${card('TARA', `${t.overallAccuracy}%`, `Weakest sub-type: ${t.weakestSubtype?.name || 'Not enough data'}<br>Questions: ${t.totalQuestions}`)}${card('A-Level', '', state.data.subjects.map((s)=>`${s.name}: ${s.predicted_grade || 'Not set'}`).join('<br>'))}${card('E&M consistency', `${state.data.journal.length} entries`, state.data.journal[0]?.title || 'No journal entries yet')}${card('Milestones', `${state.data.milestones.filter((m)=>m.status==='completed').length}/${state.data.milestones.length}`, 'Completed admissions milestones')}${card('Recommendations', '', state.data.recommendations.slice(0,2).join('<br>') || 'No recommendation yet')}</section>${digestPreviewHtml()}<section class="panel"><h3>Privacy note</h3><p class="muted">This view deliberately summarises progress. Student reflections are not shown here by default.</p></section>`;
+  return `<header class="top"><div><p class="eyebrow">Parent / Coach View</p><h2>Progress summary without private reflections</h2></div></header><section class="grid six">${card('This week', `${percent(tasks.filter((task)=>task.status==='completed').length, tasks.length)}%`, `${tasks.filter((task)=>task.status !== 'completed').length} tasks still open`)}${card('TARA Assessment', `${t.overallAccuracy}%`, `Weakest sub-type: ${t.weakestSubtype?.name || 'Not enough data'}<br>Questions: ${t.totalQuestions}`)}${card('A-Level', '', state.data.subjects.map((s)=>`${s.name}: ${s.predicted_grade || 'Not set'}`).join('<br>'))}${card('E&M consistency', `${state.data.journal.length} entries`, state.data.journal[0]?.title || 'No journal entries yet')}${card('Milestones', `${state.data.milestones.filter((m)=>m.status==='completed').length}/${state.data.milestones.length}`, 'Completed admissions milestones')}${card('Recommendations', '', state.data.recommendations.slice(0,2).join('<br>') || 'No recommendation yet')}</section>${digestPreviewHtml()}<section class="panel"><h3>Privacy note</h3><p class="muted">This view deliberately summarises progress. Student reflections are not shown here by default.</p></section>`;
 }
 
 function parentLinkedStudentsHtml() {
@@ -585,7 +648,7 @@ function parentStudentCardHtml(student) {
     .filter((topic) => ['weak', 'developing'].includes(topic.mastery_status))
     .map((topic) => `${subject.name}: ${topic.topic_name}`));
   const nextMilestones = (student.milestones || []).filter((m) => m.status !== 'completed').slice(0, 3);
-  return `<section class="panel parent-student"><div class="top mini"><div><p class="eyebrow">${escapeHtml(student.profile?.display_name || 'Student')}</p><h3>${escapeHtml(student.profile?.target_course || 'Oxford Economics & Management')}</h3></div><span class="pill success">Read-only</span></div><section class="grid six">${card('This week', `${percent(completed.length, tasks.length)}%`, `${completed.length}/${tasks.length} tasks completed<br>${open.length} still open`)}${card('TARA', `${student.tara.overallAccuracy}%`, `${student.tara.totalQuestions} questions answered<br>Weakest: ${student.tara.weakestSubtype?.name || 'Not enough data'}`)}${card('A-Level', '', student.subjects.map((s)=>`${s.name}: ${s.predicted_grade || 'Not set'}`).join('<br>'))}${card('Weak topics', weakTopics.length, weakTopics.slice(0, 4).map(escapeHtml).join('<br>') || 'None recorded')}${card('Upcoming milestones', nextMilestones.length, nextMilestones.map((m)=>`${escapeHtml(m.title)} · ${formatDate(m.target_date)}`).join('<br>') || 'No open milestones')}${card('Current focus', '', student.programme?.weekly_focus || 'No active weekly programme')}</section></section>`;
+  return `<section class="panel parent-student"><div class="top mini"><div><p class="eyebrow">${escapeHtml(student.profile?.display_name || 'Student')}</p><h3>${escapeHtml(student.profile?.target_course || 'Oxford Economics & Management')}</h3></div><span class="pill success">Read-only</span></div><section class="grid six">${card('This week', `${percent(completed.length, tasks.length)}%`, `${completed.length}/${tasks.length} tasks completed<br>${open.length} still open`)}${card('TARA Assessment', `${student.tara.overallAccuracy}%`, `${student.tara.totalQuestions} questions answered<br>Weakest: ${student.tara.weakestSubtype?.name || 'Not enough data'}`)}${card('A-Level', '', student.subjects.map((s)=>`${s.name}: ${s.predicted_grade || 'Not set'}`).join('<br>'))}${card('Weak topics', weakTopics.length, weakTopics.slice(0, 4).map(escapeHtml).join('<br>') || 'None recorded')}${card('Upcoming milestones', nextMilestones.length, nextMilestones.map((m)=>`${escapeHtml(m.title)} · ${formatDate(m.target_date)}`).join('<br>') || 'No open milestones')}${card('Current focus', '', student.programme?.weekly_focus || 'No active weekly programme')}</section></section>`;
 }
 
 function profileHtml() {
@@ -601,7 +664,7 @@ function digestPreviewHtml() {
 
 function digestSummaryHtml(digest) {
   return `<div class="digest-grid">
-    ${digestBlock('TARA', digest.tara.totalSets ? `${digest.tara.totalSets} set${digest.tara.totalSets === 1 ? '' : 's'} · ${digest.tara.correct}/${digest.tara.totalQuestions} correct · ${digest.tara.accuracy}%` : 'No TARA set completed.')}
+    ${digestBlock('TARA Assessment', digest.tara.totalSets ? `${digest.tara.totalSets} set${digest.tara.totalSets === 1 ? '' : 's'} · ${digest.tara.correct}/${digest.tara.totalQuestions} correct · ${digest.tara.accuracy}%` : 'No TARA Assessment set completed.')}
     ${digestBlock('Weakest Sub-type', digest.tara.weakSubtypes[0] ? `${escapeHtml(digest.tara.weakSubtypes[0].name)} · ${digest.tara.weakSubtypes[0].accuracy}%` : 'No weak sub-type identified yesterday.')}
     ${digestBlock('Weekly Programme', `${digest.weeklyProgramme.completedTasks.length} completed · ${digest.weeklyProgramme.skippedTasks.length} skipped · ${digest.weeklyProgramme.completedMinutes} minutes`)}
     ${digestBlock('Academics', digest.academics.length ? digest.academics.map((item) => `${escapeHtml(item.subject_name)}: ${escapeHtml(item.assessment_name || item.topic || 'assessment')} ${escapeHtml(item.percentage || '')}%`).join('<br>') : 'No academic result added.')}
@@ -615,12 +678,16 @@ function digestBlock(title, body) {
 }
 
 function taraFilterHtml() {
-  return `<section class="panel"><h3>Build a focused set</h3><form class="form-grid" data-action="tara-filters"><label>Paper year<select name="year"><option value="all">All years</option>${questionBankManifest.years.map((year)=>`<option value="${escapeAttr(year)}" ${sel(state.taraFilters.year,year)}>${year}</option>`).join('')}</select></label><label>Type<select name="family"><option value="all">All types</option>${TOP_LEVEL_TYPES.map((type)=>`<option value="${escapeAttr(type)}" ${sel(state.taraFilters.family,type)}>${type}</option>`).join('')}</select></label><label>Sub-type<select name="type"><option value="all">All sub-types</option>${ALL_SUBTYPES.map((type)=>`<option value="${escapeAttr(type)}" ${sel(state.taraFilters.type,type)}>${type}</option>`).join('')}</select></label><input type="hidden" name="pattern" value="all"><button>Apply filters</button></form></section>`;
+  return `<section class="panel"><h3>Build a focused set</h3><form class="form-grid" data-action="tara-filters"><label>Paper year<select name="year"><option value="all">All years</option>${questionBankManifest.years.map((year)=>`<option value="${escapeAttr(year)}" ${sel(state.taraFilters.year,year)}>${year}</option>`).join('')}</select></label><label>Broad type<select name="family"><option value="all">All types</option>${TOP_LEVEL_TYPES.map((type)=>`<option value="${escapeAttr(type)}" ${sel(state.taraFilters.family,type)}>${type}</option>`).join('')}</select></label><label>Sub-type / cognitive mode<select name="type"><option value="all">All sub-types</option>${ALL_SUBTYPES.map((type)=>`<option value="${escapeAttr(type)}" ${sel(state.taraFilters.type,type)}>${type}</option>`).join('')}</select></label><label>Topic tag<select name="topic"><option value="all">All topic tags</option>${topicTagOptions().map((topic)=>`<option value="${escapeAttr(topic)}" ${sel(state.taraFilters.topic,topic)}>${topic}</option>`).join('')}</select></label><input type="hidden" name="pattern" value="all"><button>Apply filters</button></form></section>`;
+}
+
+function topicTagOptions() {
+  return unique([...PROBLEM_SOLVING_TOPIC_TAGS, ...questions.map((q) => q.topic_tag)]);
 }
 
 function sessionHistoryHtml() {
   const attempts = state.data.tara.attempts;
-  if (!attempts.length) return '<p class="muted">Complete a TARA set to see historical session details.</p>';
+  if (!attempts.length) return '<p class="muted">Complete a TARA Assessment set to see historical session details.</p>';
   return `<div class="session-list">${attempts.map((attempt)=>`<article class="session-row"><div><b>${formatDateTime(attempt.completed_at)}</b><p>${attempt.total} questions · score ${attempt.score}/${attempt.total}</p></div><button class="ghost" data-review-attempt="${attempt.id}" title="Review chosen answers and coaching">Review</button></article>`).join('')}</div>`;
 }
 
@@ -690,7 +757,7 @@ function startSmartTara() {
 function startRecommendedTara() {
   const weakSubtype = state.data.tara.weakestSubtype?.name;
   if (weakSubtype) {
-    state.taraFilters = { ...state.taraFilters, type: weakSubtype };
+    state.taraFilters = { ...state.taraFilters, type: weakSubtype, topic: 'all' };
     state.notice = { type: 'info', message: `Starting a focused set for ${weakSubtype}.` };
   }
   startTara();
@@ -720,7 +787,8 @@ function filteredQuestions() {
   return questions.filter((q) =>
     (state.taraFilters.year === 'all' || String(q.paper_year) === state.taraFilters.year) &&
     (state.taraFilters.family === 'all' || q.type === state.taraFilters.family) &&
-    (state.taraFilters.type === 'all' || q.sub_type === state.taraFilters.type)
+    (state.taraFilters.type === 'all' || q.sub_type === state.taraFilters.type) &&
+    (state.taraFilters.topic === 'all' || q.topic_tag === state.taraFilters.topic)
   );
 }
 
@@ -888,10 +956,9 @@ app.addEventListener('submit', async (event) => {
 
 function triggerFor(q) {
   if (q.question_text.includes('Therefore') || q.question_text.includes('therefore')) return 'Conclusion language means you must inspect the bridge between evidence and conclusion.';
-  if (q.sub_type === 'Percentages and Ratios') return 'Ratio or percentage wording should trigger parts-to-whole thinking before calculation.';
-  if (q.sub_type === 'Data Interpretation') return 'A table, chart or schedule cue should trigger row/column selection before arithmetic.';
-  if (q.sub_type === 'Real-Life Measurements') return 'Measurement wording should trigger unit conversion before calculation.';
-  if (q.sub_type === 'Spatial and Logical Problem-Solving') return 'Diagram or pattern wording should trigger constraint tracking and elimination.';
+  if (q.sub_type === 'Relevant Selection') return 'Dense data should trigger selection first: identify the target, then ignore irrelevant rows, columns or conditions.';
+  if (q.sub_type === 'Finding Procedures') return 'No obvious method means you should choose the strategy before calculating: equation, ratio, optimisation, rate or case test.';
+  if (q.sub_type === 'Spatial Reasoning & Pattern Analysis') return 'Visual, timetable or pattern wording should trigger constraint tracking rather than impression-based matching.';
   return 'The wording should trigger the named method before looking at attractive answer choices.';
 }
 
@@ -970,6 +1037,11 @@ function daysUntil(value) {
   const todayDate = new Date(`${todayInput()}T00:00:00`);
   const targetDate = new Date(`${value}T00:00:00`);
   return Math.ceil((targetDate.getTime() - todayDate.getTime()) / 86400000);
+}
+
+function daysSince(value) {
+  if (!value) return 999;
+  return Math.floor((Date.now() - new Date(value).getTime()) / 86400000);
 }
 
 function sel(value, expected) {

@@ -440,8 +440,8 @@ async function seedMilestones(userId) {
     ['Year 12 school assessments', 'school'],
     ['Predicted grades review', 'school'],
     ['Summer preparation plan', 'supercurricular'],
-    ['TARA registration', 'tara'],
-    ['TARA test', 'tara'],
+    ['Admissions test registration (TARA)', 'tara'],
+    ['Admissions test date (TARA)', 'tara'],
     ['UCAS preparation', 'application'],
     ['Oxford application deadline', 'application'],
     ['Shortlist period', 'interview'],
@@ -551,7 +551,7 @@ function typeAccuracy(rows, type) {
 
 function recommendations({ tara, subjects, journal, tasks }) {
   const recs = [];
-  if (tara.weakestSubtype && tara.weakestSubtype.total >= 3 && tara.weakestSubtype.accuracy < 65) recs.push(`TARA ${tara.weakestSubtype.name} is below 65%, so schedule two targeted 5-question sets and one methodology review.`);
+  if (tara.weakestSubtype && tara.weakestSubtype.total >= 3 && tara.weakestSubtype.accuracy < 65) recs.push(`TARA Assessment ${tara.weakestSubtype.name} is below 65%, so schedule two targeted 5-question sets and one methodology review.`);
   if (!journal.length || daysSince(journal[0].date_completed) >= 14) recs.push('No recent E&M journal entry in 14 days, so complete one CLAIM-MECHANISM-EVIDENCE-OBJECTION-RESPONSE entry.');
   const maths = subjects.find((s) => s.name === 'Mathematics');
   if (maths && maths.predicted_grade !== 'A*') recs.push('Maths is not yet predicted A*, so protect one high-priority quantitative revision block this week.');
@@ -566,9 +566,9 @@ function readiness({ tara, subjects, journal, reasoning, milestones, tasks }) {
   const milestoneCompletion = milestones.length ? Math.round((milestones.filter((m) => m.status === 'completed').length / milestones.length) * 100) : 0;
   return {
     'Academic Strength': band(academic),
-    'TARA Readiness': band(tara.overallAccuracy),
+    'TARA Assessment Readiness': band(tara.overallAccuracy),
     'Supercurricular Depth': band(Math.min(100, journal.length * 18)),
-    'Oxford Reasoning': band(reasoning.length ? 45 : 0),
+    'Reading / Thinking Readiness': band(reasoning.length ? 45 : 0),
     'Application Readiness': band(Math.max(taskCompletion, milestoneCompletion)),
     'Interview Readiness': band(reasoning.length && milestoneCompletion > 30 ? 45 : 0)
   };
@@ -605,7 +605,7 @@ function stripDigestColumns(row) {
 function seedLocal(db) {
   const user = demoUser();
   db.subjects = ['Mathematics', 'Economics', 'Physics', 'History'].map((name) => ({ id: crypto.randomUUID(), user_id: user.id, name, target_grade: name === 'Mathematics' || name === 'Economics' ? 'A*' : 'A', current_estimated_grade: 'Not set', predicted_grade: 'Not set', academic_results: [], academic_topics: [] }));
-  db.milestones = ['Year 12 school assessments', 'Predicted grades review', 'Summer preparation plan', 'TARA registration', 'TARA test', 'UCAS preparation', 'Oxford application deadline', 'Shortlist period', 'Interview preparation', 'Interview period'].map((title) => ({ id: crypto.randomUUID(), user_id: user.id, title, category: 'application', status: 'not_started', target_date: null }));
+  db.milestones = ['Year 12 school assessments', 'Predicted grades review', 'Summer preparation plan', 'Admissions test registration (TARA)', 'Admissions test date (TARA)', 'UCAS preparation', 'Oxford application deadline', 'Shortlist period', 'Interview preparation', 'Interview period'].map((title) => ({ id: crypto.randomUUID(), user_id: user.id, title, category: 'application', status: 'not_started', target_date: null }));
 }
 
 function demoUser() {

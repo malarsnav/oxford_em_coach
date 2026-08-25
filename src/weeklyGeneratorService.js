@@ -2,19 +2,19 @@ import { getAlevelTopicPlan, topicTaskFor } from './aLevelTopicPlan.js';
 
 const labels = {
   a_level: 'A-Level',
-  tara: 'TARA',
-  economics: 'Economics',
-  management: 'Management',
-  oxford_reasoning: 'Oxford Reasoning',
+  tara: 'TARA Assessment',
+  economics: 'Super-Curricular Economics',
+  management: 'Super-Curricular Management',
+  oxford_reasoning: 'Reading / Thinking Readiness',
   application: 'Application'
 };
 
 export function getPhase(date = new Date()) {
   const month = date.getMonth();
-  if (month >= 8 && month <= 11) return { name: 'Year 12 Foundation', focus: 'A-level foundations, light TARA, light supercurricular and reasoning habits.' };
-  if (month >= 0 && month <= 5) return { name: 'Year 12 Development', focus: 'Academic strength, supercurricular depth and structured TARA.' };
-  if (month >= 6 && month <= 7) return { name: 'Summer Intensive', focus: 'TARA, application material and Oxford reasoning.' };
-  return { name: 'Application Build', focus: 'Predicted grades, TARA improvement, journal depth and application evidence.' };
+  if (month >= 8 && month <= 11) return { name: 'Year 12 Foundation', focus: 'A-level foundations, light TARA Assessment, super-curricular breadth and reasoning habits.' };
+  if (month >= 0 && month <= 5) return { name: 'Year 12 Development', focus: 'Academic strength, super-curricular depth and structured TARA Assessment.' };
+  if (month >= 6 && month <= 7) return { name: 'Summer Intensive', focus: 'TARA Assessment, application evidence and Oxford-style thinking.' };
+  return { name: 'Application Build', focus: 'Predicted grades, admissions-test improvement, journal depth and application evidence.' };
 }
 
 export function createProgrammeDraft(state, preferences = {}) {
@@ -46,7 +46,7 @@ function baseTasks(state, preferences) {
   });
   const tasks = [
     ...aLevelTasks,
-    task('tara', 'Complete a 5-question TARA set', 'Use TARA Practice to complete one bite-sized set and review the methodology report.', 25, 'medium', 'TARA needs steady low-friction practice so mistakes become visible early.'),
+    task('tara', 'Complete a 5-question TARA Assessment set', 'Use TARA Assessment Practice to complete one bite-sized set and review the methodology report.', 25, 'medium', 'Admissions-test readiness needs steady low-friction practice so mistakes become visible early.'),
     task('economics', 'Analyse one economics article', 'Record the main claim, mechanism, evidence, assumptions and one counterargument.', 35, 'medium', 'Oxford E&M preparation needs depth of thought, not just reading volume.'),
     task('management', 'Explain a strategic business choice', 'Answer: why might a company sell a product at a loss? Give at least three strategic reasons.', 20, 'low', 'Management thinking improves when strategy is linked to incentives and trade-offs.'),
     task('oxford_reasoning', 'Solve one unfamiliar reasoning prompt', 'Write assumptions first, answer, revise after a hint, then reflect on what changed.', 20, 'medium', 'Interview-style reasoning rewards assumptions, clarity and adaptability.')
@@ -69,7 +69,7 @@ function task(category, title, description, estimated_minutes, priority, recomme
 
 function priorityTask(category) {
   const byCategory = {
-    tara: task('tara', 'Extra targeted TARA set', 'Complete one additional 5-question set using the weakest available sub-type filter.', 25, 'high', 'You selected More TARA for this week.'),
+    tara: task('tara', 'Extra targeted TARA Assessment set', 'Complete one additional 5-question set using the weakest available sub-type filter.', 25, 'high', 'You selected More admissions-test practice for this week.'),
     economics: task('economics', 'Deepen one economics mechanism', 'Choose one school or article topic and explain the mechanism, assumptions and counterargument.', 30, 'high', 'You selected More Economics for this week.'),
     management: task('management', 'Compare two business strategies', 'Pick two firms in the same market and explain how their incentives, costs and positioning differ.', 30, 'high', 'You selected More Management for this week.'),
     a_level: task('a_level', 'Protect one weak A-Level topic', 'Spend one focused block on the weakest currently tracked A-Level topic, then update its confidence score.', 35, 'high', 'You selected More A-Level support for this week.'),
@@ -114,7 +114,7 @@ function focusFor(state, preferences, phase) {
 
 function summaryFor(state, tasks, phase) {
   const minutes = tasks.reduce((sum, task) => sum + task.estimated_minutes, 0);
-  const reason = state?.tara?.weakestSubtype?.accuracy < 65 ? ` TARA ${state.tara.weakestSubtype.name} is currently weak, so targeted practice is included.` : '';
+  const reason = state?.tara?.weakestSubtype?.accuracy < 65 ? ` TARA Assessment ${state.tara.weakestSubtype.name} is currently weak, so targeted practice is included.` : '';
   const carried = tasks.filter((task) => task.title.startsWith('Carry forward:')).length;
   return `${phase.name}: ${minutes} minutes of focused work across ${new Set(tasks.map((task) => task.category)).size} preparation areas.${carried ? ` ${carried} high-priority task${carried === 1 ? '' : 's'} carried forward.` : ''}${reason}`;
 }
