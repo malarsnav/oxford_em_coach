@@ -1,0 +1,110 @@
+export const questions = [
+  {
+    id: 'sample-ct-main-1',
+    paper_year: 2022,
+    question_number: 1,
+    section: 'Section 1',
+    official_question_type: 'Main Conclusion',
+    family: 'Critical Thinking',
+    reasoning_pattern: 'argument structure',
+    question_text: 'Public transport should receive more investment. Roads are increasingly congested, and many city residents cannot afford private cars. Better buses and trains would reduce traffic and widen access to work. Which statement is the main conclusion?',
+    answer_options: {
+      A: 'Roads are increasingly congested.',
+      B: 'Many city residents cannot afford cars.',
+      C: 'Public transport should receive more investment.',
+      D: 'Better buses and trains would reduce traffic.',
+      E: 'Private cars are too expensive.'
+    },
+    correct_answer: 'C',
+    explanation: 'The reasons about congestion, affordability and access all support the claim that public transport should receive more investment.',
+    methodology: 'Find the central claim that the reasons are trying to prove.',
+    relevant_question_highlights: ['should receive more investment', 'because-style reasons', 'would reduce traffic and widen access']
+  },
+  {
+    id: 'sample-ct-assumption-1',
+    paper_year: 2021,
+    question_number: 12,
+    section: 'Section 1',
+    official_question_type: 'Assumption',
+    family: 'Critical Thinking',
+    reasoning_pattern: 'missing link',
+    question_text: 'The school should extend library hours because students who study after school achieve higher marks. Which assumption is required by this argument?',
+    answer_options: {
+      A: 'All students enjoy studying in libraries.',
+      B: 'Longer library hours would allow more after-school study.',
+      C: 'Teachers should give less homework.',
+      D: 'Marks are the only purpose of school.',
+      E: 'The library is already open late.'
+    },
+    correct_answer: 'B',
+    explanation: 'The argument needs the bridge that extending hours will actually increase the after-school studying linked to higher marks.',
+    methodology: 'Use the negation test: if longer hours would not allow more after-school study, the argument collapses.',
+    relevant_question_highlights: ['should extend library hours', 'because', 'students who study after school achieve higher marks']
+  },
+  {
+    id: 'sample-ct-flaw-1',
+    paper_year: 2020,
+    question_number: 23,
+    section: 'Section 1',
+    official_question_type: 'Flaw',
+    family: 'Critical Thinking',
+    reasoning_pattern: 'alternative explanation',
+    question_text: 'Since the new revision app was introduced, pass rates have risen. Therefore, the app caused the improvement. What is the flaw?',
+    answer_options: {
+      A: 'It assumes the app was expensive.',
+      B: 'It ignores that other changes may have caused the pass-rate rise.',
+      C: 'It proves that revision is useless.',
+      D: 'It compares two unrelated schools.',
+      E: 'It relies on a definition of pass rates.'
+    },
+    correct_answer: 'B',
+    explanation: 'A change followed by an improvement does not prove causation; other causes may explain the result.',
+    methodology: 'Rewrite as: because X happened before Y, X caused Y. Then test whether other explanations are ruled out.',
+    relevant_question_highlights: ['Since', 'pass rates have risen', 'Therefore', 'caused']
+  },
+  {
+    id: 'sample-ps-ratio-1',
+    paper_year: 2019,
+    question_number: 31,
+    section: 'Section 1',
+    official_question_type: 'Finding Procedures',
+    family: 'Problem Solving',
+    reasoning_pattern: 'ratio',
+    question_text: 'A recipe uses flour and sugar in the ratio 5:2. If 350 g of flour is used, how much sugar is needed?',
+    answer_options: { A: '70 g', B: '100 g', C: '120 g', D: '140 g', E: '175 g' },
+    correct_answer: 'D',
+    explanation: '5 parts of flour correspond to 350 g, so 1 part is 70 g. Sugar is 2 parts, so 140 g.',
+    methodology: 'Find the value of one ratio part, then scale the required quantity.',
+    relevant_question_highlights: ['ratio 5:2', '350 g of flour', 'how much sugar']
+  },
+  {
+    id: 'sample-ps-table-1',
+    paper_year: 2018,
+    question_number: 43,
+    section: 'Section 1',
+    official_question_type: 'Selecting Relevant Information',
+    family: 'Problem Solving',
+    reasoning_pattern: 'table extraction',
+    question_text: 'A parking table charges £1 for up to 1 hour, £1.80 for up to 2 hours, and £2.40 for up to 3 hours. What is the cheapest valid ticket for a stay of 2 hours 15 minutes?',
+    answer_options: { A: '£1.00', B: '£1.80', C: '£2.40', D: '£3.00', E: 'Cannot tell' },
+    correct_answer: 'C',
+    explanation: '2 hours 15 minutes exceeds the 2-hour band, so the cheapest valid band is up to 3 hours at £2.40.',
+    methodology: 'Identify the exact required band and reject lower bands that do not cover the full duration.',
+    relevant_question_highlights: ['up to 2 hours', 'up to 3 hours', '2 hours 15 minutes']
+  },
+  {
+    id: 'sample-ps-overlap-1',
+    paper_year: 2017,
+    question_number: 36,
+    section: 'Section 1',
+    official_question_type: 'Identifying Similarity',
+    family: 'Problem Solving',
+    reasoning_pattern: 'overlap',
+    question_text: 'A club runs chess from 4:00 to 5:30 and debating from 5:00 to 6:00. For how long do the sessions overlap?',
+    answer_options: { A: '15 minutes', B: '30 minutes', C: '45 minutes', D: '60 minutes', E: '90 minutes' },
+    correct_answer: 'B',
+    explanation: 'Both sessions run from 5:00 to 5:30, so the overlap is 30 minutes.',
+    methodology: 'Draw the intervals on one timeline and find the shared section.',
+    relevant_question_highlights: ['4:00 to 5:30', '5:00 to 6:00', 'overlap']
+  }
+];
