@@ -399,6 +399,40 @@ input[type="checkbox"] {
   background: var(--soft);
 }
 
+.option.correct {
+  border-color: var(--accent);
+  background: var(--soft);
+}
+
+.option.incorrect {
+  border-color: var(--danger);
+  background: #fff0ed;
+}
+
+.instant-hint {
+  margin-top: 0.9rem;
+}
+
+.instant-feedback {
+  margin-top: 1rem;
+  border-radius: var(--radius);
+  padding: 0.85rem;
+}
+
+.instant-feedback.correct {
+  border-left: 4px solid var(--accent);
+  background: var(--soft);
+}
+
+.instant-feedback.incorrect {
+  border-left: 4px solid var(--danger);
+  background: #fff0ed;
+}
+
+.instant-feedback h3 {
+  margin: 0 0 0.55rem;
+}
+
 .question-visuals {
   display: grid;
   gap: 0.8rem;

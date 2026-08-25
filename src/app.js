@@ -167,10 +167,24 @@ function taskHtml(t) {
 }
 
 function taraHtml() {
-  if (!state.practice) return `<header class="top"><div><p class="eyebrow">TARA Practice</p><h2>5-question methodology set</h2></div><div class="actions"><button data-action="start-smart" title="Prioritise unseen questions, then weak questions">Smart coverage set</button><button class="ghost" data-action="start-tara" title="Start a filtered 5-question practice set">Filtered random set</button></div></header>${taraFilterHtml()}<section class="grid">${card('Question bank coverage', `${coveragePercent()}%`, `${answeredQuestionKeys().size}/${questions.length} questions seen at least once`)}${card('Current filter match', `${filteredQuestions().length}`, 'Questions available for the selected filters')}</section><section class="panel"><h3>How smart coverage works</h3><p class="muted">Smart coverage chooses unseen questions first, then questions from weak types and patterns, then mastered questions only when needed.</p></section>`;
+  if (!state.practice) return `<header class="top"><div><p class="eyebrow">TARA Practice</p><h2>5-question methodology set</h2></div><div class="actions"><button data-action="start-smart" title="Prioritise unseen questions, then weak questions">Smart coverage set</button><button class="ghost" data-action="start-tara" title="Start a filtered practice set using the filters below">Start filtered set</button></div></header>${noticeHtml()}${taraFilterHtml()}<section class="grid">${card('Question bank coverage', `${coveragePercent()}%`, `${answeredQuestionKeys().size}/${questions.length} questions seen at least once`)}${card('Current filter match', `${filteredQuestions().length}`, 'Questions available for the selected filters')}</section><section class="panel"><h3>How smart coverage works</h3><p class="muted">Smart coverage chooses unseen questions first, then questions from weak types and patterns, then mastered questions only when needed.</p></section>`;
   if (state.practice.report) return reportHtml();
   const q = state.practice.set[state.practice.index];
-  return `<section class="panel question"><p class="eyebrow">${q.paper_year} Q${q.question_number} · ${q.official_question_type} · ${q.reasoning_pattern}</p><h2>${highlight(q.question_text, q.relevant_question_highlights)}</h2>${visualHtml(q)}${Object.entries(q.answer_options).map(([k,v])=>`<button class="option ${state.practice.answers[q.id]===k?'selected':''}" data-answer="${k}"><b>${k}</b> ${v}</button>`).join('')}<div class="actions"><button class="ghost" data-action="prev-question">Previous</button><button class="ghost" data-action="next-question">Next</button><button data-action="submit-tara">Submit set</button></div></section>`;
+  const selected = state.practice.answers[q.id];
+  return `<section class="panel question"><p class="eyebrow">${q.paper_year} Q${q.question_number} · ${q.official_question_type} · ${q.reasoning_pattern}</p><h2>${highlight(q.question_text, q.relevant_question_highlights)}</h2>${visualHtml(q)}${Object.entries(q.answer_options).map(([k,v])=>`<button class="option ${optionClass(q, k, selected)}" data-answer="${k}"><b>${k}</b> ${v}</button>`).join('')}${instantFeedbackHtml(q, selected)}<div class="actions"><button class="ghost" data-action="prev-question">Previous</button><button class="ghost" data-action="next-question">Next</button><button data-action="submit-tara">Submit set</button></div></section>`;
+}
+
+function optionClass(q, key, selected) {
+  if (!selected) return '';
+  if (key === q.correct_answer) return 'correct';
+  if (key === selected) return 'incorrect selected';
+  return '';
+}
+
+function instantFeedbackHtml(q, selected) {
+  if (!selected) return '<p class="muted instant-hint">Choose an answer to see instant marking and coaching before moving on.</p>';
+  const correct = selected === q.correct_answer;
+  return `<aside class="instant-feedback ${correct ? 'correct' : 'incorrect'}"><h3>${correct ? 'Correct' : 'Not quite'} · Official answer ${q.correct_answer}</h3><p><b>Method trigger:</b> ${triggerFor(q)}</p><p><b>How to approach it:</b> ${methodologyFor(q.official_question_type).slice(0, 3).join(' ')}</p><p><b>Carry forward:</b> ${q.reasoning_pattern} questions reward naming the logical job before choosing an option.</p></aside>`;
 }
 
 function reportHtml() {
@@ -298,9 +312,19 @@ function subjectSelect() {
 }
 
 function startTara() {
+  syncTaraFiltersFromDom();
   const filtered = filteredQuestions();
-  const pool = filtered.length >= 5 ? filtered : questions;
-  state.practice = { set: [...pool].sort(()=>Math.random()-0.5).slice(0,5), index: 0, answers: {}, startedAt: new Date().toISOString(), report: false };
+  if (!filtered.length) {
+    state.notice = { type: 'error', message: 'No questions match those filters. Loosen one filter and try again.' };
+    state.practice = null;
+    state.view = 'tara';
+    return;
+  }
+  const set = shuffle(filtered).slice(0, Math.min(5, filtered.length));
+  state.notice = filtered.length < 5
+    ? { type: 'info', message: `Only ${filtered.length} question${filtered.length === 1 ? '' : 's'} matched those filters, so this set is shorter than 5.` }
+    : { type: 'success', message: `Started a filtered set from ${filtered.length} matching questions.` };
+  state.practice = { set, index: 0, answers: {}, startedAt: new Date().toISOString(), report: false };
   state.view = 'tara';
 }
 
@@ -317,6 +341,12 @@ function filteredQuestions() {
     (state.taraFilters.type === 'all' || q.official_question_type === state.taraFilters.type) &&
     (state.taraFilters.pattern === 'all' || q.reasoning_pattern === state.taraFilters.pattern)
   );
+}
+
+function syncTaraFiltersFromDom() {
+  const form = app.querySelector('form[data-action="tara-filters"]');
+  if (!form) return;
+  state.taraFilters = Object.fromEntries(new FormData(form).entries());
 }
 
 function smartQuestionPool() {
@@ -423,7 +453,7 @@ app.addEventListener('submit', async (event) => {
       return;
     }
     if (action === 'draft-programme') { state.preferences = values; state.draft = createProgrammeDraft(state.data, values); state.notice = null; render(); return; }
-    if (action === 'tara-filters') { state.taraFilters = values; render(); return; }
+    if (action === 'tara-filters') { state.taraFilters = values; state.notice = { type: 'success', message: `${filteredQuestions().length} questions match the selected filters.` }; render(); return; }
     if (button) button.disabled = true;
     if (action === 'add-result') await addAcademicResult(state.user, values);
     if (action === 'add-journal') await addJournalEntry(state.user, values);
