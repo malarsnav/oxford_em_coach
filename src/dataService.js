@@ -112,20 +112,40 @@ export async function createProgramme(user, draft, replaceCurrent = false) {
   if (!supabase) {
     const db = readLocal();
     if (replaceCurrent) db.weekly_programmes = db.weekly_programmes.map((p) => p.is_active ? { ...p, is_active: false, archived_at: new Date().toISOString() } : p);
-    const programme = { ...draft.programme, id: crypto.randomUUID(), user_id: user.id, is_active: true, version: 1 };
+    const programme = { ...draft.programme, id: crypto.randomUUID(), user_id: user.id, is_active: true, version: nextLocalProgrammeVersion(db, user.id, draft.programme.week_start) };
     db.weekly_programmes.push(programme);
     db.weekly_tasks.push(...draft.tasks.map((task) => ({ ...taskForSave(task), id: crypto.randomUUID(), programme_id: programme.id, user_id: user.id, status: 'not_started' })));
     writeLocal(db);
     return programme;
   }
+  const version = await nextRemoteProgrammeVersion(user.id, draft.programme.week_start);
   if (replaceCurrent) {
     await supabase.from('weekly_programmes').update({ is_active: false, archived_at: new Date().toISOString() }).eq('user_id', user.id).eq('is_active', true);
   }
-  const { data: programme, error } = await supabase.from('weekly_programmes').insert({ ...draft.programme, user_id: user.id, is_active: true }).select().single();
+  const { data: programme, error } = await supabase.from('weekly_programmes').insert({ ...draft.programme, version, user_id: user.id, is_active: true }).select().single();
   if (error) throw error;
   const { error: taskError } = await supabase.from('weekly_tasks').insert(draft.tasks.map((task) => ({ ...taskForSave(task), programme_id: programme.id, user_id: user.id, status: 'not_started' })));
   if (taskError) throw taskError;
   return programme;
+}
+
+function nextLocalProgrammeVersion(db, userId, weekStart) {
+  const versions = db.weekly_programmes
+    .filter((programme) => programme.user_id === userId && programme.week_start === weekStart)
+    .map((programme) => Number(programme.version || 1));
+  return versions.length ? Math.max(...versions) + 1 : 1;
+}
+
+async function nextRemoteProgrammeVersion(userId, weekStart) {
+  const { data, error } = await supabase
+    .from('weekly_programmes')
+    .select('version')
+    .eq('user_id', userId)
+    .eq('week_start', weekStart)
+    .order('version', { ascending: false })
+    .limit(1);
+  if (error) throw error;
+  return data?.[0]?.version ? Number(data[0].version) + 1 : 1;
 }
 
 function taskForSave(task) {
