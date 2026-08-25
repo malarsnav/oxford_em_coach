@@ -25,6 +25,8 @@ If `001_initial_schema.sql` has already been run, run only the incremental migra
 
 `supabase/migrations/003_parent_daily_digest.sql`
 
+`supabase/migrations/004_parent_read_only_access.sql`
+
 ## 3. Configure Auth URLs
 
 In Supabase:
@@ -79,6 +81,7 @@ GitHub Pages will redeploy automatically from the workflow.
 7. Refresh the page and confirm progress persists.
 8. Sign in from a second device with the same email and confirm the same data appears.
 9. Open Profile, add a parent email, enable the daily digest preference, save, and confirm the Parent View shows a digest preview.
+10. Sign in separately using the parent email and confirm Parent View shows the linked student's read-only summary.
 
 ## 8. Security Checks
 
@@ -97,9 +100,9 @@ Current production-safe state:
 - Parent email is stored on `user_profiles`.
 - Daily digest enabled/time/timezone preferences are stored on `user_profiles`.
 - Parent View shows a preview of the previous day's activity.
-- No scheduled email is sent yet.
+- A provider-neutral Edge Function scaffold exists for scheduled delivery, but it still needs deployment, secrets and an email provider endpoint before real emails are sent.
 
 Scheduled 6am email delivery should be added with a Supabase Edge Function or another trusted scheduled backend. GitHub Pages cannot run scheduled jobs by itself.
 
-The first Edge Function scaffold is in `supabase/functions/daily-parent-digest/index.ts`.
+The Edge Function scaffold is in `supabase/functions/daily-parent-digest/index.ts`.
 Setup notes are in `docs/parent-digest-edge-function.md`.

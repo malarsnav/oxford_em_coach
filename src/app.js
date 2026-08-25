@@ -1,4 +1,4 @@
-import { bootstrap, getSession, signIn, signOut, saveAttempt, updateTask, createProgramme, addAcademicResult, addAcademicTopic, updateAcademicTopic, addJournalEntry, addReasoningSession, saveWeeklyReview, addInterviewSession, updateProfile, saveTaraErrorAnalysis } from './dataService.js';
+import { bootstrap, getSession, signIn, signOut, saveAttempt, updateTask, createProgramme, addAcademicResult, updateSubject, addAcademicTopic, updateAcademicTopic, addJournalEntry, addReasoningSession, saveWeeklyReview, addInterviewSession, updateProfile, saveTaraErrorAnalysis } from './dataService.js';
 import { questions } from './questions.js';
 import { questionBankManifest } from './questionBankManifest.generated.js';
 import { methodologyFor } from './methodologies.js';
@@ -235,7 +235,7 @@ function analyticsHtml() {
 }
 
 function academicsHtml() {
-  return `<header class="top"><div><p class="eyebrow">A-Level Progress</p><h2>Protect academic strength</h2></div></header>${needsAttentionHtml()}<section class="grid">${state.data.subjects.map(subjectCardHtml).join('')}</section><section class="panel"><h3>Add topic to track</h3><form data-action="add-topic" class="form-grid">${subjectSelect()}<input name="topic_name" placeholder="Topic, e.g. Integration by substitution" required><label>Mastery<select name="mastery_status">${masteryOptions('developing')}</select></label><label>Confidence 1-5<input name="confidence" type="number" min="1" max="5" value="3"></label><input name="notes" placeholder="Notes or next action"><button>Save topic</button></form></section><section class="panel"><h3>Add assessment</h3><form data-action="add-result" class="form-grid">${subjectSelect()}<input name="assessment_name" placeholder="Assessment name" required><input name="topic" placeholder="Topic"><input name="score" type="number" placeholder="Score"><input name="max_score" type="number" value="100"><input name="grade" placeholder="Grade"><button>Save result</button></form></section>`;
+  return `<header class="top"><div><p class="eyebrow">A-Level Progress</p><h2>Protect academic strength</h2><p class="muted">Track grades, assessments and weekly mastery topics. Weak or developing topics are fed into the Weekly Programme generator.</p></div></header>${needsAttentionHtml()}${masteredThisWeekHtml()}<section class="grid">${state.data.subjects.map(subjectCardHtml).join('')}</section><section class="panel"><h3>Add topic to track</h3><form data-action="add-topic" class="form-grid">${subjectSelect()}<input name="topic_name" placeholder="Topic, e.g. Integration by substitution" required><label>Mastery<select name="mastery_status">${masteryOptions('developing')}</select></label><label>Confidence 1-5<input name="confidence" type="number" min="1" max="5" value="3"></label><input name="notes" placeholder="Notes or next action"><button>Save topic</button></form></section><section class="panel"><h3>Add assessment</h3><form data-action="add-result" class="form-grid">${subjectSelect()}<input name="assessment_name" placeholder="Assessment name" required><input name="topic" placeholder="Topic"><input name="assessment_date" type="date" value="${todayInput()}"><input name="score" type="number" placeholder="Score"><input name="max_score" type="number" value="100"><input name="grade" placeholder="Grade"><input name="teacher_feedback" placeholder="Teacher feedback"><button>Save result</button></form></section>`;
 }
 
 function needsAttentionHtml() {
@@ -249,10 +249,29 @@ function needsAttentionHtml() {
 }
 
 function subjectCardHtml(subject) {
-  const latest = subject.academic_results?.[0];
+  const results = sortedResults(subject.academic_results || []);
+  const latest = results[0];
   const topics = subject.academic_topics || [];
   const weakCount = topics.filter((topic) => ['weak', 'developing'].includes(topic.mastery_status)).length;
-  return `<section class="panel subject-card"><h3>${escapeHtml(subject.name)}</h3><p class="metric">${subject.predicted_grade || 'Not set'}</p><p class="muted">Target ${subject.target_grade || 'A*'} · latest ${latest?.percentage ?? 'No result'}${latest?.percentage ? '%' : ''} · ${weakCount} topic${weakCount === 1 ? '' : 's'} need attention</p>${topics.length ? `<div class="topic-stack">${topics.map(topicRowHtml).join('')}</div>` : '<p class="muted">No tracked topics yet.</p>'}</section>`;
+  return `<section class="panel subject-card"><div class="top mini"><div><h3>${escapeHtml(subject.name)}</h3><p class="muted">${weakCount} topic${weakCount === 1 ? '' : 's'} need attention</p></div><p class="metric">${escapeHtml(subject.predicted_grade || 'Not set')}</p></div><form data-action="update-subject" class="subject-form"><input type="hidden" name="subject_id" value="${subject.id}"><label>Target<input name="target_grade" value="${escapeAttr(subject.target_grade || '')}" placeholder="A*"></label><label>Current<input name="current_estimated_grade" value="${escapeAttr(subject.current_estimated_grade || '')}" placeholder="Current grade"></label><label>Predicted<input name="predicted_grade" value="${escapeAttr(subject.predicted_grade || '')}" placeholder="Predicted grade"></label><label class="span-all">Subject notes<textarea name="notes" placeholder="Teacher advice, exam-board notes, or next revision action">${escapeHtml(subject.notes || '')}</textarea></label><button>Save subject</button></form>${latest ? `<p class="callout">Latest: ${escapeHtml(latest.assessment_name || latest.topic || 'Assessment')} · ${latest.percentage ?? 0}%${latest.grade ? ` · ${escapeHtml(latest.grade)}` : ''}</p>` : '<p class="muted">No assessment recorded yet.</p>'}${results.length ? `<div class="assessment-history"><b>Recent assessments</b>${results.slice(0, 3).map(assessmentRowHtml).join('')}</div>` : ''}${topics.length ? `<div class="topic-stack">${topics.map(topicRowHtml).join('')}</div>` : '<p class="muted">No tracked topics yet.</p>'}</section>`;
+}
+
+function assessmentRowHtml(result) {
+  return `<article><span>${escapeHtml(result.assessment_name || result.topic || 'Assessment')}</span><b>${result.percentage ?? 0}%</b><small>${formatDate(result.assessment_date || result.created_at)}${result.grade ? ` · ${escapeHtml(result.grade)}` : ''}</small></article>`;
+}
+
+function sortedResults(results) {
+  return [...results].sort((a, b) => String(b.assessment_date || b.created_at || '').localeCompare(String(a.assessment_date || a.created_at || '')));
+}
+
+function masteredThisWeekHtml() {
+  const since = weekStartDate();
+  const topics = state.data.subjects.flatMap((subject) =>
+    (subject.academic_topics || [])
+      .filter((topic) => topic.mastery_status === 'strong' && String(topic.last_assessed_at || '') >= since)
+      .map((topic) => `${subject.name}: ${topic.topic_name}`)
+  );
+  return `<section class="panel"><h3>Mastered this week</h3>${topics.length ? `<ul class="compact-list">${topics.map((item) => `<li>${escapeHtml(item)}</li>`).join('')}</ul>` : '<p class="muted">When a topic is moved to Strong this week, it will appear here.</p>'}</section>`;
 }
 
 function topicRowHtml(topic) {
@@ -284,9 +303,25 @@ function interviewHtml() {
 }
 
 function parentHtml() {
+  if (state.data.parentStudents?.length) return parentLinkedStudentsHtml();
   const tasks = state.data.tasks || [];
   const t = state.data.tara;
   return `<header class="top"><div><p class="eyebrow">Parent / Coach View</p><h2>Progress summary without private reflections</h2></div></header><section class="grid six">${card('This week', `${percent(tasks.filter((task)=>task.status==='completed').length, tasks.length)}%`, `${tasks.filter((task)=>task.status !== 'completed').length} tasks still open`)}${card('TARA', `${t.overallAccuracy}%`, `Weakest sub-type: ${t.weakestSubtype?.name || 'Not enough data'}<br>Questions: ${t.totalQuestions}`)}${card('A-Level', '', state.data.subjects.map((s)=>`${s.name}: ${s.predicted_grade || 'Not set'}`).join('<br>'))}${card('E&M consistency', `${state.data.journal.length} entries`, state.data.journal[0]?.title || 'No journal entries yet')}${card('Milestones', `${state.data.milestones.filter((m)=>m.status==='completed').length}/${state.data.milestones.length}`, 'Completed admissions milestones')}${card('Recommendations', '', state.data.recommendations.slice(0,2).join('<br>') || 'No recommendation yet')}</section>${digestPreviewHtml()}<section class="panel"><h3>Privacy note</h3><p class="muted">This view deliberately summarises progress. Student reflections are not shown here by default.</p></section>`;
+}
+
+function parentLinkedStudentsHtml() {
+  return `<header class="top"><div><p class="eyebrow">Parent / Coach View</p><h2>Linked student summaries</h2><p class="muted">Read-only progress. Journal reflections and Oxford reasoning responses are not shown.</p></div></header>${state.data.parentStudents.map(parentStudentCardHtml).join('')}<section class="panel"><h3>Privacy note</h3><p class="muted">Parents see performance summaries, weekly tasks, academic grades and milestones. Private student reflections stay out of this view.</p></section>`;
+}
+
+function parentStudentCardHtml(student) {
+  const tasks = student.tasks || [];
+  const completed = tasks.filter((task) => task.status === 'completed');
+  const open = tasks.filter((task) => !['completed', 'skipped'].includes(task.status));
+  const weakTopics = student.subjects.flatMap((subject) => (subject.academic_topics || [])
+    .filter((topic) => ['weak', 'developing'].includes(topic.mastery_status))
+    .map((topic) => `${subject.name}: ${topic.topic_name}`));
+  const nextMilestones = (student.milestones || []).filter((m) => m.status !== 'completed').slice(0, 3);
+  return `<section class="panel parent-student"><div class="top mini"><div><p class="eyebrow">${escapeHtml(student.profile?.display_name || 'Student')}</p><h3>${escapeHtml(student.profile?.target_course || 'Oxford Economics & Management')}</h3></div><span class="pill success">Read-only</span></div><section class="grid six">${card('This week', `${percent(completed.length, tasks.length)}%`, `${completed.length}/${tasks.length} tasks completed<br>${open.length} still open`)}${card('TARA', `${student.tara.overallAccuracy}%`, `${student.tara.totalQuestions} questions answered<br>Weakest: ${student.tara.weakestSubtype?.name || 'Not enough data'}`)}${card('A-Level', '', student.subjects.map((s)=>`${s.name}: ${s.predicted_grade || 'Not set'}`).join('<br>'))}${card('Weak topics', weakTopics.length, weakTopics.slice(0, 4).map(escapeHtml).join('<br>') || 'None recorded')}${card('Upcoming milestones', nextMilestones.length, nextMilestones.map((m)=>`${escapeHtml(m.title)} · ${formatDate(m.target_date)}`).join('<br>') || 'No open milestones')}${card('Current focus', '', student.programme?.weekly_focus || 'No active weekly programme')}</section></section>`;
 }
 
 function profileHtml() {
@@ -526,6 +561,10 @@ app.addEventListener('submit', async (event) => {
     if (action === 'draft-programme') { state.preferences = values; state.draft = createProgrammeDraft(state.data, values); state.notice = null; render(); return; }
     if (action === 'tara-filters') { state.taraFilters = values; state.notice = { type: 'success', message: `${filteredQuestions().length} questions match the selected filters.` }; render(); return; }
     if (button) button.disabled = true;
+    if (action === 'update-subject') {
+      const subject = findSubject(values.subject_id);
+      await updateSubject(state.user, subject, values);
+    }
     if (action === 'add-result') await addAcademicResult(state.user, values);
     if (action === 'add-topic') await addAcademicTopic(state.user, values);
     if (action === 'add-journal') await addJournalEntry(state.user, values);
@@ -555,6 +594,10 @@ function triggerFor(q) {
 
 function findAcademicTopic(id) {
   return state.data.subjects.flatMap((subject) => subject.academic_topics || []).find((topic) => topic.id === id);
+}
+
+function findSubject(id) {
+  return state.data.subjects.find((subject) => subject.id === id);
 }
 
 function highlight(text, parts = []) {
@@ -595,6 +638,17 @@ function formatLongDate(value) {
 
 function formatTime(value) {
   return String(value || '06:00').slice(0, 5);
+}
+
+function todayInput() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function weekStartDate() {
+  const date = new Date();
+  const day = date.getDay() || 7;
+  date.setDate(date.getDate() - day + 1);
+  return date.toISOString().slice(0, 10);
 }
 
 function sel(value, expected) {

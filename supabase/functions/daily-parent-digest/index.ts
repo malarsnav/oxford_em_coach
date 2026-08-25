@@ -14,7 +14,7 @@ Deno.serve(async (request) => {
   if (request.method !== 'POST') return json({ error: 'POST required' }, 405);
   if (CRON_SECRET && request.headers.get('x-cron-secret') !== CRON_SECRET) return json({ error: 'Unauthorized' }, 401);
 
-  const date = previousDate();
+  const date = previousDate('Europe/London');
   const { data: profiles, error } = await supabase
     .from('user_profiles')
     .select('user_id, display_name, parent_email, parent_digest_include_no_activity')
@@ -129,10 +129,17 @@ function suggestFocus(digest: Record<string, any>) {
   return 'Keep the current weekly programme moving.';
 }
 
-function previousDate() {
+function previousDate(timeZone: string) {
   const date = new Date();
-  date.setUTCDate(date.getUTCDate() - 1);
-  return date.toISOString().slice(0, 10);
+  date.setDate(date.getDate() - 1);
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+  }).formatToParts(date);
+  const value = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  return `${value.year}-${value.month}-${value.day}`;
 }
 
 function json(body: unknown, status = 200) {

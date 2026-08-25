@@ -281,6 +281,55 @@ input[type="checkbox"] {
   margin-top: 0.9rem;
 }
 
+.subject-form {
+  display: grid;
+  gap: 0.7rem;
+  margin: 0.8rem 0;
+}
+
+.subject-form label {
+  display: grid;
+  gap: 0.35rem;
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.subject-form textarea {
+  min-height: 74px;
+}
+
+.assessment-history {
+  display: grid;
+  gap: 0.5rem;
+  margin-top: 0.85rem;
+}
+
+.assessment-history article {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.2rem 0.7rem;
+  border-top: 1px solid var(--line);
+  padding-top: 0.55rem;
+}
+
+.assessment-history small {
+  grid-column: 1 / -1;
+  color: var(--muted);
+}
+
+.compact-list {
+  margin: 0.5rem 0 0;
+  padding-left: 1.2rem;
+}
+
+.compact-list li + li {
+  margin-top: 0.35rem;
+}
+
+.parent-student {
+  margin-bottom: 1rem;
+}
+
 .topic-row {
   display: grid;
   gap: 0.65rem;
@@ -623,6 +672,14 @@ button:disabled {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
+  .subject-form {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .subject-form .span-all {
+    grid-column: 1 / -1;
+  }
+
   .digest-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -654,5 +711,9 @@ button:disabled {
   .row select,
   .row input {
     width: 100%;
+  }
+
+  .subject-form {
+    grid-template-columns: 1fr;
   }
 }

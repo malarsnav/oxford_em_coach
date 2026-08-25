@@ -25,6 +25,8 @@ DAILY_DIGEST_CRON_SECRET
 
 Do not put these values in the frontend or commit them to GitHub.
 
+This is intentionally provider-neutral. The app does not require Resend specifically. Use whichever email provider you choose later, then map the generic payload to that provider with `EMAIL_PROVIDER_PAYLOAD_TEMPLATE` if needed.
+
 `EMAIL_PROVIDER_PAYLOAD_TEMPLATE` is optional. If unset, the function sends this generic JSON payload:
 
 ```json
@@ -53,6 +55,14 @@ supabase functions deploy daily-parent-digest
 ```
 
 Then create a daily schedule for roughly 6am UK time. Supabase schedules run in UTC, so adjust for UK daylight saving when necessary.
+
+The function summarises the previous Europe/London calendar day. The student does not need to be active at 6am; the scheduler simply runs the parent summary after the day has finished.
+
+## Parent Read-Only Access
+
+Run `supabase/migrations/004_parent_read_only_access.sql` after migration `003`.
+
+When a student saves a parent email in Profile, the app creates an invited parent link. When that parent signs in with the same email address, the app calls `claim_parent_links()` and activates the link. Parent View can then read only summary tables for that linked student. Journal reflections and Oxford reasoning responses are deliberately not granted to parents in this first version.
 
 ## Manual Test Later
 

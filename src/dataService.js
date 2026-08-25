@@ -23,10 +23,11 @@ export async function signOut() {
 
 export async function bootstrap(user) {
   if (!supabase) return localBootstrap();
+  await claimParentLinks();
   await ensureProfile(user);
   await seedSubjects(user.id);
   await seedMilestones(user.id);
-  const [profile, tara, programme, subjects, journal, reasoning, milestones, weeklyReviews, interviews] = await Promise.all([
+  const [profile, tara, programme, subjects, journal, reasoning, milestones, weeklyReviews, interviews, parentStudents] = await Promise.all([
     single('user_profiles', 'user_id', user.id),
     getTaraAnalytics(user.id),
     getCurrentProgramme(user.id),
@@ -35,9 +36,10 @@ export async function bootstrap(user) {
     list('oxford_reasoning_sessions', user.id, 'date', false),
     list('milestones', user.id, 'target_date', true),
     list('weekly_reviews', user.id, 'week_start', false),
-    list('interview_sessions', user.id, 'session_date', false)
+    list('interview_sessions', user.id, 'session_date', false),
+    getParentStudentSummaries(user.id)
   ]);
-  return buildState({ profile, tara, programme, subjects, journal, reasoning, milestones, weeklyReviews, interviews });
+  return buildState({ profile, tara, programme, subjects, journal, reasoning, milestones, weeklyReviews, interviews, parentStudents });
 }
 
 export async function saveAttempt(user, set, responses, startedAt) {
@@ -99,9 +101,11 @@ export async function updateProfile(user, patch) {
   if (isMissingDigestColumn(error)) {
     const { error: retryError } = await supabase.from('user_profiles').upsert(stripDigestColumns(row), { onConflict: 'user_id' });
     if (retryError) throw retryError;
+    await upsertParentLink(user.id, row.parent_email);
     return;
   }
   if (error) throw error;
+  await upsertParentLink(user.id, row.parent_email);
 }
 
 export async function createProgramme(user, draft, replaceCurrent = false) {
@@ -135,6 +139,23 @@ export async function addAcademicResult(user, payload) {
     return;
   }
   const { error } = await supabase.from('academic_results').insert(row);
+  if (error) throw error;
+}
+
+export async function updateSubject(user, subject, patch) {
+  const row = {
+    target_grade: patch.target_grade || null,
+    current_estimated_grade: patch.current_estimated_grade || null,
+    predicted_grade: patch.predicted_grade || null,
+    notes: patch.notes || null
+  };
+  if (!supabase) {
+    const db = readLocal();
+    db.subjects = db.subjects.map((item) => item.id === subject.id ? { ...item, ...row, updated_at: new Date().toISOString() } : item);
+    writeLocal(db);
+    return;
+  }
+  const { error } = await supabase.from('subjects').update(row).eq('id', subject.id).eq('user_id', user.id);
   if (error) throw error;
 }
 
@@ -266,6 +287,47 @@ async function getTaraAnalytics(userId) {
   return summarizeTara(attempts || [], responses || [], errors || []);
 }
 
+async function claimParentLinks() {
+  if (!supabase) return;
+  const { error } = await supabase.rpc('claim_parent_links');
+  if (error && !/claim_parent_links|schema cache|function/i.test(error.message || '')) throw error;
+}
+
+async function upsertParentLink(studentUserId, parentEmail) {
+  const email = String(parentEmail || '').trim().toLowerCase();
+  if (!supabase || !email) return;
+  const { error } = await supabase.from('student_parent_links').upsert({
+    student_user_id: studentUserId,
+    parent_email: email,
+    status: 'invited'
+  }, { onConflict: 'student_user_id,parent_email', ignoreDuplicates: true });
+  if (error && !/student_parent_links|schema cache|relation/i.test(error.message || '')) throw error;
+}
+
+async function getParentStudentSummaries(parentUserId) {
+  const { data: links, error } = await supabase
+    .from('student_parent_links')
+    .select('*')
+    .eq('parent_user_id', parentUserId)
+    .eq('status', 'active');
+  if (error) {
+    if (/student_parent_links|schema cache|relation/i.test(error.message || '')) return [];
+    throw error;
+  }
+  return Promise.all((links || []).map(async (link) => {
+    const userId = link.student_user_id;
+    const [profile, tara, programme, subjects, milestones] = await Promise.all([
+      single('user_profiles', 'user_id', userId),
+      getTaraAnalytics(userId),
+      getCurrentProgramme(userId),
+      getSubjects(userId),
+      list('milestones', userId, 'target_date', true)
+    ]);
+    const tasks = programme?.weekly_tasks || [];
+    return { link, profile, tara, programme, tasks, subjects, milestones };
+  }));
+}
+
 async function ensureProfile(user) {
   const existing = await single('user_profiles', 'user_id', user.id);
   if (existing) return;
@@ -346,7 +408,7 @@ function localBootstrap() {
   }, user);
 }
 
-function buildState({ profile, tara, programme, subjects, journal, reasoning, milestones, weeklyReviews, interviews = [] }) {
+function buildState({ profile, tara, programme, subjects, journal, reasoning, milestones, weeklyReviews, interviews = [], parentStudents = [] }) {
   const tasks = programme?.weekly_tasks || programme?.tasks || readLocal().weekly_tasks.filter((t) => t.programme_id === programme?.id);
   return {
     profile,
@@ -359,6 +421,7 @@ function buildState({ profile, tara, programme, subjects, journal, reasoning, mi
     milestones,
     weeklyReviews,
     interviews,
+    parentStudents,
     readiness: readiness({ tara, subjects, journal, reasoning, milestones, tasks }),
     recommendations: recommendations({ tara, subjects, journal, tasks, milestones })
   };
