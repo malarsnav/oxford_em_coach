@@ -39,6 +39,9 @@ The migration creates persistent tables for:
 - weekly reviews
 - interview sessions
 - TARA error analysis
+- role and student-parent link tables for a future parent/coach login
+
+The current app still treats the signed-in user as the active student. Parent/coach access is intentionally staged: `student_parent_links` records who may eventually view a student's summary data, while private reflections remain excluded unless `can_view_reflections` is explicitly enabled.
 
 ## Readiness Model
 

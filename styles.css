@@ -177,8 +177,13 @@ textarea {
   text-transform: uppercase;
 }
 
-.card p {
+.card p,
+.card-body {
   margin-bottom: 0;
+}
+
+.card-body button {
+  margin-top: 0.7rem;
 }
 
 .metric {
@@ -213,6 +218,48 @@ textarea {
 
 .bar-row .bar {
   grid-column: 1 / -1;
+}
+
+.trend {
+  display: flex;
+  align-items: end;
+  gap: 0.6rem;
+  min-height: 150px;
+  padding-top: 0.8rem;
+}
+
+.trend div {
+  display: grid;
+  gap: 0.35rem;
+  justify-items: center;
+  flex: 1;
+  min-width: 38px;
+}
+
+.trend span {
+  display: block;
+  width: 100%;
+  max-width: 42px;
+  min-height: 8px;
+  border-radius: 6px 6px 0 0;
+  background: var(--accent);
+}
+
+.session-list {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.session-row {
+  display: grid;
+  gap: 0.65rem;
+  padding: 0.8rem 0;
+  border-top: 1px solid var(--line);
+}
+
+.session-row p {
+  margin: 0.25rem 0 0;
+  color: var(--muted);
 }
 
 .task {
@@ -296,6 +343,35 @@ textarea {
   margin-bottom: 1rem;
 }
 
+.review-item {
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--line);
+}
+
+.review-item .coaching {
+  border-color: #eef3f5;
+  box-shadow: none;
+}
+
+.review-item.correct {
+  border-left: 4px solid var(--accent);
+  padding-left: 0.8rem;
+}
+
+.review-item.incorrect {
+  border-left: 4px solid var(--danger);
+  padding-left: 0.8rem;
+}
+
+.error-box {
+  margin-top: 0.8rem;
+  background: #fff8f6;
+  border: 1px solid #ffd9d2;
+  border-radius: var(--radius);
+  padding: 0.85rem;
+}
+
 .coaching ol {
   margin: 0;
   padding-left: 1.35rem;
@@ -365,6 +441,11 @@ mark {
 
   .form-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .session-row {
+    grid-template-columns: 1fr auto;
+    align-items: center;
   }
 }
 

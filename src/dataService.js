@@ -85,6 +85,18 @@ export async function updateTask(user, task, patch) {
   if (error) throw error;
 }
 
+export async function updateProfile(user, patch) {
+  const row = { ...patch, user_id: user.id };
+  if (!hasSupabaseConfig) {
+    const db = readLocal();
+    db.user_profiles = [{ ...(db.user_profiles?.[0] || {}), ...row, id: db.user_profiles?.[0]?.id || crypto.randomUUID() }];
+    writeLocal(db);
+    return;
+  }
+  const { error } = await supabase.from('user_profiles').upsert(row, { onConflict: 'user_id' });
+  if (error) throw error;
+}
+
 export async function createProgramme(user, draft, replaceCurrent = false) {
   if (!hasSupabaseConfig) {
     const db = readLocal();
@@ -156,7 +168,7 @@ export async function saveWeeklyReview(user, payload) {
 }
 
 export async function addInterviewSession(user, payload) {
-  const row = { ...payload, user_id: user.id, session_date: payload.session_date || today() };
+  const row = { ...payload, user_id: user.id, session_date: payload.session_date || today(), questions: splitLines(payload.questions) };
   if (!hasSupabaseConfig) {
     const db = readLocal();
     db.interview_sessions.push({ ...row, id: crypto.randomUUID() });
@@ -164,6 +176,20 @@ export async function addInterviewSession(user, payload) {
     return;
   }
   const { error } = await supabase.from('interview_sessions').insert(row);
+  if (error) throw error;
+}
+
+export async function saveTaraErrorAnalysis(user, payload) {
+  const row = { ...payload, user_id: user.id };
+  if (!hasSupabaseConfig) {
+    const db = readLocal();
+    const existing = db.tara_error_analysis.find((item) => item.response_id === payload.response_id);
+    if (existing) Object.assign(existing, row, { updated_at: new Date().toISOString() });
+    else db.tara_error_analysis.push({ ...row, id: crypto.randomUUID(), created_at: new Date().toISOString() });
+    writeLocal(db);
+    return;
+  }
+  const { error } = await supabase.from('tara_error_analysis').upsert(row, { onConflict: 'response_id' });
   if (error) throw error;
 }
 
@@ -189,11 +215,12 @@ async function getSubjects(userId) {
 }
 
 async function getTaraAnalytics(userId) {
-  const [{ data: attempts }, { data: responses }] = await Promise.all([
+  const [{ data: attempts }, { data: responses }, { data: errors }] = await Promise.all([
     supabase.from('attempts').select('*').eq('user_id', userId).order('completed_at', { ascending: false }),
-    supabase.from('responses').select('*').eq('user_id', userId).order('created_at', { ascending: false })
+    supabase.from('responses').select('*').eq('user_id', userId).order('created_at', { ascending: false }),
+    supabase.from('tara_error_analysis').select('*').eq('user_id', userId).order('created_at', { ascending: false })
   ]);
-  return summarizeTara(attempts || [], responses || []);
+  return summarizeTara(attempts || [], responses || [], errors || []);
 }
 
 async function ensureProfile(user) {
@@ -253,8 +280,8 @@ function localBootstrap() {
     academic_topics: (db.academic_topics || []).filter((topic) => topic.subject_id === subject.id)
   }));
   return buildState({
-    profile: { display_name: 'Student preview', target_course: 'Oxford Economics & Management', current_school_year: 'Year 12' },
-    tara: summarizeTara(db.attempts, db.responses),
+    profile: db.user_profiles?.[0] || { display_name: 'Student preview', target_course: 'Oxford Economics & Management', current_school_year: 'Year 12' },
+    tara: summarizeTara(db.attempts, db.responses, db.tara_error_analysis || []),
     programme: db.weekly_programmes.find((p) => p.is_active) || null,
     subjects,
     journal: db.journal_entries,
@@ -283,14 +310,16 @@ function buildState({ profile, tara, programme, subjects, journal, reasoning, mi
   };
 }
 
-export function summarizeTara(attempts, responses) {
+export function summarizeTara(attempts, responses, errors = []) {
   const total = responses.length;
   const correct = responses.filter((r) => r.is_correct).length;
   const byType = groupAccuracy(responses, 'question_type');
   const byPattern = groupAccuracy(responses, 'reasoning_pattern');
+  const errorsByResponse = Object.fromEntries(errors.map((item) => [item.response_id, item]));
   return {
     attempts,
-    responses,
+    responses: responses.map((response) => ({ ...response, error_analysis: errorsByResponse[response.id] || null })),
+    errors,
     totalAttempts: attempts.length,
     totalQuestions: total,
     overallAccuracy: total ? Math.round((correct / total) * 100) : 0,
@@ -301,7 +330,8 @@ export function summarizeTara(attempts, responses) {
     byPattern,
     weakestType: byType.at(0),
     strongestType: byType.at(-1),
-    recentTrend: attempts.slice(0, 5).map((a) => ({ label: new Date(a.completed_at).toLocaleDateString(), value: Math.round((a.score / a.total) * 100) }))
+    recentTrend: attempts.slice(0, 5).map((a) => ({ label: new Date(a.completed_at).toLocaleDateString(), value: Math.round((a.score / a.total) * 100) })),
+    repeatErrors: groupAccuracy(responses.filter((r) => !r.is_correct), 'question_type').slice(0, 5)
   };
 }
 
@@ -356,7 +386,7 @@ function band(score) {
 }
 
 function readLocal() {
-  return JSON.parse(localStorage.getItem(localKey) || '{"attempts":[],"responses":[],"weekly_programmes":[],"weekly_tasks":[],"subjects":[],"academic_results":[],"academic_topics":[],"journal_entries":[],"oxford_reasoning_sessions":[],"milestones":[],"weekly_reviews":[],"interview_sessions":[]}');
+  return JSON.parse(localStorage.getItem(localKey) || '{"user_profiles":[],"attempts":[],"responses":[],"weekly_programmes":[],"weekly_tasks":[],"subjects":[],"academic_results":[],"academic_topics":[],"journal_entries":[],"oxford_reasoning_sessions":[],"milestones":[],"weekly_reviews":[],"interview_sessions":[],"tara_error_analysis":[]}');
 }
 
 function writeLocal(db) {
@@ -394,4 +424,8 @@ function daysSince(value) {
 
 function splitTags(value) {
   return String(value || '').split(',').map((tag) => tag.trim()).filter(Boolean);
+}
+
+function splitLines(value) {
+  return String(value || '').split('\n').map((line) => line.trim()).filter(Boolean);
 }
