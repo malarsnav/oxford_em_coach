@@ -221,7 +221,15 @@ export async function addJournalEntry(user, payload) {
 }
 
 export async function addReasoningSession(user, payload) {
-  const row = { ...payload, user_id: user.id, date: today() };
+  const row = {
+    ...payload,
+    user_id: user.id,
+    date: today(),
+    score_reasoning: toOptionalNumber(payload.score_reasoning),
+    score_adaptability: toOptionalNumber(payload.score_adaptability),
+    score_clarity: toOptionalNumber(payload.score_clarity),
+    score_assumptions: toOptionalNumber(payload.score_assumptions)
+  };
   if (!supabase) {
     const db = readLocal();
     db.oxford_reasoning_sessions.push({ ...row, id: crypto.randomUUID() });
@@ -609,4 +617,8 @@ function splitTags(value) {
 
 function splitLines(value) {
   return String(value || '').split('\n').map((line) => line.trim()).filter(Boolean);
+}
+
+function toOptionalNumber(value) {
+  return value === '' || value === null || value === undefined ? null : Number(value);
 }

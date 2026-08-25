@@ -412,6 +412,43 @@ input[type="checkbox"] {
   border-left: 5px solid var(--accent);
 }
 
+.prompt-bank {
+  border-left: 5px solid var(--accent);
+}
+
+.prompt-list {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.prompt-list button {
+  height: auto;
+  min-height: 46px;
+  text-align: left;
+  line-height: 1.35;
+}
+
+.score-grid {
+  display: grid;
+  gap: 0.8rem;
+}
+
+.score-grid label {
+  display: grid;
+  gap: 0.35rem;
+  color: var(--muted);
+  font-weight: 800;
+}
+
+.score-grid input {
+  accent-color: var(--accent);
+}
+
+.score-grid small {
+  color: var(--muted);
+  font-weight: 600;
+}
+
 .mini-checks {
   display: flex;
   flex-wrap: wrap;
@@ -818,6 +855,14 @@ button:disabled {
   .session-row {
     grid-template-columns: 1fr auto;
     align-items: center;
+  }
+
+  .prompt-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .score-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 }
 

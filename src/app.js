@@ -11,6 +11,20 @@ const app = document.querySelector('#app');
 const MAGIC_LINK_THROTTLE_MINUTES = 30;
 const MAGIC_LINK_THROTTLE_MS = MAGIC_LINK_THROTTLE_MINUTES * 60 * 1000;
 const magicLinkStorageKey = 'oxford-em-coach-magic-link-sends-v1';
+const reasoningPrompts = [
+  'If university education has both private and public benefits, who should pay for it and why?',
+  'A supermarket sells milk below cost. Is this good or bad for consumers?',
+  'If a country becomes more productive, can workers still become worse off?',
+  'Should a firm always maximise profit in the short run?',
+  'What assumptions would you need before deciding whether rent controls help tenants?'
+];
+const interviewPrompts = [
+  'Explain a recent economic news story using incentives, constraints and unintended consequences.',
+  'Why might two firms in the same industry choose very different pricing strategies?',
+  'Is competition always good for consumers?',
+  'How would you decide whether a merger should be allowed?',
+  'Tell me about something you read that changed your mind about economics or management.'
+];
 const state = {
   user: null,
   data: null,
@@ -372,7 +386,13 @@ function journalTypeOptions(selected) {
 }
 
 function reasoningHtml() {
-  return `<header class="top"><div><p class="eyebrow">Oxford Reasoning</p><h2>Practise thinking aloud</h2></div></header><section class="panel"><form data-action="add-reasoning" class="stack"><textarea name="prompt" placeholder="Unfamiliar prompt" required></textarea><textarea name="assumptions" placeholder="Assumptions"></textarea><textarea name="initial_answer" placeholder="Initial answer"></textarea><textarea name="reasoning_steps" placeholder="Reasoning steps"></textarea><textarea name="revised_answer" placeholder="Revised answer after hint"></textarea><textarea name="reflection" placeholder="Reflection"></textarea><button>Save reasoning session</button></form></section>`;
+  return `<header class="top"><div><p class="eyebrow">Oxford Reasoning</p><h2>Practise thinking aloud</h2><p class="muted">The goal is not a perfect answer. It is to state assumptions, reason clearly, respond to hints and revise.</p></div></header>${promptBankHtml('Reasoning prompt bank', reasoningPrompts, 'reasoning-prompt')}<section class="panel"><form data-action="add-reasoning" class="stack reasoning-form"><textarea name="prompt" data-prompt-target="reasoning" placeholder="Unfamiliar prompt" required></textarea><textarea name="assumptions" placeholder="Assumptions I am making"></textarea><textarea name="initial_answer" placeholder="Initial answer"></textarea><textarea name="reasoning_steps" placeholder="Reasoning steps"></textarea><textarea name="hint_given" placeholder="Hint or challenge given"></textarea><textarea name="revised_answer" placeholder="Revised answer after hint"></textarea><textarea name="coach_feedback" placeholder="Coach feedback"></textarea><div class="score-grid">${scoreInput('score_reasoning','Logical reasoning')}${scoreInput('score_assumptions','Use of assumptions')}${scoreInput('score_adaptability','Adaptability')}${scoreInput('score_clarity','Clarity')}</div><textarea name="reflection" placeholder="Reflection: what changed and what should I practise next?"></textarea><button>Save reasoning session</button></form></section><section class="panel"><h3>Reasoning history</h3>${reasoningHistoryHtml()}</section>`;
+}
+
+function reasoningHistoryHtml() {
+  const rows = recentRows(state.data.reasoning || [], 'date');
+  if (!rows.length) return '<p class="muted">No reasoning sessions yet.</p>';
+  return `<div class="session-list">${rows.slice(0, 8).map((item) => `<article class="session-row"><div><b>${escapeHtml(item.prompt || 'Reasoning session')}</b><p>${formatDate(item.date || item.created_at)} · ${reasoningAverage(item)} avg score</p><small>${escapeHtml(item.reflection || item.coach_feedback || item.revised_answer || 'No reflection recorded yet.')}</small></div></article>`).join('')}</div>`;
 }
 
 function readinessHtml() {
@@ -517,7 +537,30 @@ function weeklyReviewField(name, value) {
 }
 
 function interviewHtml() {
-  return `<header class="top"><div><p class="eyebrow">Interview Prep</p><h2>Practise clarity, adaptability and quantitative thinking</h2></div></header><section class="panel"><form data-action="add-interview" class="stack"><input name="topic" placeholder="Topic"><input name="session_type" placeholder="Session type"><textarea name="questions" placeholder="Questions practised"></textarea><textarea name="reasoning_feedback" placeholder="Reasoning feedback"></textarea><textarea name="clarity_feedback" placeholder="Clarity feedback"></textarea><textarea name="adaptability_feedback" placeholder="Adaptability feedback"></textarea><textarea name="overall_feedback" placeholder="Overall feedback"></textarea><textarea name="next_steps" placeholder="Next steps"></textarea><button>Save interview session</button></form></section><section class="grid">${state.data.interviews.map((item)=>card(item.topic || 'Interview session', item.session_date || '', item.overall_feedback || item.next_steps || '')).join('')}</section>`;
+  return `<header class="top"><div><p class="eyebrow">Interview Prep</p><h2>Practise clarity, adaptability and quantitative thinking</h2><p class="muted">Record practice as evidence of how the student thinks, responds and improves, not just whether the first answer sounded polished.</p></div></header>${promptBankHtml('Oxford E&M interview prompt bank', interviewPrompts, 'interview-prompt')}<section class="panel"><form data-action="add-interview" class="stack interview-form"><div class="form-grid"><input name="topic" placeholder="Topic"><input name="session_type" placeholder="Session type, e.g. parent mock / school mock"><input name="session_date" type="date" value="${todayInput()}"></div><textarea name="questions" data-prompt-target="interview" placeholder="Questions practised, one per line"></textarea><textarea name="notes" placeholder="What happened in the session?"></textarea><textarea name="reasoning_feedback" placeholder="Reasoning feedback"></textarea><textarea name="clarity_feedback" placeholder="Clarity feedback"></textarea><textarea name="adaptability_feedback" placeholder="Adaptability feedback"></textarea><textarea name="quantitative_feedback" placeholder="Quantitative feedback"></textarea><textarea name="overall_feedback" placeholder="Overall feedback"></textarea><textarea name="next_steps" placeholder="Next steps"></textarea><button>Save interview session</button></form></section><section class="panel"><h3>Interview history</h3>${interviewHistoryHtml()}</section>`;
+}
+
+function interviewHistoryHtml() {
+  const rows = recentRows(state.data.interviews || [], 'session_date');
+  if (!rows.length) return '<p class="muted">No interview sessions yet.</p>';
+  return `<div class="session-list">${rows.slice(0, 8).map((item) => `<article class="session-row"><div><b>${escapeHtml(item.topic || 'Interview session')}</b><p>${formatDate(item.session_date || item.created_at)} · ${escapeHtml(item.session_type || 'Practice')}</p><small>${escapeHtml(item.overall_feedback || item.next_steps || item.reasoning_feedback || 'No feedback recorded yet.')}</small></div></article>`).join('')}</div>`;
+}
+
+function promptBankHtml(title, prompts, target) {
+  return `<section class="panel prompt-bank"><h3>${title}</h3><div class="prompt-list">${prompts.map((prompt) => `<button class="ghost" data-fill-prompt="${target}" data-prompt="${escapeAttr(prompt)}" title="Use this prompt">${escapeHtml(prompt)}</button>`).join('')}</div></section>`;
+}
+
+function scoreInput(name, labelText) {
+  return `<label>${labelText}<input name="${name}" type="range" min="1" max="5" value="3"><small>1 developing · 5 strong</small></label>`;
+}
+
+function reasoningAverage(item) {
+  const scores = ['score_reasoning','score_assumptions','score_adaptability','score_clarity'].map((key) => Number(item[key])).filter(Boolean);
+  return scores.length ? (scores.reduce((sum, score) => sum + score, 0) / scores.length).toFixed(1) : 'not scored';
+}
+
+function recentRows(rows, dateField) {
+  return [...rows].sort((a, b) => String(b[dateField] || b.created_at || '').localeCompare(String(a[dateField] || a.created_at || '')));
 }
 
 function parentHtml() {
@@ -720,6 +763,7 @@ app.addEventListener('click', async (event) => {
   if (target.dataset.answer) { state.practice.answers[state.practice.set[state.practice.index].id] = target.dataset.answer; render(); return; }
   if (target.dataset.topicFilter) { state.academicTopicFilter = target.dataset.topicFilter; render(); return; }
   if (target.dataset.journalMode) { state.journalMode = target.dataset.journalMode; render(); return; }
+  if (target.dataset.fillPrompt) { fillPrompt(target.dataset.fillPrompt, target.dataset.prompt); return; }
   if (target.dataset.removeDraft) { state.draft.tasks.splice(Number(target.dataset.removeDraft), 1); render(); return; }
   if (target.dataset.reviewAttempt) { state.reviewAttemptId = target.dataset.reviewAttempt; state.view = 'analytics'; render(); return; }
   const action = target.dataset.action;
@@ -858,6 +902,13 @@ function findSubject(id) {
 
 function findMilestone(id) {
   return state.data.milestones.find((milestone) => milestone.id === id);
+}
+
+function fillPrompt(targetName, prompt) {
+  const textarea = app.querySelector(`[data-prompt-target="${targetName.replace('-prompt', '')}"]`);
+  if (!textarea) return;
+  textarea.value = textarea.value ? `${textarea.value}\n${prompt}` : prompt;
+  textarea.focus();
 }
 
 function highlight(text, parts = []) {
