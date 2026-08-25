@@ -452,6 +452,7 @@ function setFormStatus(form, message, type = 'info') {
 
 function friendlyError(error) {
   const message = error?.message || String(error);
+  if (message.toLowerCase().includes('rate limit')) return 'Supabase email limit reached. Wait about 1 hour before trying again, or configure custom SMTP in Supabase for production email delivery.';
   if (message.toLowerCase().includes('failed to fetch')) return 'Could not reach Supabase. Check internet connection and try again.';
   if (message.toLowerCase().includes('redirect')) return 'Sign-in redirect is not allowed yet. Check Supabase Authentication URL Configuration.';
   if (message.toLowerCase().includes('email')) return message;
