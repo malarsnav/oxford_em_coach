@@ -114,7 +114,7 @@ export async function createProgramme(user, draft, replaceCurrent = false) {
     if (replaceCurrent) db.weekly_programmes = db.weekly_programmes.map((p) => p.is_active ? { ...p, is_active: false, archived_at: new Date().toISOString() } : p);
     const programme = { ...draft.programme, id: crypto.randomUUID(), user_id: user.id, is_active: true, version: 1 };
     db.weekly_programmes.push(programme);
-    db.weekly_tasks.push(...draft.tasks.map((task) => ({ ...task, id: crypto.randomUUID(), programme_id: programme.id, user_id: user.id, status: 'not_started' })));
+    db.weekly_tasks.push(...draft.tasks.map((task) => ({ ...taskForSave(task), id: crypto.randomUUID(), programme_id: programme.id, user_id: user.id, status: 'not_started' })));
     writeLocal(db);
     return programme;
   }
@@ -123,9 +123,14 @@ export async function createProgramme(user, draft, replaceCurrent = false) {
   }
   const { data: programme, error } = await supabase.from('weekly_programmes').insert({ ...draft.programme, user_id: user.id, is_active: true }).select().single();
   if (error) throw error;
-  const { error: taskError } = await supabase.from('weekly_tasks').insert(draft.tasks.map((task) => ({ ...task, programme_id: programme.id, user_id: user.id, status: 'not_started' })));
+  const { error: taskError } = await supabase.from('weekly_tasks').insert(draft.tasks.map((task) => ({ ...taskForSave(task), programme_id: programme.id, user_id: user.id, status: 'not_started' })));
   if (taskError) throw taskError;
   return programme;
+}
+
+function taskForSave(task) {
+  const { recommendation_reason, ...row } = task;
+  return row;
 }
 
 export async function addAcademicResult(user, payload) {

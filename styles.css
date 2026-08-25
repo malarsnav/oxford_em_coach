@@ -110,6 +110,8 @@ input[type="checkbox"] {
   gap: 0.45rem;
   overflow-x: auto;
   padding-bottom: 0.2rem;
+  scrollbar-width: thin;
+  scroll-snap-type: x proximity;
 }
 
 .sidebar nav button {
@@ -118,6 +120,7 @@ input[type="checkbox"] {
   background: #eef3f5;
   color: var(--ink);
   white-space: nowrap;
+  scroll-snap-align: start;
 }
 
 .sidebar nav button.active {
@@ -201,6 +204,31 @@ input[type="checkbox"] {
 
 .card-body button {
   margin-top: 0.7rem;
+}
+
+.recommendation {
+  border-left: 5px solid var(--accent);
+}
+
+.compact-panel {
+  padding-block: 0.75rem;
+}
+
+.segmented {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+
+.segmented button {
+  min-height: 36px;
+  background: #eef3f5;
+  color: var(--ink);
+}
+
+.segmented button.active {
+  background: var(--accent);
+  color: #ffffff;
 }
 
 .metric {
@@ -406,6 +434,17 @@ input[type="checkbox"] {
 .task p {
   margin: 0.35rem 0 0;
   color: var(--muted);
+}
+
+.task .why {
+  color: var(--ink);
+}
+
+.why {
+  border-left: 4px solid var(--accent);
+  border-radius: 0 var(--radius) var(--radius) 0;
+  background: var(--soft);
+  padding: 0.65rem 0.75rem;
 }
 
 .row,
@@ -695,6 +734,20 @@ button:disabled {
 }
 
 @media (max-width: 520px) {
+  body {
+    font-size: 16px;
+  }
+
+  .sidebar {
+    gap: 0.55rem;
+    padding: 0.75rem;
+  }
+
+  .sidebar nav button {
+    min-height: 44px;
+    padding-inline: 0.85rem;
+  }
+
   .main {
     padding: 0.8rem;
   }
@@ -708,12 +761,28 @@ button:disabled {
     width: 100%;
   }
 
+  .actions,
+  .row {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
   .row select,
-  .row input {
+  .row input,
+  .row button {
     width: 100%;
   }
 
   .subject-form {
     grid-template-columns: 1fr;
+  }
+
+  .task {
+    padding-top: 0.8rem;
+    margin-top: 0.8rem;
+  }
+
+  .metric {
+    font-size: 1.55rem;
   }
 }

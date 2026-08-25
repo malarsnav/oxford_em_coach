@@ -20,6 +20,7 @@ const state = {
   draft: null,
   notice: null,
   reviewAttemptId: null,
+  academicTopicFilter: 'all',
   taraFilters: { year: 'all', family: 'all', type: 'all', pattern: 'all' },
   preferences: { minutes: 180, workload: 'standard', schoolWeek: 'normal', priority: 'none' }
 };
@@ -148,7 +149,8 @@ function aLevelTopicPlanHtml() {
 }
 
 function draftHtml() {
-  return `<section class="panel draft"><h3>Draft programme review</h3><p>${state.draft.programme.weekly_focus}</p>${state.draft.tasks.map((t,i)=>`<article class="task"><input data-draft="${i}" data-field="title" value="${escapeAttr(t.title)}"><textarea data-draft="${i}" data-field="description">${t.description}</textarea><div class="row"><input data-draft="${i}" data-field="estimated_minutes" type="number" value="${t.estimated_minutes}"><select data-draft="${i}" data-field="priority"><option ${sel(t.priority,'high')}>high</option><option ${sel(t.priority,'medium')}>medium</option><option ${sel(t.priority,'low')}>low</option></select><button data-remove-draft="${i}" class="ghost">Remove</button></div></article>`).join('')}<div class="actions"><button data-action="accept-draft">Accept programme</button><button class="ghost" data-action="draft-programme">Regenerate</button></div></section>`;
+  const minutes = state.draft.tasks.reduce((sum, task) => sum + Number(task.estimated_minutes || 0), 0);
+  return `<section class="panel draft"><div class="top mini"><div><h3>Draft programme review</h3><p>${state.draft.programme.weekly_focus}</p></div><span class="pill success">${minutes} min</span></div>${state.draft.tasks.map((t,i)=>`<article class="task"><input data-draft="${i}" data-field="title" value="${escapeAttr(t.title)}"><textarea data-draft="${i}" data-field="description">${t.description}</textarea>${t.recommendation_reason ? `<p class="why"><b>Why this task:</b> ${escapeHtml(t.recommendation_reason)}</p>` : ''}<div class="row"><input data-draft="${i}" data-field="estimated_minutes" type="number" value="${t.estimated_minutes}"><select data-draft="${i}" data-field="priority"><option ${sel(t.priority,'high')}>high</option><option ${sel(t.priority,'medium')}>medium</option><option ${sel(t.priority,'low')}>low</option></select><button data-remove-draft="${i}" class="ghost">Remove</button></div></article>`).join('')}<div class="actions"><button data-action="accept-draft">Accept programme</button><button class="ghost" data-action="draft-programme">Regenerate</button></div></section>`;
 }
 
 function noticeHtml() {
@@ -164,7 +166,7 @@ function groupTasks(tasks) {
 }
 
 function taskHtml(t) {
-  return `<article class="task"><div><b>${t.title}</b><p>${t.description || ''}</p></div><div class="row"><span class="pill ${t.priority}">${t.priority}</span><span>${t.estimated_minutes || 0} min</span><select data-task-status="${t.id}" title="Update task status">${['not_started','in_progress','completed','skipped'].map((s)=>`<option value="${s}" ${sel(t.status,s)}>${s.replace('_',' ')}</option>`).join('')}</select></div><textarea data-task-field="${t.id}" data-field="completion_notes" placeholder="Completion notes">${t.completion_notes || ''}</textarea><textarea data-task-field="${t.id}" data-field="reflection" placeholder="Reflection">${t.reflection || ''}</textarea><input data-task-field="${t.id}" data-field="evidence_url" placeholder="Evidence URL" value="${escapeAttr(t.evidence_url || '')}"></article>`;
+  return `<article class="task"><div><b>${t.title}</b><p>${t.description || ''}</p>${t.recommendation_reason ? `<p class="why"><b>Why this task:</b> ${escapeHtml(t.recommendation_reason)}</p>` : ''}</div><div class="row"><span class="pill ${t.priority}">${t.priority}</span><span>${t.estimated_minutes || 0} min</span><select data-task-status="${t.id}" title="Update task status">${['not_started','in_progress','completed','skipped'].map((s)=>`<option value="${s}" ${sel(t.status,s)}>${s.replace('_',' ')}</option>`).join('')}</select></div><textarea data-task-field="${t.id}" data-field="completion_notes" placeholder="Completion notes">${t.completion_notes || ''}</textarea><textarea data-task-field="${t.id}" data-field="reflection" placeholder="Reflection">${t.reflection || ''}</textarea><input data-task-field="${t.id}" data-field="evidence_url" placeholder="Evidence URL" value="${escapeAttr(t.evidence_url || '')}"></article>`;
 }
 
 function taraHtml() {
@@ -231,11 +233,28 @@ function carryForwardFor(q) {
 
 function analyticsHtml() {
   const t = state.data.tara;
-  return `<header class="top"><div><p class="eyebrow">TARA Analytics</p><h2>${t.overallAccuracy}% overall accuracy</h2></div></header><section class="grid">${card('Total attempts', t.totalAttempts, `${t.totalQuestions} questions answered`)}${card('Average set score', t.averageSetScore, 'Mini-sets are not official scaled scores.')}${card('Critical Thinking', `${t.criticalAccuracy}%`, '')}${card('Numerical Reasoning', `${t.problemAccuracy}%`, '')}</section><section class="panel"><h3>Accuracy trend</h3>${trend(t.recentTrend)}</section><section class="panel"><h3>By type</h3>${bars(t.byType)}</section><section class="panel"><h3>By sub-type</h3>${bars(t.byPattern)}</section><section class="panel"><h3>Historical test sessions</h3>${sessionHistoryHtml()}</section>${state.reviewAttemptId ? reviewAttemptHtml(state.reviewAttemptId) : ''}`;
+  return `<header class="top"><div><p class="eyebrow">TARA Analytics</p><h2>${t.overallAccuracy}% overall accuracy</h2></div><button data-action="start-recommended-tara">Practise recommended area</button></header>${taraRecommendationHtml(t)}<section class="grid">${card('Total attempts', t.totalAttempts, `${t.totalQuestions} questions answered`)}${card('Average set score', t.averageSetScore, 'Mini-sets are not official scaled scores.')}${card('Critical Thinking', `${t.criticalAccuracy}%`, '')}${card('Numerical Reasoning', `${t.problemAccuracy}%`, '')}</section><section class="panel"><h3>Accuracy trend</h3>${trend(t.recentTrend)}</section><section class="grid"><section class="panel"><h3>By type</h3>${bars(t.byType)}</section><section class="panel"><h3>By sub-type</h3>${bars(t.byPattern)}</section></section><section class="panel"><h3>Repeat mistake signals</h3>${repeatMistakesHtml(t)}</section><section class="panel"><h3>Historical test sessions</h3>${sessionHistoryHtml()}</section>${state.reviewAttemptId ? reviewAttemptHtml(state.reviewAttemptId) : ''}`;
+}
+
+function taraRecommendationHtml(t) {
+  if (!t.totalQuestions) return `<section class="panel"><h3>What to practise next</h3><p class="muted">Complete one set first. The app will then recommend practice from the weakest type or sub-type.</p></section>`;
+  const weak = t.weakestSubtype || t.weakestType;
+  const reason = weak?.total ? `${weak.name} is currently ${weak.accuracy}% across ${weak.total} question${weak.total === 1 ? '' : 's'}.` : 'There is not enough detail yet, so use smart coverage to keep seeing unseen questions.';
+  return `<section class="panel recommendation"><div class="top mini"><div><h3>What to practise next</h3><p>${escapeHtml(reason)}</p></div><span class="pill high">${weak?.accuracy ?? t.overallAccuracy}%</span></div><p class="callout">Recommended action: ${weak?.name ? `start a focused 5-question set for ${escapeHtml(weak.name)}, then review every trap and carry-forward method.` : 'start a smart coverage set.'}</p></section>`;
+}
+
+function repeatMistakesHtml(t) {
+  if (!t.repeatErrors?.length) return '<p class="muted">No repeated mistake pattern yet. This will populate after incorrect responses are recorded.</p>';
+  return `<div class="topic-list">${t.repeatErrors.map((row) => `<article><b>${escapeHtml(row.name)}</b><p>${row.total} incorrect response${row.total === 1 ? '' : 's'}</p><small>Use the coaching report to classify why the mistake happened.</small></article>`).join('')}</div>`;
 }
 
 function academicsHtml() {
-  return `<header class="top"><div><p class="eyebrow">A-Level Progress</p><h2>Protect academic strength</h2><p class="muted">Track grades, assessments and weekly mastery topics. Weak or developing topics are fed into the Weekly Programme generator.</p></div></header>${needsAttentionHtml()}${masteredThisWeekHtml()}<section class="grid">${state.data.subjects.map(subjectCardHtml).join('')}</section><section class="panel"><h3>Add topic to track</h3><form data-action="add-topic" class="form-grid">${subjectSelect()}<input name="topic_name" placeholder="Topic, e.g. Integration by substitution" required><label>Mastery<select name="mastery_status">${masteryOptions('developing')}</select></label><label>Confidence 1-5<input name="confidence" type="number" min="1" max="5" value="3"></label><input name="notes" placeholder="Notes or next action"><button>Save topic</button></form></section><section class="panel"><h3>Add assessment</h3><form data-action="add-result" class="form-grid">${subjectSelect()}<input name="assessment_name" placeholder="Assessment name" required><input name="topic" placeholder="Topic"><input name="assessment_date" type="date" value="${todayInput()}"><input name="score" type="number" placeholder="Score"><input name="max_score" type="number" value="100"><input name="grade" placeholder="Grade"><input name="teacher_feedback" placeholder="Teacher feedback"><button>Save result</button></form></section>`;
+  return `<header class="top"><div><p class="eyebrow">A-Level Progress</p><h2>Protect academic strength</h2><p class="muted">Track grades, assessments and weekly mastery topics. Weak or developing topics are fed into the Weekly Programme generator.</p></div></header>${needsAttentionHtml()}${masteredThisWeekHtml()}${topicFilterHtml()}<section class="grid">${state.data.subjects.map(subjectCardHtml).join('')}</section><section class="panel"><h3>Add topic to track</h3><form data-action="add-topic" class="form-grid">${subjectSelect()}<input name="topic_name" placeholder="Topic, e.g. Integration by substitution" required><label>Mastery<select name="mastery_status">${masteryOptions('developing')}</select></label><label>Confidence 1-5<input name="confidence" type="number" min="1" max="5" value="3"></label><input name="notes" placeholder="Notes or next action"><button>Save topic</button></form></section><section class="panel"><h3>Add assessment</h3><form data-action="add-result" class="form-grid">${subjectSelect()}<input name="assessment_name" placeholder="Assessment name" required><input name="topic" placeholder="Topic"><input name="assessment_date" type="date" value="${todayInput()}"><input name="score" type="number" placeholder="Score"><input name="max_score" type="number" value="100"><input name="grade" placeholder="Grade"><input name="teacher_feedback" placeholder="Teacher feedback"><button>Save result</button></form></section>`;
+}
+
+function topicFilterHtml() {
+  const filters = ['all','weak','developing','secure','strong'];
+  return `<section class="panel compact-panel"><h3>Topic filter</h3><div class="segmented">${filters.map((filter) => `<button class="${state.academicTopicFilter === filter ? 'active' : ''}" data-topic-filter="${filter}" title="Show ${filter === 'all' ? 'all' : filter} A-Level topics">${label(filter)}</button>`).join('')}</div></section>`;
 }
 
 function needsAttentionHtml() {
@@ -251,8 +270,9 @@ function needsAttentionHtml() {
 function subjectCardHtml(subject) {
   const results = sortedResults(subject.academic_results || []);
   const latest = results[0];
-  const topics = subject.academic_topics || [];
-  const weakCount = topics.filter((topic) => ['weak', 'developing'].includes(topic.mastery_status)).length;
+  const topics = filteredAcademicTopics(subject.academic_topics || []);
+  const allTopics = subject.academic_topics || [];
+  const weakCount = allTopics.filter((topic) => ['weak', 'developing'].includes(topic.mastery_status)).length;
   return `<section class="panel subject-card"><div class="top mini"><div><h3>${escapeHtml(subject.name)}</h3><p class="muted">${weakCount} topic${weakCount === 1 ? '' : 's'} need attention</p></div><p class="metric">${escapeHtml(subject.predicted_grade || 'Not set')}</p></div><form data-action="update-subject" class="subject-form"><input type="hidden" name="subject_id" value="${subject.id}"><label>Target<input name="target_grade" value="${escapeAttr(subject.target_grade || '')}" placeholder="A*"></label><label>Current<input name="current_estimated_grade" value="${escapeAttr(subject.current_estimated_grade || '')}" placeholder="Current grade"></label><label>Predicted<input name="predicted_grade" value="${escapeAttr(subject.predicted_grade || '')}" placeholder="Predicted grade"></label><label class="span-all">Subject notes<textarea name="notes" placeholder="Teacher advice, exam-board notes, or next revision action">${escapeHtml(subject.notes || '')}</textarea></label><button>Save subject</button></form>${latest ? `<p class="callout">Latest: ${escapeHtml(latest.assessment_name || latest.topic || 'Assessment')} · ${latest.percentage ?? 0}%${latest.grade ? ` · ${escapeHtml(latest.grade)}` : ''}</p>` : '<p class="muted">No assessment recorded yet.</p>'}${results.length ? `<div class="assessment-history"><b>Recent assessments</b>${results.slice(0, 3).map(assessmentRowHtml).join('')}</div>` : ''}${topics.length ? `<div class="topic-stack">${topics.map(topicRowHtml).join('')}</div>` : '<p class="muted">No tracked topics yet.</p>'}</section>`;
 }
 
@@ -276,6 +296,11 @@ function masteredThisWeekHtml() {
 
 function topicRowHtml(topic) {
   return `<article class="topic-row"><div><b>${escapeHtml(topic.topic_name)}</b><small>${label(topic.mastery_status)} · confidence ${topic.confidence || 3}/5</small></div><div class="row"><select data-topic-status="${topic.id}" title="Update mastery">${['weak','developing','secure','strong'].map((status) => `<option value="${status}" ${sel(topic.mastery_status,status)}>${label(status)}</option>`).join('')}</select><select data-topic-confidence="${topic.id}" title="Update confidence">${[1,2,3,4,5].map((score) => `<option value="${score}" ${sel(String(topic.confidence || 3),String(score))}>${score}/5</option>`).join('')}</select></div><textarea data-topic-notes="${topic.id}" placeholder="Notes or next action">${topic.notes || ''}</textarea></article>`;
+}
+
+function filteredAcademicTopics(topics) {
+  if (state.academicTopicFilter === 'all') return topics;
+  return topics.filter((topic) => topic.mastery_status === state.academicTopicFilter);
 }
 
 function masteryOptions(selected) {
@@ -423,6 +448,15 @@ function startSmartTara() {
   state.view = 'tara';
 }
 
+function startRecommendedTara() {
+  const weakSubtype = state.data.tara.weakestSubtype?.name;
+  if (weakSubtype) {
+    state.taraFilters = { ...state.taraFilters, type: weakSubtype };
+    state.notice = { type: 'info', message: `Starting a focused set for ${weakSubtype}.` };
+  }
+  startTara();
+}
+
 function filteredQuestions() {
   return questions.filter((q) =>
     (state.taraFilters.year === 'all' || String(q.paper_year) === state.taraFilters.year) &&
@@ -471,12 +505,14 @@ app.addEventListener('click', async (event) => {
   if (!target) return;
   if (target.dataset.view) { state.view = target.dataset.view; render(); return; }
   if (target.dataset.answer) { state.practice.answers[state.practice.set[state.practice.index].id] = target.dataset.answer; render(); return; }
+  if (target.dataset.topicFilter) { state.academicTopicFilter = target.dataset.topicFilter; render(); return; }
   if (target.dataset.removeDraft) { state.draft.tasks.splice(Number(target.dataset.removeDraft), 1); render(); return; }
   if (target.dataset.reviewAttempt) { state.reviewAttemptId = target.dataset.reviewAttempt; state.view = 'analytics'; render(); return; }
   const action = target.dataset.action;
   if (action === 'signout') { await signOut(); location.reload(); }
   if (action === 'start-tara') { startTara(); render(); }
   if (action === 'start-smart') { startSmartTara(); render(); }
+  if (action === 'start-recommended-tara') { startRecommendedTara(); render(); }
   if (action === 'prev-question') { state.practice.index = Math.max(0, state.practice.index - 1); render(); }
   if (action === 'next-question') { state.practice.index = Math.min(state.practice.set.length - 1, state.practice.index + 1); render(); }
   if (action === 'submit-tara') await submitTara();

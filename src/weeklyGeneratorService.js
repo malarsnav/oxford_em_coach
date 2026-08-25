@@ -22,8 +22,10 @@ export function createProgrammeDraft(state, preferences = {}) {
   const phase = getPhase();
   const targetMinutes = Number(preferences.minutes || 180);
   const workload = preferences.workload || 'standard';
+  const adjustedTarget = adjustedMinutes(targetMinutes, workload, preferences.schoolWeek);
   let tasks = baseTasks(state, preferences);
-  tasks = rebalance(tasks, workload === 'light' ? targetMinutes * 0.7 : workload === 'intensive' ? targetMinutes * 1.25 : targetMinutes);
+  tasks = carryForwardIncompleteTasks(tasks, state);
+  tasks = rebalance(tasks, adjustedTarget);
   return {
     programme: {
       week_start: week.week_start,
@@ -40,26 +42,55 @@ export function createProgrammeDraft(state, preferences = {}) {
 function baseTasks(state, preferences) {
   const aLevelTasks = getAlevelTopicPlan(state).map((item) => {
     const planned = topicTaskFor(item);
-    return task(planned.category, planned.title, planned.description, planned.estimated_minutes, planned.priority);
+    return task(planned.category, planned.title, planned.description, planned.estimated_minutes, planned.priority, item.reason);
   });
   const tasks = [
     ...aLevelTasks,
-    task('tara', 'Complete a 5-question TARA set', 'Use TARA Practice to complete one bite-sized set and review the methodology report.', 25, 'medium'),
-    task('economics', 'Analyse one economics article', 'Record the main claim, mechanism, evidence, assumptions and one counterargument.', 35, 'medium'),
-    task('management', 'Explain a strategic business choice', 'Answer: why might a company sell a product at a loss? Give at least three strategic reasons.', 20, 'low'),
-    task('oxford_reasoning', 'Solve one unfamiliar reasoning prompt', 'Write assumptions first, answer, revise after a hint, then reflect on what changed.', 20, 'medium')
+    task('tara', 'Complete a 5-question TARA set', 'Use TARA Practice to complete one bite-sized set and review the methodology report.', 25, 'medium', 'TARA needs steady low-friction practice so mistakes become visible early.'),
+    task('economics', 'Analyse one economics article', 'Record the main claim, mechanism, evidence, assumptions and one counterargument.', 35, 'medium', 'Oxford E&M preparation needs depth of thought, not just reading volume.'),
+    task('management', 'Explain a strategic business choice', 'Answer: why might a company sell a product at a loss? Give at least three strategic reasons.', 20, 'low', 'Management thinking improves when strategy is linked to incentives and trade-offs.'),
+    task('oxford_reasoning', 'Solve one unfamiliar reasoning prompt', 'Write assumptions first, answer, revise after a hint, then reflect on what changed.', 20, 'medium', 'Interview-style reasoning rewards assumptions, clarity and adaptability.')
   ];
   if (state?.tara?.weakestSubtype?.accuracy < 65) {
-    tasks.push(task('tara', `Target weak sub-type: ${state.tara.weakestSubtype.name}`, `Accuracy in ${state.tara.weakestSubtype.name} is below 65%. Complete one focused 5-question set and write the transferable method.`, 30, 'high'));
+    tasks.push(task('tara', `Target weak sub-type: ${state.tara.weakestSubtype.name}`, `Accuracy in ${state.tara.weakestSubtype.name} is below 65%. Complete one focused 5-question set and write the transferable method.`, 30, 'high', `Recent ${state.tara.weakestSubtype.name} accuracy is ${state.tara.weakestSubtype.accuracy}%, so this needs targeted repair.`));
   }
   if (preferences.priority === 'application') {
-    tasks.push(task('application', 'Capture one application evidence point', 'Convert one journal or school achievement into a concise example that could support a personal statement paragraph.', 25, 'medium'));
+    tasks.push(task('application', 'Capture one application evidence point', 'Convert one journal or school achievement into a concise example that could support a personal statement paragraph.', 25, 'medium', 'You asked for more application/interview work this week.'));
+  }
+  if (preferences.priority && preferences.priority !== 'none' && preferences.priority !== 'application') {
+    tasks.push(priorityTask(preferences.priority));
   }
   return tasks;
 }
 
-function task(category, title, description, estimated_minutes, priority) {
-  return { category, title, description, estimated_minutes, priority, due_date: currentWeek().week_end, status: 'not_started' };
+function task(category, title, description, estimated_minutes, priority, recommendation_reason = '') {
+  return { category, title, description, estimated_minutes, priority, recommendation_reason, due_date: currentWeek().week_end, status: 'not_started' };
+}
+
+function priorityTask(category) {
+  const byCategory = {
+    tara: task('tara', 'Extra targeted TARA set', 'Complete one additional 5-question set using the weakest available sub-type filter.', 25, 'high', 'You selected More TARA for this week.'),
+    economics: task('economics', 'Deepen one economics mechanism', 'Choose one school or article topic and explain the mechanism, assumptions and counterargument.', 30, 'high', 'You selected More Economics for this week.'),
+    management: task('management', 'Compare two business strategies', 'Pick two firms in the same market and explain how their incentives, costs and positioning differ.', 30, 'high', 'You selected More Management for this week.'),
+    a_level: task('a_level', 'Protect one weak A-Level topic', 'Spend one focused block on the weakest currently tracked A-Level topic, then update its confidence score.', 35, 'high', 'You selected More A-Level support for this week.'),
+    oxford_reasoning: task('oxford_reasoning', 'Second Oxford reasoning prompt', 'Attempt a fresh prompt and explicitly revise your answer after identifying a hidden assumption.', 25, 'high', 'You selected More Oxford Reasoning for this week.')
+  };
+  return byCategory[category] || byCategory.a_level;
+}
+
+function carryForwardIncompleteTasks(tasks, state) {
+  const unfinished = (state?.tasks || [])
+    .filter((item) => item.priority === 'high' && !['completed', 'skipped'].includes(item.status))
+    .slice(0, 2)
+    .map((item) => task(item.category, `Carry forward: ${item.title}`, item.description || 'Finish this high-priority task from the current programme.', item.estimated_minutes || 20, 'high', 'This high-priority task was still open, so it is carried forward before adding more workload.'));
+  return [...unfinished, ...tasks];
+}
+
+function adjustedMinutes(targetMinutes, workload, schoolWeek) {
+  let minutes = workload === 'light' ? targetMinutes * 0.7 : workload === 'intensive' ? targetMinutes * 1.25 : targetMinutes;
+  if (schoolWeek === 'exam') minutes *= 0.75;
+  if (schoolWeek === 'holiday') minutes *= 1.2;
+  return Math.round(minutes);
 }
 
 function rebalance(tasks, targetMinutes) {
@@ -84,7 +115,8 @@ function focusFor(state, preferences, phase) {
 function summaryFor(state, tasks, phase) {
   const minutes = tasks.reduce((sum, task) => sum + task.estimated_minutes, 0);
   const reason = state?.tara?.weakestSubtype?.accuracy < 65 ? ` TARA ${state.tara.weakestSubtype.name} is currently weak, so targeted practice is included.` : '';
-  return `${phase.name}: ${minutes} minutes of focused work across ${new Set(tasks.map((task) => task.category)).size} preparation areas.${reason}`;
+  const carried = tasks.filter((task) => task.title.startsWith('Carry forward:')).length;
+  return `${phase.name}: ${minutes} minutes of focused work across ${new Set(tasks.map((task) => task.category)).size} preparation areas.${carried ? ` ${carried} high-priority task${carried === 1 ? '' : 's'} carried forward.` : ''}${reason}`;
 }
 
 function priorityWeight(priority) {
