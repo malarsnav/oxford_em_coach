@@ -245,7 +245,7 @@ function taraHtml() {
 }
 
 function questionMetaHtml(q) {
-  return `<div class="meta-strip"><span>${escapeHtml(q.topic_tag || 'No topic tag')}</span><span>Difficulty ${q.estimated_difficulty_tier || 3}/4 · ${escapeHtml(q.estimated_difficulty_label || 'Moderately Difficult')}</span><span>${q.time_budget_seconds || 90}s target</span>${q.requires_spatial_processing ? '<span>Spatial processing</span>' : ''}</div>`;
+  return `<div class="meta-strip"><span>${escapeHtml(q.topic_tag || 'No topic tag')}</span><span>${q.time_budget_seconds || 90}s target pace</span>${q.requires_spatial_processing ? '<span>Spatial processing</span>' : ''}</div>`;
 }
 
 function optionClass(q, key, selected) {

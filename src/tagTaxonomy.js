@@ -62,8 +62,6 @@ export function normalizeQuestionTags(question) {
     broad_type: tags.broadType,
     topic_tag: tags.topicTag,
     critical_objective: tags.criticalObjective,
-    estimated_difficulty_tier: estimatedDifficultyTier(question, tags),
-    estimated_difficulty_label: difficultyLabel(estimatedDifficultyTier(question, tags)),
     time_budget_seconds: timeBudgetSeconds(question, tags),
     distractor_analysis: distractorAnalysis(question),
     has_image: Boolean(question.visuals?.length),
@@ -82,8 +80,6 @@ export function normalizeQuestionTags(question) {
       sub_type: normalized.sub_type,
       topic_tag: normalized.topic_tag,
       critical_objective: normalized.critical_objective,
-      estimated_difficulty_tier: normalized.estimated_difficulty_tier,
-      estimated_difficulty_label: normalized.estimated_difficulty_label,
       time_budget_seconds: normalized.time_budget_seconds,
       distractor_analysis: normalized.distractor_analysis,
       has_image: normalized.has_image,
@@ -181,31 +177,6 @@ function problemSolvingTags(value) {
     return { subType: 'Spatial Reasoning & Pattern Analysis', topicTag: 'Abstract Pattern Logic' };
   }
   return { subType: 'Finding Procedures', topicTag: 'Rate, Ratio & Multi-step Arithmetic' };
-}
-
-function estimatedDifficultyTier(question, tags) {
-  const rawDifficulty = clean(question.difficulty);
-  const textLength = String(question.question_text || '').length;
-  let base = rawDifficulty.includes('hard') ? 4 : rawDifficulty.includes('easy') ? 1 : 3;
-  if (!rawDifficulty.includes('hard') && !question.visuals?.length) {
-    if (tags.subType === 'Identifying the Main Conclusion' && textLength < 850) base = 1;
-    else if (tags.broadType === 'Critical Thinking' && textLength < 700) base = 2;
-    else if (tags.broadType === 'Numerical Reasoning & Problem-Solving' && textLength < 350) base = 2;
-  }
-  const visualBump = question.visuals?.length ? 1 : 0;
-  const spatialBump = tags.requiresSpatialProcessing ? 1 : 0;
-  const textBump = textLength > 900 ? 1 : 0;
-  const numericalEaseAdjustment = tags.broadType === 'Numerical Reasoning & Problem-Solving' && !tags.requiresSpatialProcessing ? -1 : 0;
-  return Math.max(1, Math.min(4, base + Math.max(visualBump, spatialBump, textBump) + numericalEaseAdjustment));
-}
-
-function difficultyLabel(tier) {
-  return {
-    1: 'Easy',
-    2: 'Moderately Easy',
-    3: 'Moderately Difficult',
-    4: 'Hard'
-  }[tier] || 'Moderately Difficult';
 }
 
 function timeBudgetSeconds(question, tags) {

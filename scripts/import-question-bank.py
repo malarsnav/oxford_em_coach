@@ -53,31 +53,6 @@ def numerical_subtype(pattern):
     return "Finding Procedures", "Rate, Ratio & Multi-step Arithmetic"
 
 
-def difficulty_tier(item, family, subtype, has_visual):
-    raw_difficulty = str(item.get("difficulty", "")).lower()
-    question_length = len(item.get("question", ""))
-    base = 4 if raw_difficulty == "hard" else 1 if raw_difficulty == "easy" else 3
-    if raw_difficulty != "hard" and not has_visual:
-        if subtype == "Identifying the Main Conclusion" and question_length < 850:
-            base = 1
-        elif family == "Critical Thinking" and question_length < 700:
-            base = 2
-        elif family == "Numerical Reasoning & Problem-Solving" and question_length < 350:
-            base = 2
-    bump = 1 if has_visual or subtype == "Spatial Reasoning & Pattern Analysis" or question_length > 900 else 0
-    numerical_ease_adjustment = -1 if family == "Numerical Reasoning & Problem-Solving" and subtype != "Spatial Reasoning & Pattern Analysis" else 0
-    return max(1, min(4, base + bump + numerical_ease_adjustment))
-
-
-def difficulty_label(tier):
-    return {
-        1: "Easy",
-        2: "Moderately Easy",
-        3: "Moderately Difficult",
-        4: "Hard",
-    }.get(tier, "Moderately Difficult")
-
-
 def time_budget_seconds(family, subtype, has_visual):
     if family == "Critical Thinking":
         if subtype == "Identifying the Main Conclusion":
@@ -180,7 +155,6 @@ def normalize_question(item):
         subtype, topic_tag = numerical_subtype(f"{pattern} {item.get('question', '')}")
 
     has_image = bool(visual_assets)
-    tier = difficulty_tier(item, family, subtype, has_image)
     time_budget = time_budget_seconds(family, subtype, has_image)
     distractors = distractor_analysis(item.get("options", []), item.get("answer"), item.get("question", ""))
     requires_spatial = subtype == "Spatial Reasoning & Pattern Analysis" or any(term in str(pattern or "").lower() for term in ["spatial", "rotation", "cube", "net", "grid"])
@@ -197,8 +171,6 @@ def normalize_question(item):
         "broad_type": family,
         "topic_tag": topic_tag,
         "critical_objective": CRITICAL_OBJECTIVES.get(subtype),
-        "estimated_difficulty_tier": tier,
-        "estimated_difficulty_label": difficulty_label(tier),
         "time_budget_seconds": time_budget,
         "distractor_analysis": distractors,
         "has_image": has_image,
@@ -213,15 +185,12 @@ def normalize_question(item):
             "sub_type": subtype,
             "topic_tag": topic_tag,
             "critical_objective": CRITICAL_OBJECTIVES.get(subtype),
-            "estimated_difficulty_tier": tier,
-            "estimated_difficulty_label": difficulty_label(tier),
             "time_budget_seconds": time_budget,
             "distractor_analysis": distractors,
             "has_image": has_image,
             "requires_spatial_processing": requires_spatial,
             "em_concept_link": concept_link,
         },
-        "difficulty": item.get("difficulty", "Medium"),
         "question_text": item.get("question", "").strip(),
         "answer_options": option_object(item.get("options", [])),
         "correct_answer": item.get("answer"),
@@ -243,12 +212,6 @@ def main():
         "broadTypes": sorted({q["broad_type"] for q in questions}),
         "subTypes": sorted({q["sub_type"] for q in questions}),
         "topicTags": sorted({q["topic_tag"] for q in questions if q.get("topic_tag")}),
-        "difficultyTiers": [
-            {"tier": 1, "label": "Easy"},
-            {"tier": 2, "label": "Moderately Easy"},
-            {"tier": 3, "label": "Moderately Difficult"},
-            {"tier": 4, "label": "Hard"},
-        ],
         "criticalThinkingObjectives": sorted({q["critical_objective"] for q in questions if q.get("critical_objective")}),
         "problemSolvingModes": sorted({q["sub_type"] for q in questions if q["broad_type"] == "Numerical Reasoning & Problem-Solving"}),
     }

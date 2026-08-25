@@ -52,24 +52,6 @@ export const questionBankManifest = {
     "Timetable & Gantt/Schedule Optimization",
     "Work Rates & Motion Dynamics"
   ],
-  "difficultyTiers": [
-    {
-      "tier": 1,
-      "label": "Easy"
-    },
-    {
-      "tier": 2,
-      "label": "Moderately Easy"
-    },
-    {
-      "tier": 3,
-      "label": "Moderately Difficult"
-    },
-    {
-      "tier": 4,
-      "label": "Hard"
-    }
-  ],
   "criticalThinkingObjectives": [
     "Applied Logic",
     "Evaluative Analysis",
