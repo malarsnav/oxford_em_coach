@@ -58,10 +58,11 @@ function renderLogin() {
         <h1>Plan the week. Practise TARA. Build genuine E&M depth.</h1>
         <p>A mobile-first preparation coach for a 15-month Oxford Economics & Management journey.</p>
         <form data-action="login" class="stack">
-          <input name="email" type="email" placeholder="Student email" required />
-          <button>Send magic link</button>
+          <input name="email" type="email" placeholder="Student email" autocomplete="email" inputmode="email" required />
+          <button type="submit">Send magic link</button>
+          <p class="form-status" data-login-status aria-live="polite"></p>
         </form>
-        <p class="muted">If Supabase is not configured yet, the app runs in local demo mode.</p>
+        <p class="muted">A secure sign-in link will be emailed to this address. Open the link on the same device if possible.</p>
       </section>
     </main>`;
 }
@@ -355,19 +356,33 @@ app.addEventListener('submit', async (event) => {
   const form = event.target;
   const values = Object.fromEntries(new FormData(form).entries());
   const action = form.dataset.action;
-  if (action === 'login') { await signIn(values.email); app.querySelector('.hero').insertAdjacentHTML('beforeend', '<p class="callout">Check your email for the magic link.</p>'); return; }
-  if (action === 'draft-programme') { state.preferences = values; state.draft = createProgrammeDraft(state.data, values); render(); return; }
-  if (action === 'tara-filters') { state.taraFilters = values; render(); return; }
-  if (action === 'add-result') await addAcademicResult(state.user, values);
-  if (action === 'add-journal') await addJournalEntry(state.user, values);
-  if (action === 'add-reasoning') await addReasoningSession(state.user, values);
-  if (action === 'add-interview') await addInterviewSession(state.user, values);
-  if (action === 'save-review') await saveWeeklyReview(state.user, values);
-  if (action === 'save-profile') await updateProfile(state.user, values);
-  if (action === 'save-error') await saveTaraErrorAnalysis(state.user, values);
-  state.data = await bootstrap(state.user);
-  form.reset();
-  render();
+  const button = form.querySelector('button[type="submit"], button:not([type])');
+  try {
+    if (action === 'login') {
+      setFormStatus(form, 'Sending magic link...', 'info');
+      if (button) button.disabled = true;
+      await signIn(values.email);
+      setFormStatus(form, `Magic link sent to ${values.email}. Check inbox and spam/junk.`, 'success');
+      return;
+    }
+    if (action === 'draft-programme') { state.preferences = values; state.draft = createProgrammeDraft(state.data, values); render(); return; }
+    if (action === 'tara-filters') { state.taraFilters = values; render(); return; }
+    if (button) button.disabled = true;
+    if (action === 'add-result') await addAcademicResult(state.user, values);
+    if (action === 'add-journal') await addJournalEntry(state.user, values);
+    if (action === 'add-reasoning') await addReasoningSession(state.user, values);
+    if (action === 'add-interview') await addInterviewSession(state.user, values);
+    if (action === 'save-review') await saveWeeklyReview(state.user, values);
+    if (action === 'save-profile') await updateProfile(state.user, values);
+    if (action === 'save-error') await saveTaraErrorAnalysis(state.user, values);
+    state.data = await bootstrap(state.user);
+    form.reset();
+    render();
+  } catch (error) {
+    setFormStatus(form, friendlyError(error), 'error');
+  } finally {
+    if (button) button.disabled = false;
+  }
 });
 
 function triggerFor(q) {
@@ -423,6 +438,24 @@ function escapeHtml(value) {
     .replaceAll('<', '&lt;')
     .replaceAll('>', '&gt;')
     .replaceAll('"', '&quot;');
+}
+
+function setFormStatus(form, message, type = 'info') {
+  const status = form.querySelector('[data-login-status], [data-form-status]') || form.querySelector('.form-status');
+  if (!status) {
+    form.insertAdjacentHTML('beforeend', `<p class="form-status ${type}">${escapeHtml(message)}</p>`);
+    return;
+  }
+  status.className = `form-status ${type}`;
+  status.textContent = message;
+}
+
+function friendlyError(error) {
+  const message = error?.message || String(error);
+  if (message.toLowerCase().includes('failed to fetch')) return 'Could not reach Supabase. Check internet connection and try again.';
+  if (message.toLowerCase().includes('redirect')) return 'Sign-in redirect is not allowed yet. Check Supabase Authentication URL Configuration.';
+  if (message.toLowerCase().includes('email')) return message;
+  return `Something went wrong: ${message}`;
 }
 
 function unique(values) {

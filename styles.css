@@ -421,6 +421,36 @@ mark {
   border-radius: 0 var(--radius) var(--radius) 0;
 }
 
+.form-status {
+  min-height: 1.2rem;
+  margin: 0;
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.form-status.info {
+  color: var(--accent);
+}
+
+.form-status.success {
+  color: var(--accent);
+  background: var(--soft);
+  border-radius: var(--radius);
+  padding: 0.65rem;
+}
+
+.form-status.error {
+  color: var(--danger);
+  background: #fff0ed;
+  border-radius: var(--radius);
+  padding: 0.65rem;
+}
+
+button:disabled {
+  cursor: wait;
+  opacity: 0.65;
+}
+
 .draft input,
 .draft textarea {
   background: #fcfdfd;
