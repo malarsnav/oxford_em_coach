@@ -5,6 +5,7 @@ import { methodologyFor } from './methodologies.js';
 import { createProgrammeDraft } from './weeklyGeneratorService.js';
 import { buildDailyDigest, previousLocalDate } from './dailyDigestService.js';
 import { getAlevelTopicPlan } from './aLevelTopicPlan.js';
+import { ALL_SUBTYPES, TOP_LEVEL_TYPES } from './tagTaxonomy.js';
 
 const app = document.querySelector('#app');
 const MAGIC_LINK_THROTTLE_MINUTES = 30;
@@ -107,7 +108,7 @@ function dashboardHtml() {
     </header>
     <section class="grid six">
       ${card('This Week', `${percent(done, tasks.length)}% complete`, `${data.programme?.weekly_focus || 'No programme yet.'}<br>${remaining.slice(0,2).map((t) => `<b>${t.title}</b>`).join('<br>') || 'Generate a programme to begin.'}`)}
-      ${card('TARA Mastery', `${data.tara.overallAccuracy}% accuracy`, `${questionBankManifest.totalQuestions} questions · ${questionBankManifest.visualQuestionCount} with visuals<br>Coverage: ${coveragePercent()}% of bank<br>Strongest: ${data.tara.strongestType?.name || 'Not enough data'}<br>Weakest: ${data.tara.weakestType?.name || 'Not enough data'}<br><button data-action="start-smart" title="Prioritise unseen questions, then weak questions">Smart coverage set</button>`)}
+      ${card('TARA Mastery', `${data.tara.overallAccuracy}% accuracy`, `${questionBankManifest.totalQuestions} questions · ${questionBankManifest.visualQuestionCount} with visuals<br>Coverage: ${coveragePercent()}% of bank<br>Strongest sub-type: ${data.tara.strongestSubtype?.name || 'Not enough data'}<br>Weakest sub-type: ${data.tara.weakestSubtype?.name || 'Not enough data'}<br><button data-action="start-smart" title="Prioritise unseen questions, then weak questions">Smart coverage set</button>`)}
       ${card('A-Level Progress', `${data.subjects.length} subjects`, data.subjects.map((s) => `${s.name}: ${s.predicted_grade || 'Not set'}`).join('<br>'))}
       ${card('E&M Exploration', `${data.journal.length} entries`, data.journal[0]?.title || 'Add a structured journal entry.')}
       ${card('Oxford Readiness', '', Object.entries(data.readiness).map(([k,v]) => `${k}: <b>${v.label}</b>`).join('<br>'))}
@@ -171,7 +172,7 @@ function taraHtml() {
   if (state.practice.report) return reportHtml();
   const q = state.practice.set[state.practice.index];
   const selected = state.practice.answers[q.id];
-  return `<section class="panel question"><p class="eyebrow">${q.paper_year} Q${q.question_number} · ${q.official_question_type} · ${q.reasoning_pattern}</p><h2>${highlight(q.question_text, q.relevant_question_highlights)}</h2>${visualHtml(q)}${Object.entries(q.answer_options).map(([k,v])=>`<button class="option ${optionClass(q, k, selected)}" data-answer="${k}"><b>${k}</b> ${v}</button>`).join('')}${instantFeedbackHtml(q, selected)}<div class="actions"><button class="ghost" data-action="prev-question">Previous</button><button class="ghost" data-action="next-question">Next</button><button data-action="submit-tara">Submit set</button></div></section>`;
+  return `<section class="panel question"><p class="eyebrow">${q.paper_year} Q${q.question_number} · ${q.type} · ${q.sub_type}</p><h2>${highlight(q.question_text, q.relevant_question_highlights)}</h2>${visualHtml(q)}${Object.entries(q.answer_options).map(([k,v])=>`<button class="option ${optionClass(q, k, selected)}" data-answer="${k}"><b>${k}</b> ${v}</button>`).join('')}${instantFeedbackHtml(q, selected)}<div class="actions"><button class="ghost" data-action="prev-question">Previous</button><button class="ghost" data-action="next-question">Next</button><button data-action="submit-tara">Submit set</button></div></section>`;
 }
 
 function optionClass(q, key, selected) {
@@ -184,7 +185,7 @@ function optionClass(q, key, selected) {
 function instantFeedbackHtml(q, selected) {
   if (!selected) return '<p class="muted instant-hint">Choose an answer to see instant marking and coaching before moving on.</p>';
   const correct = selected === q.correct_answer;
-  return `<aside class="instant-feedback ${correct ? 'correct' : 'incorrect'}"><h3>${correct ? 'Correct' : 'Not quite'} · Official answer ${q.correct_answer}</h3><p><b>Method trigger:</b> ${triggerFor(q)}</p><p><b>How to approach it:</b> ${methodologyFor(q.official_question_type).slice(0, 3).join(' ')}</p><p><b>Carry forward:</b> ${q.reasoning_pattern} questions reward naming the logical job before choosing an option.</p></aside>`;
+  return `<aside class="instant-feedback ${correct ? 'correct' : 'incorrect'}"><h3>${correct ? 'Correct' : 'Not quite'} · Official answer ${q.correct_answer}</h3><p><b>Method trigger:</b> ${triggerFor(q)}</p><p><b>How to approach it:</b> ${methodologyFor(q.sub_type).slice(0, 3).join(' ')}</p><p><b>Carry forward:</b> ${q.sub_type} questions reward naming the task before choosing an option.</p></aside>`;
 }
 
 function reportHtml() {
@@ -195,12 +196,16 @@ function reportHtml() {
 
 function coachingHtml(q, selected) {
   const correct = selected === q.correct_answer;
-  return `<article class="panel coaching"><p class="eyebrow">Question ${q.question_number} · ${q.official_question_type} · ${q.reasoning_pattern}</p><h3>${correct ? 'Correct' : 'Incorrect'} · Your answer ${selected || 'blank'} · Official answer ${q.correct_answer}</h3><h4>A. Standard methodology</h4><ol>${methodologyFor(q.official_question_type).map((m)=>`<li>${m}</li>`).join('')}</ol><h4>B. Full original question</h4><p>${highlight(q.question_text, q.relevant_question_highlights)}</p>${visualHtml(q)}<h4>C. Highlight decisive wording</h4><p>${q.relevant_question_highlights.map((h)=>`<mark>${h}</mark>`).join(' ') || '<span class="muted">No extracted highlight yet. Use the question stem and numerical constraints as the first clues.</span>'}</p><h4>D. What the wording should trigger</h4><p>${triggerFor(q)}</p><h4>E. Apply the method</h4><p>${q.methodology} ${q.explanation}</p><h4>F. Trap to avoid</h4><p>Do not choose an option that sounds related but fails the exact task: ${q.official_question_type}.</p><h4>G. Method to carry forward</h4><p>Carry the pattern forward: ${q.reasoning_pattern} means you should slow down and name the logical job before calculating or choosing.</p></article>`;
+  return `<article class="panel coaching"><p class="eyebrow">Question ${q.question_number} · ${q.type} · ${q.sub_type}</p><h3>${correct ? 'Correct' : 'Incorrect'} · Your answer ${selected || 'blank'} · Official answer ${q.correct_answer}</h3><h4>A. Standard methodology</h4><ol>${methodologyFor(q.sub_type).map((m)=>`<li>${m}</li>`).join('')}</ol><h4>B. Full original question</h4><p>${highlight(q.question_text, q.relevant_question_highlights)}</p>${visualHtml(q)}<h4>C. Highlight decisive wording</h4><p>${q.relevant_question_highlights.map((h)=>`<mark>${h}</mark>`).join(' ') || '<span class="muted">No extracted highlight yet. Use the question stem and numerical constraints as the first clues.</span>'}</p><h4>D. What the wording should trigger</h4><p>${triggerFor(q)}</p><h4>E. Apply the method</h4><p>${coachingExplanation(q)}</p><h4>F. Trap to avoid</h4><p>Do not choose an option that sounds related but fails the exact task: ${q.sub_type}.</p><h4>G. Method to carry forward</h4><p>Carry the method forward: ${q.sub_type} means you should slow down and name the required thinking move before calculating or choosing.</p></article>`;
+}
+
+function coachingExplanation(q) {
+  return `This is a ${q.type} question, sub-type ${q.sub_type}. Start by applying the standard methodology above, then use the highlighted wording to identify exactly what the question asks. The official answer is ${q.correct_answer}; treat it as the option that satisfies the task with the fewest extra assumptions.`;
 }
 
 function analyticsHtml() {
   const t = state.data.tara;
-  return `<header class="top"><div><p class="eyebrow">TARA Analytics</p><h2>${t.overallAccuracy}% overall accuracy</h2></div></header><section class="grid">${card('Total attempts', t.totalAttempts, `${t.totalQuestions} questions answered`)}${card('Average set score', t.averageSetScore, 'Mini-sets are not official scaled scores.')}${card('Critical Thinking', `${t.criticalAccuracy}%`, '')}${card('Problem Solving', `${t.problemAccuracy}%`, '')}</section><section class="panel"><h3>Accuracy trend</h3>${trend(t.recentTrend)}</section><section class="panel"><h3>By official type</h3>${bars(t.byType)}</section><section class="panel"><h3>By reasoning pattern</h3>${bars(t.byPattern)}</section><section class="panel"><h3>Historical test sessions</h3>${sessionHistoryHtml()}</section>${state.reviewAttemptId ? reviewAttemptHtml(state.reviewAttemptId) : ''}`;
+  return `<header class="top"><div><p class="eyebrow">TARA Analytics</p><h2>${t.overallAccuracy}% overall accuracy</h2></div></header><section class="grid">${card('Total attempts', t.totalAttempts, `${t.totalQuestions} questions answered`)}${card('Average set score', t.averageSetScore, 'Mini-sets are not official scaled scores.')}${card('Critical Thinking', `${t.criticalAccuracy}%`, '')}${card('Numerical Reasoning', `${t.problemAccuracy}%`, '')}</section><section class="panel"><h3>Accuracy trend</h3>${trend(t.recentTrend)}</section><section class="panel"><h3>By type</h3>${bars(t.byType)}</section><section class="panel"><h3>By sub-type</h3>${bars(t.byPattern)}</section><section class="panel"><h3>Historical test sessions</h3>${sessionHistoryHtml()}</section>${state.reviewAttemptId ? reviewAttemptHtml(state.reviewAttemptId) : ''}`;
 }
 
 function academicsHtml() {
@@ -230,7 +235,7 @@ function interviewHtml() {
 function parentHtml() {
   const tasks = state.data.tasks || [];
   const t = state.data.tara;
-  return `<header class="top"><div><p class="eyebrow">Parent / Coach View</p><h2>Progress summary without private reflections</h2></div></header><section class="grid six">${card('This week', `${percent(tasks.filter((task)=>task.status==='completed').length, tasks.length)}%`, `${tasks.filter((task)=>task.status !== 'completed').length} tasks still open`)}${card('TARA', `${t.overallAccuracy}%`, `Weakest: ${t.weakestType?.name || 'Not enough data'}<br>Questions: ${t.totalQuestions}`)}${card('A-Level', '', state.data.subjects.map((s)=>`${s.name}: ${s.predicted_grade || 'Not set'}`).join('<br>'))}${card('E&M consistency', `${state.data.journal.length} entries`, state.data.journal[0]?.title || 'No journal entries yet')}${card('Milestones', `${state.data.milestones.filter((m)=>m.status==='completed').length}/${state.data.milestones.length}`, 'Completed admissions milestones')}${card('Recommendations', '', state.data.recommendations.slice(0,2).join('<br>') || 'No recommendation yet')}</section>${digestPreviewHtml()}<section class="panel"><h3>Privacy note</h3><p class="muted">This view deliberately summarises progress. Student reflections are not shown here by default.</p></section>`;
+  return `<header class="top"><div><p class="eyebrow">Parent / Coach View</p><h2>Progress summary without private reflections</h2></div></header><section class="grid six">${card('This week', `${percent(tasks.filter((task)=>task.status==='completed').length, tasks.length)}%`, `${tasks.filter((task)=>task.status !== 'completed').length} tasks still open`)}${card('TARA', `${t.overallAccuracy}%`, `Weakest sub-type: ${t.weakestSubtype?.name || 'Not enough data'}<br>Questions: ${t.totalQuestions}`)}${card('A-Level', '', state.data.subjects.map((s)=>`${s.name}: ${s.predicted_grade || 'Not set'}`).join('<br>'))}${card('E&M consistency', `${state.data.journal.length} entries`, state.data.journal[0]?.title || 'No journal entries yet')}${card('Milestones', `${state.data.milestones.filter((m)=>m.status==='completed').length}/${state.data.milestones.length}`, 'Completed admissions milestones')}${card('Recommendations', '', state.data.recommendations.slice(0,2).join('<br>') || 'No recommendation yet')}</section>${digestPreviewHtml()}<section class="panel"><h3>Privacy note</h3><p class="muted">This view deliberately summarises progress. Student reflections are not shown here by default.</p></section>`;
 }
 
 function profileHtml() {
@@ -247,7 +252,7 @@ function digestPreviewHtml() {
 function digestSummaryHtml(digest) {
   return `<div class="digest-grid">
     ${digestBlock('TARA', digest.tara.totalSets ? `${digest.tara.totalSets} set${digest.tara.totalSets === 1 ? '' : 's'} · ${digest.tara.correct}/${digest.tara.totalQuestions} correct · ${digest.tara.accuracy}%` : 'No TARA set completed.')}
-    ${digestBlock('Weakest Type', digest.tara.weakTypes[0] ? `${escapeHtml(digest.tara.weakTypes[0].name)} · ${digest.tara.weakTypes[0].accuracy}%` : 'No weak type identified yesterday.')}
+    ${digestBlock('Weakest Sub-type', digest.tara.weakSubtypes[0] ? `${escapeHtml(digest.tara.weakSubtypes[0].name)} · ${digest.tara.weakSubtypes[0].accuracy}%` : 'No weak sub-type identified yesterday.')}
     ${digestBlock('Weekly Programme', `${digest.weeklyProgramme.completedTasks.length} completed · ${digest.weeklyProgramme.skippedTasks.length} skipped · ${digest.weeklyProgramme.completedMinutes} minutes`)}
     ${digestBlock('Academics', digest.academics.length ? digest.academics.map((item) => `${escapeHtml(item.subject_name)}: ${escapeHtml(item.assessment_name || item.topic || 'assessment')} ${escapeHtml(item.percentage || '')}%`).join('<br>') : 'No academic result added.')}
     ${digestBlock('E&M / Reasoning', `${digest.journal.length} journal entr${digest.journal.length === 1 ? 'y' : 'ies'} · ${digest.reasoning.length} reasoning session${digest.reasoning.length === 1 ? '' : 's'}`)}
@@ -260,9 +265,7 @@ function digestBlock(title, body) {
 }
 
 function taraFilterHtml() {
-  const types = unique(questions.map((q) => q.official_question_type));
-  const patterns = unique(questions.map((q) => q.reasoning_pattern));
-  return `<section class="panel"><h3>Build a focused set</h3><form class="form-grid" data-action="tara-filters"><label>Paper year<select name="year"><option value="all">All years</option>${questionBankManifest.years.map((year)=>`<option value="${escapeAttr(year)}" ${sel(state.taraFilters.year,year)}>${year}</option>`).join('')}</select></label><label>Area<select name="family"><option value="all">All</option><option value="Critical Reasoning" ${sel(state.taraFilters.family,'Critical Reasoning')}>Critical Reasoning</option><option value="Problem Solving" ${sel(state.taraFilters.family,'Problem Solving')}>Problem Solving</option></select></label><label>Official type<select name="type"><option value="all">All types</option>${types.map((type)=>`<option value="${escapeAttr(type)}" ${sel(state.taraFilters.type,type)}>${type}</option>`).join('')}</select></label><label>Reasoning pattern<select name="pattern"><option value="all">All patterns</option>${patterns.map((pattern)=>`<option value="${escapeAttr(pattern)}" ${sel(state.taraFilters.pattern,pattern)}>${pattern}</option>`).join('')}</select></label><button>Apply filters</button></form></section>`;
+  return `<section class="panel"><h3>Build a focused set</h3><form class="form-grid" data-action="tara-filters"><label>Paper year<select name="year"><option value="all">All years</option>${questionBankManifest.years.map((year)=>`<option value="${escapeAttr(year)}" ${sel(state.taraFilters.year,year)}>${year}</option>`).join('')}</select></label><label>Type<select name="family"><option value="all">All types</option>${TOP_LEVEL_TYPES.map((type)=>`<option value="${escapeAttr(type)}" ${sel(state.taraFilters.family,type)}>${type}</option>`).join('')}</select></label><label>Sub-type<select name="type"><option value="all">All sub-types</option>${ALL_SUBTYPES.map((type)=>`<option value="${escapeAttr(type)}" ${sel(state.taraFilters.type,type)}>${type}</option>`).join('')}</select></label><input type="hidden" name="pattern" value="all"><button>Apply filters</button></form></section>`;
 }
 
 function sessionHistoryHtml() {
@@ -337,9 +340,8 @@ function startSmartTara() {
 function filteredQuestions() {
   return questions.filter((q) =>
     (state.taraFilters.year === 'all' || String(q.paper_year) === state.taraFilters.year) &&
-    (state.taraFilters.family === 'all' || q.family === state.taraFilters.family) &&
-    (state.taraFilters.type === 'all' || q.official_question_type === state.taraFilters.type) &&
-    (state.taraFilters.pattern === 'all' || q.reasoning_pattern === state.taraFilters.pattern)
+    (state.taraFilters.family === 'all' || q.type === state.taraFilters.family) &&
+    (state.taraFilters.type === 'all' || q.sub_type === state.taraFilters.type)
   );
 }
 
@@ -352,10 +354,10 @@ function syncTaraFiltersFromDom() {
 function smartQuestionPool() {
   const answered = answeredQuestionKeys();
   const weakType = state.data.tara.weakestType?.name;
-  const weakPattern = state.data.tara.byPattern?.[0]?.name;
+  const weakPattern = state.data.tara.weakestSubtype?.name;
   const filtered = filteredQuestions();
   const unseen = filtered.filter((q) => !answered.has(questionKey(q)));
-  const weak = filtered.filter((q) => q.official_question_type === weakType || q.reasoning_pattern === weakPattern);
+  const weak = filtered.filter((q) => q.type === weakType || q.sub_type === weakPattern);
   const rest = filtered.filter((q) => !unseen.includes(q) && !weak.includes(q));
   return [...shuffle(unseen), ...shuffle(weak), ...shuffle(rest), ...shuffle(questions)].filter(uniqueQuestion);
 }
@@ -365,8 +367,8 @@ async function submitTara() {
     paper_year: q.paper_year,
     question_number: q.question_number,
     section: q.section,
-    question_type: q.official_question_type,
-    reasoning_pattern: q.reasoning_pattern,
+    question_type: q.type,
+    reasoning_pattern: q.sub_type,
     selected_answer: state.practice.answers[q.id] || null,
     correct_answer: q.correct_answer,
     is_correct: state.practice.answers[q.id] === q.correct_answer
@@ -474,8 +476,10 @@ app.addEventListener('submit', async (event) => {
 
 function triggerFor(q) {
   if (q.question_text.includes('Therefore') || q.question_text.includes('therefore')) return 'Conclusion language means you must inspect the bridge between evidence and conclusion.';
-  if (q.reasoning_pattern.includes('ratio')) return 'A ratio phrase should trigger parts-to-whole thinking before calculation.';
-  if (q.reasoning_pattern.includes('table')) return 'A table cue should trigger row/column selection before arithmetic.';
+  if (q.sub_type === 'Percentages and Ratios') return 'Ratio or percentage wording should trigger parts-to-whole thinking before calculation.';
+  if (q.sub_type === 'Data Interpretation') return 'A table, chart or schedule cue should trigger row/column selection before arithmetic.';
+  if (q.sub_type === 'Real-Life Measurements') return 'Measurement wording should trigger unit conversion before calculation.';
+  if (q.sub_type === 'Spatial and Logical Problem-Solving') return 'Diagram or pattern wording should trigger constraint tracking and elimination.';
   return 'The wording should trigger the named method before looking at attractive answer choices.';
 }
 

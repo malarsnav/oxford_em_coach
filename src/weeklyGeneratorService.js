@@ -49,8 +49,8 @@ function baseTasks(state, preferences) {
     task('management', 'Explain a strategic business choice', 'Answer: why might a company sell a product at a loss? Give at least three strategic reasons.', 20, 'low'),
     task('oxford_reasoning', 'Solve one unfamiliar reasoning prompt', 'Write assumptions first, answer, revise after a hint, then reflect on what changed.', 20, 'medium')
   ];
-  if (state?.tara?.weakestType?.accuracy < 65) {
-    tasks.push(task('tara', `Target weak type: ${state.tara.weakestType.name}`, `Accuracy in ${state.tara.weakestType.name} is below 65%. Complete one focused 5-question set and write the transferable method.`, 30, 'high'));
+  if (state?.tara?.weakestSubtype?.accuracy < 65) {
+    tasks.push(task('tara', `Target weak sub-type: ${state.tara.weakestSubtype.name}`, `Accuracy in ${state.tara.weakestSubtype.name} is below 65%. Complete one focused 5-question set and write the transferable method.`, 30, 'high'));
   }
   if (preferences.priority === 'application') {
     tasks.push(task('application', 'Capture one application evidence point', 'Convert one journal or school achievement into a concise example that could support a personal statement paragraph.', 25, 'medium'));
@@ -77,13 +77,13 @@ function rebalance(tasks, targetMinutes) {
 
 function focusFor(state, preferences, phase) {
   if (preferences.priority && preferences.priority !== 'none') return `This week emphasises ${labels[preferences.priority] || preferences.priority} while maintaining ${phase.focus}`;
-  if (state?.tara?.weakestType?.accuracy < 65) return `Repair ${state.tara.weakestType.name} while keeping A-level foundations moving.`;
+  if (state?.tara?.weakestSubtype?.accuracy < 65) return `Repair ${state.tara.weakestSubtype.name} while keeping A-level foundations moving.`;
   return 'Build strong academic habits and begin light Oxford reasoning preparation.';
 }
 
 function summaryFor(state, tasks, phase) {
   const minutes = tasks.reduce((sum, task) => sum + task.estimated_minutes, 0);
-  const reason = state?.tara?.weakestType?.accuracy < 65 ? ` TARA ${state.tara.weakestType.name} is currently weak, so targeted practice is included.` : '';
+  const reason = state?.tara?.weakestSubtype?.accuracy < 65 ? ` TARA ${state.tara.weakestSubtype.name} is currently weak, so targeted practice is included.` : '';
   return `${phase.name}: ${minutes} minutes of focused work across ${new Set(tasks.map((task) => task.category)).size} preparation areas.${reason}`;
 }
 

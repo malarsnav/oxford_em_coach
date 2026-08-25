@@ -8,22 +8,32 @@ OUT_BANK = ROOT / "src" / "questionBank.generated.js"
 OUT_MANIFEST = ROOT / "src" / "questionBankManifest.generated.js"
 
 TYPE_MAP = {
-    "Identifying the Main Conclusion": "Main Conclusion",
-    "Identifying an Assumption": "Assumption",
-    "Assessing the Impact of Additional Evidence": "Additional Evidence / Strengthen / Weaken",
-    "Detecting Flaws in Reasoning": "Flaw",
-    "Identifying Parallel Reasoning": "Parallel Reasoning",
+    "Identifying the Main Conclusion": "Identifying the Main Conclusion",
+    "Identifying an Assumption": "Identifying Assumptions",
+    "Assessing the Impact of Additional Evidence": "Assessing Additional Evidence",
+    "Detecting Flaws in Reasoning": "Detecting Reasoning Errors (Flaws)",
+    "Identifying Parallel Reasoning": "Matching Arguments (Parallel Reasoning)",
     "Drawing a Conclusion": "Drawing a Conclusion",
-    "Matching Principles": "Matching Principles",
-    "Selecting Relevant Information": "Selecting Relevant Information",
-    "Finding Procedures": "Finding Procedures",
-    "Identifying Similarity": "Identifying Similarity",
+    "Matching Principles": "Applying Principles",
 }
 
 FAMILY_MAP = {
-    "Critical Reasoning": "Critical Reasoning",
-    "Numerical Reasoning": "Problem Solving",
+    "Critical Reasoning": "Critical Thinking",
+    "Numerical Reasoning": "Numerical Reasoning & Problem-Solving",
 }
+
+
+def numerical_subtype(pattern):
+    value = str(pattern or "").lower()
+    if any(term in value for term in ["percent", "ratio", "proportion", "fraction"]):
+        return "Percentages and Ratios"
+    if any(term in value for term in ["rate", "resource", "conversion", "time", "currency", "speed", "distance"]):
+        return "Real-Life Measurements"
+    if any(term in value for term in ["table", "graph", "data", "schedule", "queue", "overlap", "selection"]):
+        return "Data Interpretation"
+    if any(term in value for term in ["spatial", "rotation", "cube", "net", "grid", "similarity"]):
+        return "Spatial and Logical Problem-Solving"
+    return "Basic Arithmetic Operations"
 
 
 def option_object(options):
@@ -42,8 +52,9 @@ def normalize_question(item):
             })
 
     old_type = item.get("questionType") or item.get("type")
-    official_type = TYPE_MAP.get(old_type, old_type)
     family = FAMILY_MAP.get(item.get("category"), item.get("category") or "Critical Reasoning")
+    pattern = item.get("specificPattern") or item.get("pattern")
+    official_type = TYPE_MAP.get(old_type, old_type) if family == "Critical Thinking" else numerical_subtype(pattern)
 
     return {
         "id": item["id"],
@@ -52,8 +63,10 @@ def normalize_question(item):
         "question_number": item.get("questionNumber"),
         "section": item.get("section", "Section 1"),
         "family": family,
+        "type": family,
+        "sub_type": official_type,
         "official_question_type": official_type,
-        "reasoning_pattern": item.get("specificPattern") or item.get("pattern"),
+        "reasoning_pattern": official_type,
         "difficulty": item.get("difficulty", "Medium"),
         "question_text": item.get("question", "").strip(),
         "answer_options": option_object(item.get("options", [])),

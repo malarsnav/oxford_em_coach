@@ -1,4 +1,5 @@
 import { hasSupabaseConfig, supabase } from './supabaseClient.js';
+import { normalizeResponseTags } from './tagTaxonomy.js';
 
 const localKey = 'oxford-em-coach-demo';
 
@@ -328,6 +329,7 @@ function buildState({ profile, tara, programme, subjects, journal, reasoning, mi
 }
 
 export function summarizeTara(attempts, responses, errors = []) {
+  responses = responses.map(normalizeResponseTags);
   const total = responses.length;
   const correct = responses.filter((r) => r.is_correct).length;
   const byType = groupAccuracy(responses, 'question_type');
@@ -341,12 +343,14 @@ export function summarizeTara(attempts, responses, errors = []) {
     totalQuestions: total,
     overallAccuracy: total ? Math.round((correct / total) * 100) : 0,
     averageSetScore: attempts.length ? (attempts.reduce((s, a) => s + Number(a.score || 0), 0) / attempts.length).toFixed(1) : '0.0',
-    criticalAccuracy: familyAccuracy(responses, ['Main Conclusion', 'Drawing a Conclusion', 'Assumption', 'Additional Evidence / Strengthen / Weaken', 'Flaw', 'Parallel Reasoning', 'Matching Principles']),
-    problemAccuracy: familyAccuracy(responses, ['Selecting Relevant Information', 'Finding Procedures', 'Identifying Similarity']),
+    criticalAccuracy: typeAccuracy(responses, 'Critical Thinking'),
+    problemAccuracy: typeAccuracy(responses, 'Numerical Reasoning & Problem-Solving'),
     byType,
     byPattern,
     weakestType: byType.at(0),
     strongestType: byType.at(-1),
+    weakestSubtype: byPattern.at(0),
+    strongestSubtype: byPattern.at(-1),
     recentTrend: attempts.slice(0, 5).map((a) => ({ label: new Date(a.completed_at).toLocaleDateString(), value: Math.round((a.score / a.total) * 100) })),
     repeatErrors: groupAccuracy(responses.filter((r) => !r.is_correct), 'question_type').slice(0, 5)
   };
@@ -363,14 +367,14 @@ function groupAccuracy(rows, key) {
   }, {})).sort((a, b) => a.accuracy - b.accuracy || b.total - a.total);
 }
 
-function familyAccuracy(rows, types) {
-  const selected = rows.filter((r) => types.includes(r.question_type));
+function typeAccuracy(rows, type) {
+  const selected = rows.filter((r) => r.question_type === type);
   return selected.length ? Math.round((selected.filter((r) => r.is_correct).length / selected.length) * 100) : 0;
 }
 
 function recommendations({ tara, subjects, journal, tasks }) {
   const recs = [];
-  if (tara.weakestType && tara.weakestType.total >= 3 && tara.weakestType.accuracy < 65) recs.push(`TARA ${tara.weakestType.name} is below 65%, so schedule two targeted 5-question sets and one methodology review.`);
+  if (tara.weakestSubtype && tara.weakestSubtype.total >= 3 && tara.weakestSubtype.accuracy < 65) recs.push(`TARA ${tara.weakestSubtype.name} is below 65%, so schedule two targeted 5-question sets and one methodology review.`);
   if (!journal.length || daysSince(journal[0].date_completed) >= 14) recs.push('No recent E&M journal entry in 14 days, so complete one CLAIM-MECHANISM-EVIDENCE-OBJECTION-RESPONSE entry.');
   const maths = subjects.find((s) => s.name === 'Mathematics');
   if (maths && maths.predicted_grade !== 'A*') recs.push('Maths is not yet predicted A*, so protect one high-priority quantitative revision block this week.');

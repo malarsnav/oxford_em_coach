@@ -12,8 +12,8 @@ export function buildDailyDigest(data, date = previousLocalDate()) {
   const totalQuestions = responses.length;
   const correct = responses.filter((response) => response.is_correct).length;
   const weakTypes = weakestGroups(responses, 'question_type');
-  const weakPatterns = weakestGroups(responses, 'reasoning_pattern');
-  const recommendations = buildDigestRecommendations({ attempts, responses, weakTypes, completedTasks, skippedTasks, journalEntries, reasoningSessions, appRecommendations: data.recommendations || [] });
+  const weakSubtypes = weakestGroups(responses, 'reasoning_pattern');
+  const recommendations = buildDigestRecommendations({ attempts, responses, weakSubtypes, completedTasks, skippedTasks, journalEntries, reasoningSessions, appRecommendations: data.recommendations || [] });
 
   return {
     date,
@@ -25,7 +25,7 @@ export function buildDailyDigest(data, date = previousLocalDate()) {
       correct,
       accuracy: totalQuestions ? Math.round((correct / totalQuestions) * 100) : 0,
       weakTypes,
-      weakPatterns
+      weakSubtypes
     },
     weeklyProgramme: {
       completedTasks,
@@ -87,9 +87,9 @@ function weakestGroups(rows, key) {
     .slice(0, 3);
 }
 
-function buildDigestRecommendations({ attempts, responses, weakTypes, completedTasks, skippedTasks, journalEntries, reasoningSessions, appRecommendations }) {
+function buildDigestRecommendations({ attempts, responses, weakSubtypes, completedTasks, skippedTasks, journalEntries, reasoningSessions, appRecommendations }) {
   const recs = [];
-  if (attempts.length && weakTypes[0]?.accuracy < 70) recs.push(`Review ${weakTypes[0].name}: yesterday's accuracy was ${weakTypes[0].accuracy}%.`);
+  if (attempts.length && weakSubtypes[0]?.accuracy < 70) recs.push(`Review ${weakSubtypes[0].name}: yesterday's accuracy was ${weakSubtypes[0].accuracy}%.`);
   if (responses.some((response) => !response.is_correct)) recs.push('Spend 10 minutes reviewing every missed TARA question before starting a new set.');
   if (skippedTasks.length) recs.push('Look at skipped weekly tasks and either reschedule or deliberately remove them from this week.');
   if (!journalEntries.length && !reasoningSessions.length) recs.push('Add one short E&M journal or Oxford reasoning reflection today to keep depth building.');
