@@ -270,21 +270,51 @@ alter table public.weekly_reviews enable row level security;
 alter table public.interview_sessions enable row level security;
 alter table public.tara_error_analysis enable row level security;
 
-create policy "own profiles" on public.user_profiles for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
-create policy "own attempts" on public.attempts for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
-create policy "own responses" on public.responses for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
-create policy "own programmes" on public.weekly_programmes for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
-create policy "own tasks" on public.weekly_tasks for all using (
-  auth.uid() = user_id and exists (select 1 from public.weekly_programmes p where p.id = programme_id and p.user_id = auth.uid())
+revoke all on table public.user_profiles from anon, authenticated;
+revoke all on table public.attempts from anon, authenticated;
+revoke all on table public.responses from anon, authenticated;
+revoke all on table public.weekly_programmes from anon, authenticated;
+revoke all on table public.weekly_tasks from anon, authenticated;
+revoke all on table public.subjects from anon, authenticated;
+revoke all on table public.academic_results from anon, authenticated;
+revoke all on table public.academic_topics from anon, authenticated;
+revoke all on table public.journal_entries from anon, authenticated;
+revoke all on table public.oxford_reasoning_sessions from anon, authenticated;
+revoke all on table public.milestones from anon, authenticated;
+revoke all on table public.weekly_reviews from anon, authenticated;
+revoke all on table public.interview_sessions from anon, authenticated;
+revoke all on table public.tara_error_analysis from anon, authenticated;
+
+grant select, insert, update on table public.user_profiles to authenticated;
+grant select, insert, update on table public.attempts to authenticated;
+grant select, insert, update on table public.responses to authenticated;
+grant select, insert, update on table public.weekly_programmes to authenticated;
+grant select, insert, update on table public.weekly_tasks to authenticated;
+grant select, insert, update on table public.subjects to authenticated;
+grant select, insert, update on table public.academic_results to authenticated;
+grant select, insert, update on table public.academic_topics to authenticated;
+grant select, insert, update on table public.journal_entries to authenticated;
+grant select, insert, update on table public.oxford_reasoning_sessions to authenticated;
+grant select, insert, update on table public.milestones to authenticated;
+grant select, insert, update on table public.weekly_reviews to authenticated;
+grant select, insert, update on table public.interview_sessions to authenticated;
+grant select, insert, update on table public.tara_error_analysis to authenticated;
+
+create policy "own profiles" on public.user_profiles for all to authenticated using ((select auth.uid()) = user_id) with check ((select auth.uid()) = user_id);
+create policy "own attempts" on public.attempts for all to authenticated using ((select auth.uid()) = user_id) with check ((select auth.uid()) = user_id);
+create policy "own responses" on public.responses for all to authenticated using ((select auth.uid()) = user_id) with check ((select auth.uid()) = user_id);
+create policy "own programmes" on public.weekly_programmes for all to authenticated using ((select auth.uid()) = user_id) with check ((select auth.uid()) = user_id);
+create policy "own tasks" on public.weekly_tasks for all to authenticated using (
+  (select auth.uid()) = user_id and exists (select 1 from public.weekly_programmes p where p.id = programme_id and p.user_id = (select auth.uid()))
 ) with check (
-  auth.uid() = user_id and exists (select 1 from public.weekly_programmes p where p.id = programme_id and p.user_id = auth.uid())
+  (select auth.uid()) = user_id and exists (select 1 from public.weekly_programmes p where p.id = programme_id and p.user_id = (select auth.uid()))
 );
-create policy "own subjects" on public.subjects for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
-create policy "own academic results" on public.academic_results for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
-create policy "own academic topics" on public.academic_topics for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
-create policy "own journal entries" on public.journal_entries for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
-create policy "own reasoning sessions" on public.oxford_reasoning_sessions for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
-create policy "own milestones" on public.milestones for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
-create policy "own weekly reviews" on public.weekly_reviews for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
-create policy "own interview sessions" on public.interview_sessions for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
-create policy "own tara error analysis" on public.tara_error_analysis for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+create policy "own subjects" on public.subjects for all to authenticated using ((select auth.uid()) = user_id) with check ((select auth.uid()) = user_id);
+create policy "own academic results" on public.academic_results for all to authenticated using ((select auth.uid()) = user_id) with check ((select auth.uid()) = user_id);
+create policy "own academic topics" on public.academic_topics for all to authenticated using ((select auth.uid()) = user_id) with check ((select auth.uid()) = user_id);
+create policy "own journal entries" on public.journal_entries for all to authenticated using ((select auth.uid()) = user_id) with check ((select auth.uid()) = user_id);
+create policy "own reasoning sessions" on public.oxford_reasoning_sessions for all to authenticated using ((select auth.uid()) = user_id) with check ((select auth.uid()) = user_id);
+create policy "own milestones" on public.milestones for all to authenticated using ((select auth.uid()) = user_id) with check ((select auth.uid()) = user_id);
+create policy "own weekly reviews" on public.weekly_reviews for all to authenticated using ((select auth.uid()) = user_id) with check ((select auth.uid()) = user_id);
+create policy "own interview sessions" on public.interview_sessions for all to authenticated using ((select auth.uid()) = user_id) with check ((select auth.uid()) = user_id);
+create policy "own tara error analysis" on public.tara_error_analysis for all to authenticated using ((select auth.uid()) = user_id) with check ((select auth.uid()) = user_id);
