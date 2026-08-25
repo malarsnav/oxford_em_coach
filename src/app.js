@@ -559,7 +559,8 @@ function normalizeProfilePayload(values) {
   return {
     ...values,
     parent_email: normalizeEmail(values.parent_email),
-    parent_digest_enabled: values.parent_digest_enabled === 'true'
+    parent_digest_enabled: values.parent_digest_enabled === 'true',
+    application_year: values.application_year ? Number(values.application_year) : null
   };
 }
 
