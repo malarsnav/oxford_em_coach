@@ -5,6 +5,9 @@ import { methodologyFor } from './methodologies.js';
 import { createProgrammeDraft } from './weeklyGeneratorService.js';
 
 const app = document.querySelector('#app');
+const MAGIC_LINK_THROTTLE_MINUTES = 30;
+const MAGIC_LINK_THROTTLE_MS = MAGIC_LINK_THROTTLE_MINUTES * 60 * 1000;
+const magicLinkStorageKey = 'oxford-em-coach-magic-link-sends-v1';
 const state = {
   user: null,
   data: null,
@@ -23,7 +26,10 @@ async function init() {
   try {
     const session = await getSession();
     state.user = session.user;
-    if (state.user) state.data = await bootstrap(state.user);
+    if (state.user) {
+      markMagicLinkUsed(state.user.email);
+      state.data = await bootstrap(state.user);
+    }
     render();
   } catch (error) {
     state.error = error;
@@ -359,10 +365,17 @@ app.addEventListener('submit', async (event) => {
   const button = form.querySelector('button[type="submit"], button:not([type])');
   try {
     if (action === 'login') {
+      const email = normalizeEmail(values.email);
+      const throttle = magicLinkThrottleStatus(email);
+      if (throttle.blocked) {
+        setFormStatus(form, throttle.message, 'info');
+        return;
+      }
       setFormStatus(form, 'Sending magic link...', 'info');
       if (button) button.disabled = true;
-      await signIn(values.email);
-      setFormStatus(form, `Magic link sent to ${values.email}. Check inbox and spam/junk.`, 'success');
+      await signIn(email);
+      recordMagicLinkSent(email);
+      setFormStatus(form, `Magic link sent to ${email}. Check inbox and spam/junk.`, 'success');
       return;
     }
     if (action === 'draft-programme') { state.preferences = values; state.draft = createProgrammeDraft(state.data, values); render(); return; }
@@ -450,9 +463,68 @@ function setFormStatus(form, message, type = 'info') {
   status.textContent = message;
 }
 
+function normalizeEmail(email) {
+  return String(email || '').trim().toLowerCase();
+}
+
+function magicLinkThrottleStatus(email) {
+  const record = readMagicLinkRecords()[email];
+  if (!record?.sentAt) return { blocked: false };
+
+  const elapsed = Date.now() - Number(record.sentAt);
+  if (elapsed >= MAGIC_LINK_THROTTLE_MS) return { blocked: false };
+
+  const remaining = Math.max(1, Math.ceil((MAGIC_LINK_THROTTLE_MS - elapsed) / 60000));
+  if (record.usedAt) {
+    return {
+      blocked: true,
+      message: `A magic link for ${email} was already used recently. To protect the Supabase email limit, wait ${remaining} more minute${remaining === 1 ? '' : 's'} before requesting another one.`
+    };
+  }
+
+  return {
+    blocked: true,
+    message: `A magic link was already sent to ${email}. Please find that email in your inbox or spam/junk folder and open the latest link. You can request another link in ${remaining} minute${remaining === 1 ? '' : 's'}.`
+  };
+}
+
+function recordMagicLinkSent(email) {
+  const records = readMagicLinkRecords();
+  records[email] = { sentAt: Date.now(), usedAt: null };
+  writeMagicLinkRecords(records);
+}
+
+function markMagicLinkUsed(email) {
+  const normalized = normalizeEmail(email);
+  const records = readMagicLinkRecords();
+  const record = records[normalized];
+  if (!record?.sentAt || record.usedAt) return;
+  if (Date.now() - Number(record.sentAt) > MAGIC_LINK_THROTTLE_MS) return;
+  records[normalized] = { ...record, usedAt: Date.now() };
+  writeMagicLinkRecords(records);
+}
+
+function readMagicLinkRecords() {
+  try {
+    const records = JSON.parse(localStorage.getItem(magicLinkStorageKey) || '{}');
+    const cutoff = Date.now() - MAGIC_LINK_THROTTLE_MS;
+    return Object.fromEntries(Object.entries(records).filter(([, record]) => Number(record.sentAt) >= cutoff));
+  } catch {
+    return {};
+  }
+}
+
+function writeMagicLinkRecords(records) {
+  try {
+    localStorage.setItem(magicLinkStorageKey, JSON.stringify(records));
+  } catch {
+    // If localStorage is unavailable, Supabase still enforces its own server-side limits.
+  }
+}
+
 function friendlyError(error) {
   const message = error?.message || String(error);
-  if (message.toLowerCase().includes('rate limit')) return 'Supabase email limit reached. Wait about 1 hour before trying again, or configure custom SMTP in Supabase for production email delivery.';
+  if (message.toLowerCase().includes('rate limit')) return `Supabase email limit reached. Wait about 1 hour before trying again, or configure custom SMTP. The app now also avoids repeat magic-link requests inside ${MAGIC_LINK_THROTTLE_MINUTES} minutes on the same device.`;
   if (message.toLowerCase().includes('failed to fetch')) return 'Could not reach Supabase. Check internet connection and try again.';
   if (message.toLowerCase().includes('redirect')) return 'Sign-in redirect is not allowed yet. Check Supabase Authentication URL Configuration.';
   if (message.toLowerCase().includes('email')) return message;
