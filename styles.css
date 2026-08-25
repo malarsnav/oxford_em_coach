@@ -922,6 +922,62 @@ input[type="checkbox"] {
   margin: 0.35rem 0;
 }
 
+.worked-solution h4 {
+  margin-top: 1.15rem;
+}
+
+.method-card,
+.answer-box {
+  padding: 0.85rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: #fbfcfd;
+}
+
+.method-card p,
+.answer-box p {
+  margin: 0 0 0.55rem;
+}
+
+.solution-grid {
+  display: grid;
+  gap: 0.7rem;
+}
+
+.solution-grid article {
+  display: grid;
+  gap: 0.45rem;
+  padding: 0.85rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: #fbfcfd;
+}
+
+.solution-grid b {
+  color: var(--accent);
+}
+
+.solution-grid p,
+.solution-grid ul {
+  margin: 0;
+}
+
+.solution-grid ul {
+  padding-left: 1.1rem;
+}
+
+.calculation-steps {
+  display: grid;
+  gap: 0.5rem;
+  padding-left: 1.35rem;
+}
+
+.answer-box {
+  margin-top: 0.85rem;
+  border-left: 5px solid var(--accent);
+  background: var(--soft);
+}
+
 mark {
   border-radius: 4px;
   background: #fff3bf;
@@ -1038,6 +1094,10 @@ button:disabled {
 
   .allocation-strip {
     grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .solution-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .form-grid {

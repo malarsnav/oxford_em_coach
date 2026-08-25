@@ -273,7 +273,20 @@ function optionClass(q, key, selected) {
 function instantFeedbackHtml(q, selected) {
   if (!selected) return '<p class="muted instant-hint">Choose an answer to see instant marking and coaching before moving on.</p>';
   const correct = selected === q.correct_answer;
+  if (isNumericalQuestion(q)) {
+    return numericalInstantFeedbackHtml(q, correct);
+  }
   return `<aside class="instant-feedback ${correct ? 'correct' : 'incorrect'}"><h3>${correct ? 'Correct' : 'Not quite'} · Official answer ${q.correct_answer}</h3><p><b>Method trigger:</b> ${triggerFor(q)}</p><p><b>How to approach it:</b> ${methodologyFor(q.sub_type).slice(0, 3).join(' ')}</p><p><b>Common trap:</b> ${trapFor(q)}</p><p><b>Carry forward:</b> ${carryForwardFor(q)}</p></aside>`;
+}
+
+function numericalInstantFeedbackHtml(q, correct) {
+  return `<aside class="instant-feedback ${correct ? 'correct' : 'incorrect'}">
+    <h3>${correct ? 'Correct' : 'Not quite'} · Official answer ${q.correct_answer}</h3>
+    <p><b>Target:</b> ${escapeHtml(finalQuestion(q.question_text))}</p>
+    <p><b>Technique:</b> ${escapeHtml(numericalTechniqueName(q))}</p>
+    <p><b>Next move:</b> ${escapeHtml(numericalCalculationSteps(q)[0])}</p>
+    <p><b>Trap:</b> ${escapeHtml(trapFor(q))}</p>
+  </aside>`;
 }
 
 function reportHtml() {
@@ -283,14 +296,175 @@ function reportHtml() {
 }
 
 function coachingHtml(q, selected) {
+  if (isNumericalQuestion(q)) return numericalCoachingHtml(q, selected);
   const correct = selected === q.correct_answer;
   return `<article class="panel coaching"><p class="eyebrow">Question ${q.question_number} · ${q.type} · ${q.sub_type}</p><h3>${correct ? 'Correct' : 'Incorrect'} · Your answer ${selected || 'blank'} · Official answer ${q.correct_answer}</h3>${questionMetaHtml(q)}<h4>A. Standard methodology</h4><ol>${methodologyFor(q.sub_type).map((m)=>`<li>${m}</li>`).join('')}</ol><h4>B. Full original question</h4><p>${highlight(q.question_text, q.relevant_question_highlights)}</p>${visualHtml(q)}<h4>C. Highlight decisive wording</h4><p>${q.relevant_question_highlights.map((h)=>`<mark>${h}</mark>`).join(' ') || '<span class="muted">No extracted highlight yet. Use the question stem and numerical constraints as the first clues.</span>'}</p><h4>D. What the wording should trigger</h4><p>${triggerFor(q)}</p><h4>E. Apply the method</h4><p>${coachingExplanation(q)}</p><h4>F. Trap to avoid</h4><p>${trapFor(q)}</p>${distractorAnalysisHtml(q)}<h4>G. Method to carry forward</h4><p>${carryForwardFor(q)}</p></article>`;
+}
+
+function numericalCoachingHtml(q, selected) {
+  const correct = selected === q.correct_answer;
+  return `<article class="panel coaching worked-solution">
+    <p class="eyebrow">Question ${q.question_number} · ${q.type} · ${q.sub_type}</p>
+    <h3>${correct ? 'Correct' : 'Incorrect'} · Your answer ${selected || 'blank'} · Official answer ${q.correct_answer}</h3>
+    ${questionMetaHtml(q)}
+    <h4>A. Standard Numerical Method</h4>
+    <div class="method-card"><p><b>${escapeHtml(numericalTechniqueName(q))}</b></p><ol>${numericalMethodSteps(q).map((m)=>`<li>${escapeHtml(m)}</li>`).join('')}</ol></div>
+    <h4>B. Full Original Question</h4>
+    <p>${highlight(q.question_text, q.relevant_question_highlights)}</p>
+    ${visualHtml(q)}
+    <h4>C. Set Up the Problem</h4>
+    <div class="solution-grid">
+      <article><b>Target quantity</b><p>${escapeHtml(finalQuestion(q.question_text))}</p></article>
+      <article><b>Known information</b>${factListHtml(numericalFacts(q))}</article>
+      <article><b>Constraints to obey</b>${factListHtml(numericalConstraints(q))}</article>
+      <article><b>Relevant visual/data source</b><p>${q.has_image ? 'Use the chart, table, diagram or timetable before calculating. Match labels and units carefully.' : 'The needed data is in the written stem and answer options.'}</p></article>
+    </div>
+    <h4>D. Calculation Path</h4>
+    <ol class="calculation-steps">${numericalCalculationSteps(q).map((step)=>`<li>${escapeHtml(step)}</li>`).join('')}</ol>
+    <div class="answer-box"><b>Official answer: ${q.correct_answer}</b><p>${escapeHtml(q.answer_options?.[q.correct_answer] || '')}</p></div>
+    <h4>E. Option & Trap Check</h4>
+    <p>${escapeHtml(trapFor(q))}</p>
+    ${distractorAnalysisHtml(q)}
+    <h4>F. Technique To Carry Forward</h4>
+    <p>${escapeHtml(carryForwardFor(q))}</p>
+  </article>`;
 }
 
 function distractorAnalysisHtml(q) {
   const rows = Object.entries(q.distractor_analysis || {});
   if (!rows.length) return '';
   return `<h4>Option-by-option distractor check</h4><div class="distractor-list">${rows.map(([option, reason]) => `<article><b>${option.replace('option_', '')}</b><p>${escapeHtml(reason)}</p></article>`).join('')}</div>`;
+}
+
+function isNumericalQuestion(q) {
+  return q.type === 'Numerical Reasoning & Problem-Solving' || q.broad_type === 'Numerical Reasoning & Problem-Solving';
+}
+
+function numericalTechniqueName(q) {
+  if (q.topic_tag?.includes('Cost') || q.topic_tag?.includes('Optimization') || q.topic_tag?.includes('Combinatorics')) return 'Bundle, constraint and minimum-cost comparison';
+  if (q.topic_tag?.includes('Schedule') || q.topic_tag?.includes('Timetable')) return 'Timeline, interval and earliest/latest comparison';
+  if (q.topic_tag?.includes('Rate') || q.topic_tag?.includes('Ratio') || q.topic_tag?.includes('Arithmetic')) return 'Rate, ratio and multi-step arithmetic setup';
+  if (q.topic_tag?.includes('Data') || q.topic_tag?.includes('Table')) return 'Targeted data extraction before calculation';
+  if (q.requires_spatial_processing || q.topic_tag?.includes('Spatial') || q.topic_tag?.includes('Net') || q.topic_tag?.includes('Pattern')) return 'Constraint tracking for spatial or pattern logic';
+  if (q.sub_type === 'Relevant Selection') return 'Targeted data extraction before calculation';
+  if (q.sub_type === 'Spatial Reasoning & Pattern Analysis') return 'Constraint tracking for spatial or pattern logic';
+  return 'Choose the procedure before doing arithmetic';
+}
+
+function numericalMethodSteps(q) {
+  const common = [
+    'Read the final question first and write the exact quantity required.',
+    'List the relevant values with units, separating them from distracting numbers.',
+    'Write each condition as a constraint before calculating.',
+    'Choose the procedure: equation, table extraction, bundle comparison, timeline, rate, ratio or case test.',
+    'Calculate in labelled steps, then compare against the answer options.',
+    'Check the chosen option obeys every condition, not just the arithmetic.'
+  ];
+  if (q.topic_tag?.includes('Cost') || q.topic_tag?.includes('Optimization') || q.topic_tag?.includes('Combinatorics')) {
+    return [
+      'Convert the people/items into categories first.',
+      'List each ticket/package/choice and exactly what it covers.',
+      'Check eligibility constraints before comparing prices.',
+      'Test the largest valid bundles or most restrictive packages first.',
+      'Calculate total cost for plausible combinations.',
+      'Choose the cheapest valid combination, not the cheapest-looking single ticket.'
+    ];
+  }
+  if (q.topic_tag?.includes('Schedule') || q.topic_tag?.includes('Timetable')) {
+    return [
+      'Convert the target journey or schedule into a start point and end point.',
+      'Include walking, waiting, transfer or return-time constraints.',
+      'Find the earliest/latest feasible times from the timetable.',
+      'Calculate durations on one consistent timeline.',
+      'Compare maximum and minimum feasible durations if asked.',
+      'Check that every chosen time lies inside the allowed window.'
+    ];
+  }
+  if (q.requires_spatial_processing || q.sub_type === 'Spatial Reasoning & Pattern Analysis') {
+    return [
+      'Turn the visual into explicit positions, adjacencies, movements or repeating states.',
+      'Mark impossible cases first, such as faces that cannot touch or routes that cannot occur.',
+      'Track one change at a time rather than relying on visual similarity.',
+      'Use elimination against each option.',
+      'Re-check orientation, order and labels before choosing.'
+    ];
+  }
+  return common;
+}
+
+function numericalCalculationSteps(q) {
+  if (q.topic_tag?.includes('Cost') || q.topic_tag?.includes('Optimization') || q.topic_tag?.includes('Combinatorics')) {
+    return [
+      'Create category counts, for example adults, children, items, groups or time blocks.',
+      'Write a small table of available packages: what each package covers, its price and any eligibility rule.',
+      'Test valid package combinations. Reject any combination that breaks a constraint even if the price looks low.',
+      'Calculate the total for each remaining plausible combination.',
+      `Select option ${q.correct_answer} because it is the official valid minimum/maximum after the constraints are applied.`
+    ];
+  }
+  if (q.topic_tag?.includes('Schedule') || q.topic_tag?.includes('Timetable')) {
+    return [
+      'Mark the fixed start and finish limits.',
+      'Add any access time such as walking or transfer time before reading the timetable.',
+      'Find the earliest feasible outward journey and latest feasible return journey.',
+      'For minimum/maximum questions, calculate both extremes in minutes.',
+      `Compare the resulting difference with the answer options and choose ${q.correct_answer}.`
+    ];
+  }
+  if (q.topic_tag?.includes('Data') || q.topic_tag?.includes('Table') || q.sub_type === 'Relevant Selection') {
+    return [
+      'Circle the final target quantity.',
+      'Extract only the rows, columns, labels or chart values needed for that target.',
+      'Write the calculation with units beside every number.',
+      'Ignore unused data even if it appears in the same table or diagram.',
+      `Match the final value to option ${q.correct_answer}.`
+    ];
+  }
+  if (q.requires_spatial_processing || q.sub_type === 'Spatial Reasoning & Pattern Analysis') {
+    return [
+      'Label the starting position or arrangement.',
+      'Apply each movement, fold, rotation or pattern rule in order.',
+      'Use impossible adjacencies or impossible positions to remove wrong options.',
+      'Check the final orientation or repeated state.',
+      `Choose option ${q.correct_answer} after all spatial/pattern constraints are satisfied.`
+    ];
+  }
+  return [
+    'Translate the words into variables, quantities and units.',
+    'Choose the mathematical operation before calculating.',
+    'Carry out the arithmetic in short labelled lines.',
+    'Check the answer against constraints and units.',
+    `Choose option ${q.correct_answer} if it is the only value satisfying the setup.`
+  ];
+}
+
+function numericalFacts(q) {
+  const sentences = splitQuestionSentences(q.question_text);
+  const facts = sentences.filter((sentence) => /(\d|[$£€%]|minute|hour|metre|km|mile|litre|kg|year|people|ticket|price|cost)/i.test(sentence));
+  return facts.slice(0, 6);
+}
+
+function numericalConstraints(q) {
+  const highlighted = q.relevant_question_highlights || [];
+  const sentences = splitQuestionSentences(q.question_text);
+  const constraints = sentences.filter((sentence) => /(must|least|at least|at most|up to|under|over|maximum|minimum|cheapest|least amount|total|each|every|including|only|exactly|between|difference)/i.test(sentence));
+  return [...new Set([...highlighted, ...constraints])].slice(0, 6);
+}
+
+function splitQuestionSentences(text) {
+  return (String(text || '').replace(/\s+/g, ' ').match(/[^.?]+[.?]?/g) || [])
+    .map((sentence) => sentence.trim())
+    .filter(Boolean);
+}
+
+function finalQuestion(text) {
+  const sentences = splitQuestionSentences(text);
+  return [...sentences].reverse().find((sentence) => sentence.includes('?')) || sentences[sentences.length - 1] || 'Identify the exact quantity requested by the question.';
+}
+
+function factListHtml(items) {
+  if (!items.length) return '<p class="muted">No clean extraction yet. Read the stem and write the relevant values manually before calculating.</p>';
+  return `<ul>${items.map((item)=>`<li>${escapeHtml(item)}</li>`).join('')}</ul>`;
 }
 
 function coachingExplanation(q) {
