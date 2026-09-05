@@ -1592,11 +1592,12 @@ function formatTime(value) {
 }
 
 function todayInput() {
-  return new Date().toISOString().slice(0, 10);
+  return dateInput(new Date());
 }
 
 function dateInput(date) {
-  return new Date(date).toISOString().slice(0, 10);
+  const local = new Date(date);
+  return `${local.getFullYear()}-${String(local.getMonth()+1).padStart(2,'0')}-${String(local.getDate()).padStart(2,'0')}`;
 }
 
 function currentWeek() {

@@ -36,7 +36,7 @@ const mockData = `const fixture=${JSON.stringify(fixture)};
   try {
     browser=await chromium.launch({channel:'msedge',headless:true});
     for (const width of [390,1440]) {
-      const page=await browser.newPage({viewport:{width,height:900}});
+      const page=await browser.newPage({viewport:{width,height:900},timezoneId:'Europe/London'});
       const errors=[];page.on('pageerror',e=>errors.push(e.message));
       await page.route('**/src/dataService.js',r=>r.fulfill({contentType:'text/javascript',body:mockData}));
       await page.route('**/src/supabaseClient.js',r=>r.fulfill({contentType:'text/javascript',body:mockSdk}));
@@ -265,6 +265,17 @@ const mockData = `const fixture=${JSON.stringify(fixture)};
       await page.getByRole('button',{name:'Dashboard',exact:true}).click();
       await page.screenshot({path:path.join(root,`../work/school-${width}.png`),fullPage:false});
       assert.deepEqual(errors,[]);
+      // UK midnight is still the previous UTC day during British Summer Time.
+      await page.clock.setFixedTime(new Date('2026-09-05T23:15:00Z'));
+      await page.getByRole('button',{name:'Today',exact:true}).click();
+      assert.equal(await page.locator('[data-report-date]').inputValue(),'2026-09-06');
+      await page.getByRole('button',{name:'Yesterday',exact:true}).click();
+      assert.equal(await page.locator('[data-report-date]').inputValue(),'2026-09-05');
+      await page.getByRole('button',{name:'Plan Tracker',exact:true}).click();
+      await page.getByRole('button',{name:'Today',exact:true}).click();
+      assert.equal(await page.locator('[data-action="plan-filter"] [name=date]').inputValue(),'2026-09-06');
+      await page.getByRole('button',{name:'Previous day',exact:true}).click();
+      assert.equal(await page.locator('[data-action="plan-filter"] [name=date]').inputValue(),'2026-09-05');
       await page.close();console.log(`School task save, upload, marking, refresh, date/subject tracker and layout passed at ${width}px (mock backend).`);
     }
   } finally {if(browser)await browser.close();server.close();}
