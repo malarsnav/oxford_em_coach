@@ -7,6 +7,45 @@ const modes = ['learn','practise','assess','reflect'];
 const esc = v => String(v ?? '').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 export const areaFor = activity => activity === 'AS Maths' ? 'AS-Further Maths' : activity === 'Maths tuition' ? 'Maths' : ['SMC','Super-Curricular'].includes(activity) ? 'Super Curricular' : activity;
 export const displayActivity = activity => activity === 'AS Maths' ? 'AS-Further Maths' : activity === 'SMC' ? 'Super Curricular' : activity;
+export const logArea = log => log.details?.outcome==='skipped' ? null : areaFor(log.details?.actual_activity || log.planned_activity);
+
+export function deviationFields(block, log) {
+  const d=log?.details || {}, outcome=d.outcome || 'followed';
+  return `<label>What happened?<select data-plan-outcome name="plan_outcome">${[['followed','Followed plan'],['changed','Did something else'],['skipped','Skipped']].map(([v,l])=>`<option value="${v}" ${outcome===v?'selected':''}>${l}</option>`).join('')}</select></label>
+    <div data-actual-fields ${outcome!=='changed'?'hidden':''}><label>Actual subject / activity<select data-actual-area name="actual_activity">${[...STUDY_AREAS,'Spillover'].map(a=>`<option ${a===areaFor(d.actual_activity || block.activity)?'selected':''}>${a}</option>`).join('')}</select></label><div class="form-grid"><label>Actual start<input type="time" name="actual_from" value="${esc(d.actual_from || block.from)}"></label><label>Actual end<input type="time" name="actual_to" value="${esc(d.actual_to || block.to)}"></label></div></div>
+    <label data-change-reason ${outcome==='followed'?'hidden':''}>Reason (optional)<input name="change_reason" value="${esc(d.change_reason)}"></label>`;
+}
+
+export function handleDeviation(event, logs, attempts, schoolYear) {
+  const t=event.target;
+  if(!t.matches('[data-plan-outcome], [data-actual-area]'))return;
+  const form=t.form, outcome=form.elements.plan_outcome.value, host=form.querySelector('[data-actual-content]');
+  form.querySelector('[data-actual-fields]').hidden=outcome!=='changed';
+  form.querySelector('[data-change-reason]').hidden=outcome==='followed';
+  host.hidden=outcome==='skipped';
+  if(outcome==='skipped')return;
+  const area=outcome==='changed'?form.elements.actual_activity.value:areaFor(form.elements.planned_activity.value);
+  const previous=host.dataset.area;
+  if(previous===area)return;
+  // Retain unsaved fields when switching between subjects inside the same block.
+  form.studyDrafts ||= new Map();
+  const fragment=document.createDocumentFragment();
+  while(host.firstChild)fragment.appendChild(host.firstChild);
+  form.studyDrafts.set(previous,fragment);
+  if(form.studyDrafts.has(area))host.appendChild(form.studyDrafts.get(area));
+  else host.innerHTML=richStudyFields(area,{},attempts,customTopicsFor(logs,area),schoolYear);
+  host.dataset.area=area;
+}
+
+export function collectDeviation(form) {
+  const outcome=form.elements.plan_outcome.value;
+  const details=outcome==='skipped'?JSON.parse(form.querySelector('[data-actual-content]').dataset.originalDetails || '{}'):(collectStudyDetails(form)||{});
+  const actual=outcome==='changed'?form.elements.actual_activity.value:form.elements.planned_activity.value;
+  const from=outcome==='changed'?form.elements.actual_from.value:form.elements.start_time.value;
+  const to=outcome==='changed'?form.elements.actual_to.value:form.elements.end_time.value;
+  if(outcome!=='skipped'&&(!/^\d{2}:\d{2}$/.test(from)||!/^\d{2}:\d{2}$/.test(to)||to<=from))throw new Error('Actual end time must be after the start time.');
+  return {...details,outcome,actual_activity:outcome==='skipped'?null:actual,actual_from:outcome==='skipped'?null:from,actual_to:outcome==='skipped'?null:to,change_reason:outcome==='followed'?'':form.elements.change_reason.value};
+}
 export function scheduledAreas(day) {
   const rows = day ? (['Saturday','Sunday'].includes(day) ? WEEKEND_TIMETABLE : WEEKDAY_TIMETABLE) : [...WEEKDAY_TIMETABLE,...WEEKEND_TIMETABLE];
   return new Set(rows.flatMap(row=> day ? [areaFor(row[day])] : Object.entries(row).filter(([k])=>!['from','to'].includes(k)).map(([,v])=>areaFor(v))));
@@ -76,7 +115,7 @@ export function richStudyFields(activity, log = {}, attempts = [], customTopics 
 }
 
 export function customTopicsFor(logs, area) {
-  return [...new Map(logs.filter(l=>areaFor(l.planned_activity)===area).flatMap(l=>l.details?.entries||[]).filter(e=>e.id.startsWith('custom:')).map(e=>[e.id,e])).values()];
+  return [...new Map(logs.filter(l=>logArea(l)===area).flatMap(l=>l.details?.entries||[]).filter(e=>e.id.startsWith('custom:')).map(e=>[e.id,e])).values()];
 }
 
 export function handleStudyInput(event, logs) {
@@ -154,7 +193,7 @@ export function collectStudyDetails(form) {
 }
 
 export function topicHistoryHtml(logs,area) {
-  const rows=logs.filter(l=>areaFor(l.planned_activity)===area).flatMap(l=>(l.details?.entries||[]).map(e=>({...e,date:l.log_date})));
+  const rows=logs.filter(l=>logArea(l)===area).flatMap(l=>(l.details?.entries||[]).map(e=>({...e,date:l.log_date})));
   if(!academic.includes(area))return '';
   const unique=new Set(rows.map(e=>e.id));
   return `<details class="topic-history"><summary>Topic history (${unique.size} topics / sub-topics recorded)</summary><p>Coverage records activity, not mastery. One block is counted once, even when it covers several topics.</p>${rows.sort((a,b)=>b.date.localeCompare(a.date)).slice(0,100).map(e=>`<article><b>${esc(e.topic)} · ${esc(e.ref||e.label)}</b><p>${esc(e.date)} · ${esc((e.modes||[]).join(', '))}${e.score!=null?' · '+e.score+'/'+e.total:''}${e.correct!=null?' · '+e.correct+'/'+e.attempted+' correct':''}${e.rag?' · '+esc(e.rag):''}</p><p>${esc(e.notes)}</p></article>`).join('')||'<p>No structured topic entries yet.</p>'}</details>`;

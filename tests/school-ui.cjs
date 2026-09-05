@@ -27,7 +27,7 @@ const dataSource = fs.readFileSync(path.join(root,'src/dataService.js'),'utf8');
 const names = [...dataSource.matchAll(/export (?:async )?function (\w+)/g)].map(m=>m[1]);
 const mockData = `const fixture=${JSON.stringify(fixture)};
  export async function getSession(){return {user:{id:'test-user',email:'student@example.test'}};}
- export async function bootstrap(){const data=structuredClone(fixture);const rows=JSON.parse(localStorage.getItem('test-tasks')||'[]');data.subjects.forEach(s=>s.academic_results=rows.filter(r=>r.subject_id===s.id));data.studyPlanLogs=JSON.parse(localStorage.getItem('test-logs')||'[]');return data;}
+ export async function bootstrap(){if(localStorage.getItem('test-offline'))throw new Error('Network unavailable');const data=structuredClone(fixture);const rows=JSON.parse(localStorage.getItem('test-tasks')||'[]');data.subjects.forEach(s=>s.academic_results=rows.filter(r=>r.subject_id===s.id));data.studyPlanLogs=JSON.parse(localStorage.getItem('test-logs')||'[]');return data;}
  export async function saveStudyPlanLog(user,row){const logs=JSON.parse(localStorage.getItem('test-logs')||'[]');const i=logs.findIndex(l=>l.log_date===row.log_date && l.start_time===row.start_time && l.end_time===row.end_time && l.planned_activity===row.planned_activity);if(i<0)logs.push(row);else logs[i]=row;localStorage.setItem('test-logs',JSON.stringify(logs));}
  ${names.filter(n=>!['getSession','bootstrap','saveStudyPlanLog'].includes(n)).map(n=>`export async function ${n}(){}`).join('\n')}`;
 (async()=>{
@@ -175,6 +175,46 @@ const mockData = `const fixture=${JSON.stringify(fixture)};
       await page.locator('.daily-block').first().getByRole('button',{name:'Edit log',exact:true}).click();
       assert.equal(await page.locator('form[data-action="save-study-log"]:focus [name=start_time]').inputValue(),'09:00');
       await page.getByRole('button',{name:'Dashboard',exact:true}).click();
+      await page.locator('.daily-block').first().getByRole('button',{name:'Edit log',exact:true}).click();
+      const changed=page.locator('[data-action="save-study-log"]').first();
+      await changed.locator('[data-plan-outcome]').selectOption('changed');
+      await changed.locator('[data-actual-area]').selectOption('Physics');
+      await changed.locator('[data-topic-search]').fill('4.5.1');
+      await changed.locator('[data-pick-topic$=":4.5.1"]').check();
+      await changed.locator('[data-plan-outcome]').selectOption('followed');
+      assert.ok(await changed.locator('[data-topic-id$=":2.3"]').count()>0);
+      await changed.locator('[data-plan-outcome]').selectOption('changed');
+      assert.equal(await changed.locator('[data-pick-topic$=":4.5.1"]').isChecked(),true);
+      await changed.locator('[name=actual_from]').fill('09:15');await changed.locator('[name=actual_to]').fill('10:00');
+      await changed.getByRole('button',{name:'Save progress',exact:true}).click();
+      await changed.getByText('Progress saved.',{exact:true}).waitFor();
+      await page.getByRole('button',{name:'Dashboard',exact:true}).click();
+      await page.locator('.daily-block').first().getByText(/Actual:/).waitFor();
+      await page.reload();await page.locator('.daily-block').first().getByText(/Actual:/).waitFor();
+      assert.ok((await page.locator('.daily-block').first().textContent()).includes('09:15-10:00'));
+      await page.getByRole('button',{name:'Yesterday',exact:true}).click();
+      await page.getByText(/0\/5 planned study blocks logged on/).waitFor();
+      assert.equal(await page.locator('.daily-upcoming').count(),0);
+      await page.getByRole('button',{name:'Today',exact:true}).click();
+      await page.evaluate(()=>localStorage.setItem('test-offline','1'));
+      await page.getByRole('button',{name:'Refresh',exact:true}).click();
+      await page.getByText(/Refresh failed. Showing the previous report/).waitFor();
+      await page.getByText('6/8 planned study blocks logged today',{exact:true}).waitFor();
+      await page.evaluate(()=>localStorage.removeItem('test-offline'));
+      await page.getByRole('button',{name:'Retry refresh',exact:true}).click();
+      await page.getByRole('button',{name:'Refresh',exact:true}).waitFor();
+      await page.getByText(/Last refreshed/).waitFor();
+      await page.locator('.daily-block').nth(1).getByRole('button',{name:'Edit log',exact:true}).click();
+      const skipped=page.locator('[data-action="save-study-log"]').nth(1);
+      await skipped.locator('[data-plan-outcome]').selectOption('skipped');
+      await skipped.getByRole('button',{name:'Save progress',exact:true}).click();
+      await skipped.getByText('Progress saved.',{exact:true}).waitFor();
+      await page.getByRole('button',{name:'Dashboard',exact:true}).click();
+      await page.getByText('4 followed plan · 1 changed · 1 skipped',{exact:true}).waitFor();
+      assert.equal(await page.locator('.daily-block').nth(1).locator('.daily-topic-preview').count(),0);
+      await page.locator('[data-report-date]').fill('2026-09-04');
+      await page.getByText(/0\/5 planned study blocks logged on/).waitFor();
+      await page.getByRole('button',{name:'Today',exact:true}).click();
       await page.evaluate(()=>window.scrollTo(0,0));
       await page.screenshot({path:path.join(root,`../work/school-${width}.png`),fullPage:false});
       assert.deepEqual(errors,[]);

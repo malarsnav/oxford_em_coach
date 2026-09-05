@@ -1476,3 +1476,6 @@ button:disabled {
 .daily-topic-preview { margin:8px 0; }
 .daily-block > button { margin-top:10px; min-height:44px; }
 .study-log { scroll-margin-top:280px; }
+.report-controls .row { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:6px; }
+.report-controls .row button { min-width:0; min-height:44px; padding:8px; font-size:14px; white-space:normal; }
+.report-controls p { font-size:13px; margin:10px 0 0; overflow-wrap:anywhere; }

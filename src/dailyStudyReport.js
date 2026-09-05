@@ -1,10 +1,11 @@
 import { WEEKDAY_TIMETABLE, WEEKEND_TIMETABLE } from './studentStudyPlan.js';
 
-export function dailyStudyReport(logs = [], now = new Date()) {
-  const date = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
-  const day = now.toLocaleDateString('en-GB',{weekday:'long'});
+export function dailyStudyReport(logs = [], now = new Date(), selectedDate) {
+  const today = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
+  const date=selectedDate || today;
+  const day = new Date(date+'T12:00:00').toLocaleDateString('en-GB',{weekday:'long'});
   const minutes = value => Number(value.slice(0,2))*60+Number(value.slice(3,5));
-  const clock = now.getHours()*60+now.getMinutes();
+  const clock = date<today?1440:date>today?-1:now.getHours()*60+now.getMinutes();
   const key = (from,to,activity) => JSON.stringify([from.slice(0,5),to.slice(0,5),activity]);
   const todayLogs = [...new Map(logs.filter(l=>l.log_date===date).map(l=>[key(l.start_time,l.end_time,l.planned_activity),l])).values()];
   const rows = ['Saturday','Sunday'].includes(day)?WEEKEND_TIMETABLE:WEEKDAY_TIMETABLE;
@@ -19,8 +20,11 @@ export function dailyStudyReport(logs = [], now = new Date()) {
     overdue:blocks.filter(b=>b.status==='Not logged').length,
     upcoming:blocks.filter(b=>b.status==='Upcoming').length,
     plannedMinutes:blocks.reduce((sum,b)=>sum+b.minutes,0),
-    loggedMinutes:blocks.filter(b=>b.log).reduce((sum,b)=>sum+b.minutes,0),
-    green:todayLogs.filter(l=>l.rag_status==='green').length,
-    amber:todayLogs.filter(l=>l.rag_status==='amber').length,
-    red:todayLogs.filter(l=>l.rag_status==='red').length};
+    loggedMinutes:blocks.filter(b=>b.log && b.log.details?.outcome!=='skipped').reduce((sum,b)=>sum+b.minutes,0),
+    followed:blocks.filter(b=>b.log && (!b.log.details?.outcome || b.log.details.outcome==='followed')).length,
+    changed:blocks.filter(b=>b.log?.details?.outcome==='changed').length,
+    skipped:blocks.filter(b=>b.log?.details?.outcome==='skipped').length,
+    green:todayLogs.filter(l=>l.details?.outcome!=='skipped'&&l.rag_status==='green').length,
+    amber:todayLogs.filter(l=>l.details?.outcome!=='skipped'&&l.rag_status==='amber').length,
+    red:todayLogs.filter(l=>l.details?.outcome!=='skipped'&&l.rag_status==='red').length};
 }

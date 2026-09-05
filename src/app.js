@@ -2,6 +2,7 @@ import { bootstrap, getSession, signIn, signOut, saveAttempt, updateTask, addAca
 import { STUDY_AREAS, areaFor, displayActivity, availabilityHtml, richStudyFields, handleStudyInput, collectStudyDetails, customTopicsFor, topicHistoryHtml } from './planTracking.js';
 import { saveSchoolTask, schoolAttachmentUrl } from './schoolTaskService.js';
 import { dailyStudyReport } from './dailyStudyReport.js';
+import { logArea, deviationFields, handleDeviation, collectDeviation } from './planTracking.js';
 import { questionBankManifest } from './questionBankManifest.generated.js';
 import { methodologyFor } from './methodologies.js';
 import { buildDailyDigest, previousLocalDate } from './dailyDigestService.js';
@@ -39,7 +40,7 @@ const state = {
   reviewAttemptId: null,
   academicTopicFilter: 'all',
   schoolSubject: 'all', schoolStatus: 'all',
-  extraBlock: null,
+  extraBlock: null, reportDate: null, lastRefresh: null, refreshing: false, refreshError: '',
   planMode: 'date', planDate: todayInput(), planSubject: 'Maths',
   planFrom: todayInput().slice(0,7) + '-01', planTo: todayInput(),
   journalMode: 'reading',
@@ -57,6 +58,7 @@ async function init() {
     if (state.user) {
       markMagicLinkUsed(state.user.email);
       state.data = await bootstrap(state.user);
+      state.lastRefresh = new Date();
     }
     render();
   } catch (error) {
@@ -138,7 +140,8 @@ function viewHtml() {
 
 function dashboardHtml() {
   const data = state.data;
-  const today = dailyStudyReport(data.studyPlanLogs || []);
+  const today = dailyStudyReport(data.studyPlanLogs || [],new Date(),state.reportDate);
+  const period=today.date===todayInput()?'today':'on '+formatDate(today.date);
   const tasks = data.tasks || [];
   const done = tasks.filter((t) => t.status === 'completed').length;
   const remaining = tasks.filter((t) => !['completed', 'skipped'].includes(t.status));
@@ -147,14 +150,16 @@ function dashboardHtml() {
       <div><p class="eyebrow">Oxford E&M Coaching Dashboard</p><h2>What needs attention now?</h2><p class="muted">Track homework, assessments, your study plan and TARA practice.</p></div>
       <button data-view="programme">Open Plan Tracker</button>
     </header>
+    <section class="panel report-controls"><label>Report date<input type="date" data-report-date value="${today.date}"></label><div class="row"><button class="ghost" data-report-yesterday>Yesterday</button><button class="ghost" data-report-today>Today</button><button class="ghost" data-report-refresh ${state.refreshing?'disabled':''}>${state.refreshing?'Refreshing…':state.refreshError?'Retry refresh':'Refresh'}</button></div><p role="status">${state.refreshError?escapeHtml(state.refreshError):state.lastRefresh?'Last refreshed '+state.lastRefresh.toLocaleString():'Not refreshed yet'}</p></section>
     <section class="panel focus-card">
       <div>
-        <p class="eyebrow">Today · ${formatLongDate(today.date)}</p>
-        <h3>${today.logged}/${today.total} planned study blocks logged today</h3>
+        <p class="eyebrow">${formatLongDate(today.date)}</p>
+        <h3>${today.logged}/${today.total} planned study blocks logged ${period}</h3>
         <p class="muted">${today.percent}% logged · ${today.total-today.logged} remaining · ${today.extra.length} extra study blocks</p>
       </div>
       <div class="bar" role="progressbar" aria-label="Today's planned blocks logged" aria-valuenow="${today.percent}" aria-valuemin="0" aria-valuemax="100"><span style="width:${today.percent}%"></span></div>
       <p>${today.overdue} earlier blocks not logged · ${today.upcoming} upcoming</p>
+      <p>${today.followed} followed plan · ${today.changed} changed · ${today.skipped} skipped</p>
       <p class="muted">${today.loggedMinutes} of ${today.plannedMinutes} planned minutes covered by logs. Logged time is not measured study time.</p>
     </section>
     ${dailyReportHtml(today)}
@@ -167,6 +172,7 @@ function dashboardHtml() {
 }
 
 function dailyReportHtml(report) {
+  const period=report.date===todayInput()?"Today's":formatDate(report.date);
   const openButton = (b,caption) => `<button class="ghost" data-log-block="${escapeAttr(JSON.stringify([b.date,b.from,b.to,b.activity]))}" title="${escapeAttr(`${caption}: ${displayActivity(b.activity)}, ${b.from}-${b.to}`)}">${caption}</button>`;
   const next = report.blocks.find(b=>b.status==='Current block') || report.blocks.find(b=>b.status==='Not logged') || report.blocks.find(b=>!b.log);
   const detail = log => {
@@ -175,21 +181,24 @@ function dailyReportHtml(report) {
     const notes=log.details?.study_notes || log.details?.work_done || log.details?.key_idea || log.topics_covered || log.topics_practised || '';
     return `${topics.length?`<p>${topics.map(escapeHtml).join('; ')}</p>`:''}${notes?`<p class="muted">${escapeHtml(notes)}</p>`:''}${log.rag_status?`<small>Reflection: ${escapeHtml(log.rag_status)}</small>`:''}`;
   };
-  return `<section class="panel daily-report"><h3>Today's progress against the plan</h3>
+  return `<section class="panel daily-report"><h3>${period} progress against the plan</h3>
     ${next?`<div class="daily-next"><div><small>Next action</small><b>${escapeHtml(displayActivity(next.activity))}</b><small>${next.from}-${next.to} · ${next.status}</small></div>${openButton(next,'Log progress')}</div>`:'<p>All planned blocks are logged.</p>'}
-    <p>${report.green} green · ${report.amber} amber · ${report.red} red block reflections today</p>
+    <p>${report.green} green · ${report.amber} amber · ${report.red} red block reflections</p>
     <div class="daily-report-list">${report.blocks.map(b=>{
       const rag=['green','amber','red'].includes(b.log?.rag_status)?b.log.rag_status:null;
-      const tone=b.log?(rag || 'logged'):b.status==='Current block'?'current':b.status==='Not logged'?'unlogged':'upcoming';
-      const label=b.log?`✓ Logged${rag?' · '+rag[0].toUpperCase()+rag.slice(1):' · RAG unset'}`:b.status==='Current block'?'Now':b.status;
-      const topics=[...new Set((b.log?.details?.entries || []).map(e=>e.topic))];
+      const skipped=b.log?.details?.outcome==='skipped', changed=b.log?.details?.outcome==='changed';
+      const tone=skipped?'unlogged':b.log?(rag || 'logged'):b.status==='Current block'?'current':b.status==='Not logged'?'unlogged':'upcoming';
+      const label=skipped?'Skipped':b.log?`✓ ${changed?'Changed':'Logged'}${rag?' · '+rag[0].toUpperCase()+rag.slice(1):' · RAG unset'}`:b.status==='Current block'?'Now':b.status;
+      const topics=skipped?[]:[...new Set((b.log?.details?.entries || []).map(e=>e.topic))];
       return `<article class="daily-block daily-${tone}"><div class="top mini"><div><b>${escapeHtml(displayActivity(b.activity))}</b><small>${b.from}-${b.to}</small></div><strong class="daily-status">${label}</strong></div>
+        ${changed?`<p>Actual: <b>${escapeHtml(displayActivity(b.log.details.actual_activity))}</b> · ${escapeHtml(b.log.details.actual_from)}-${escapeHtml(b.log.details.actual_to)}</p>`:''}
+        ${b.log?.details?.change_reason?`<p>${escapeHtml(b.log.details.change_reason)}</p>`:''}
         ${topics.length?`<p class="daily-topic-preview">${escapeHtml(topics.slice(0,2).join(', '))}${topics.length>2?` +${topics.length-2} more`:''}</p>`:''}
-        ${b.log?`<details><summary>View logged details</summary>${detail(b.log) || '<p>No additional notes.</p>'}</details>`:''}
+        ${b.log&&!skipped?`<details><summary>View logged details</summary>${detail(b.log) || '<p>No additional notes.</p>'}</details>`:''}
         ${openButton(b,b.log?'Edit log':'Log progress')}</article>`;
     }).join('') || '<p>No study blocks planned today.</p>'}</div>
-    ${report.extra.length?`<details><summary>Extra study today (${report.extra.length})</summary>${report.extra.map(l=>`<article><b>${escapeHtml(displayActivity(l.planned_activity))}</b><small>${escapeHtml(l.start_time.slice(0,5))}-${escapeHtml(l.end_time.slice(0,5))}</small>${detail(l)}</article>`).join('')}</details>`:''}
-    <button class="ghost" data-today-plan>Update today's progress</button></section>`;
+    ${report.extra.length?`<details><summary>Extra study ${report.date===todayInput()?'today':formatDate(report.date)} (${report.extra.length})</summary>${report.extra.map(l=>`<article><b>${escapeHtml(displayActivity(l.planned_activity))}</b><small>${escapeHtml(l.start_time.slice(0,5))}-${escapeHtml(l.end_time.slice(0,5))}</small>${detail(l)}</article>`).join('')}</details>`:''}
+    <button class="ghost" data-today-plan>Update ${report.date===todayInput()?"today's":"this day's"} progress</button></section>`;
 }
 
 function dashboardSignalsHtml() {
@@ -280,7 +289,7 @@ function selectedPlanBlocks() {
     }
   }
   for (const log of state.data.studyPlanLogs || []) {
-    if (log.log_date < from || log.log_date > to || (state.planMode === 'subject' && areaFor(log.planned_activity) !== state.planSubject)) continue;
+    if (log.log_date < from || log.log_date > to || (state.planMode === 'subject' && areaFor(log.planned_activity) !== state.planSubject && logArea(log)!==state.planSubject)) continue;
     if (!blocks.some(b => b.date === log.log_date && b.from === log.start_time.slice(0,5) && b.to === log.end_time.slice(0,5) && b.activity === log.planned_activity)) blocks.push({date:log.log_date,day:log.day_name,from:log.start_time.slice(0,5),to:log.end_time.slice(0,5),activity:log.planned_activity});
   }
   return blocks.sort((a,b) => (a.date+a.from).localeCompare(b.date+b.from));
@@ -296,7 +305,10 @@ function studyPlanLogHtml(block) {
     <input type="hidden" name="end_time" value="${block.to}">
     <input type="hidden" name="planned_activity" value="${escapeAttr(block.activity)}">
     <div class="log-head"><div><b>${escapeHtml(displayActivity(block.activity))}</b><p>${formatLongDate(block.date)} · ${block.from}-${block.to}</p></div><label>RAG<select name="rag_status"><option value="">Unset</option><option value="green" ${sel(rag,'green')}>Green</option><option value="amber" ${sel(rag,'amber')}>Amber</option><option value="red" ${sel(rag,'red')}>Red</option></select></label></div>
-    ${richStudyFields(block.activity,log || {},state.data.tara.attempts,customTopicsFor(state.data.studyPlanLogs || [],areaFor(block.activity)),state.data.profile?.current_school_year || 'Year 12')}
+    ${deviationFields(block,log)}
+    <div data-actual-content data-area="${escapeAttr(logArea(log || {planned_activity:block.activity}) || areaFor(block.activity))}" data-original-details="${escapeAttr(JSON.stringify(log?.details || {}))}" ${log?.details?.outcome==='skipped'?'hidden':''}>
+    ${richStudyFields(log?.details?.actual_activity || block.activity,log || {},state.data.tara.attempts,customTopicsFor(state.data.studyPlanLogs || [],logArea(log || {planned_activity:block.activity})),state.data.profile?.current_school_year || 'Year 12')}
+    </div>
     <details class="block-notes"><summary>Block notes / previous entries</summary><label>Learn<textarea name="topics_covered" placeholder="Topics covered">${escapeHtml(log?.topics_covered || '')}</textarea></label>
     <label>Practise<textarea name="topics_practised" placeholder="Questions, exercises or practice done">${escapeHtml(log?.topics_practised || '')}</textarea></label>
     <label>Assess<textarea name="topics_assessed" placeholder="Score, test result, timed attempt or self-check">${escapeHtml(log?.topics_assessed || '')}</textarea></label>
@@ -1323,7 +1335,15 @@ app.addEventListener('click', async (event) => {
     if(form){form.tabIndex=-1;HTMLElement.prototype.focus.call(form,{preventScroll:true});form.scrollIntoView({block:'start'});}
     return;
   }
-  if (target.hasAttribute('data-today-plan')) { state.planMode='date';state.planDate=todayInput();state.extraBlock=null;state.view='programme';render();return; }
+  if (target.hasAttribute('data-today-plan')) { state.planMode='date';state.planDate=state.reportDate || todayInput();state.extraBlock=null;state.view='programme';render();return; }
+  if(target.hasAttribute('data-report-today')){state.reportDate=null;render();return;}
+  if(target.hasAttribute('data-report-yesterday')){const d=new Date();d.setDate(d.getDate()-1);state.reportDate=dateInput(d);render();return;}
+  if(target.hasAttribute('data-report-refresh')){
+    state.refreshing=true;state.refreshError='';render();
+    try{state.data=await bootstrap(state.user);state.lastRefresh=new Date();}
+    catch(error){state.refreshError='Refresh failed. Showing the previous report. '+friendlyError(error);}
+    finally{state.refreshing=false;if(state.view==='dashboard')render();}return;
+  }
   if (target.dataset.schoolFile) {
     try {
       const task = schoolTasks().find(t => t.id === target.dataset.schoolFile);
@@ -1362,6 +1382,8 @@ app.addEventListener('click', async (event) => {
 });
 
 app.addEventListener('change', async (event) => {
+  if(event.target.matches('[data-report-date]')){if(event.target.validity.valid && event.target.value){state.reportDate=event.target.value;render();}return;}
+  handleDeviation(event,state.data?.studyPlanLogs || [],state.data?.tara?.attempts || [],state.data?.profile?.current_school_year || 'Year 12');
   handleStudyInput(event,state.data?.studyPlanLogs || []);
   if (event.target.name === 'mode' && event.target.form?.dataset.action === 'plan-filter') {
     const form = event.target.form;
@@ -1473,10 +1495,12 @@ app.addEventListener('submit', async (event) => {
     if (action === 'save-profile') await updateProfile(state.user, normalizeProfilePayload(values));
     if (action === 'save-error') await saveTaraErrorAnalysis(state.user, values);
     if (action === 'save-study-log') {
-      const details=collectStudyDetails(form);
+      const details=collectDeviation(form);
       await saveStudyPlanLog(state.user,{...values, ...(details ? {details} : {})});
-      state.data=await bootstrap(state.user);
+      try {state.data=await bootstrap(state.user);state.lastRefresh=new Date();}
+      catch(error){state.refreshError='Progress saved, but the report refresh failed. Showing the previous report.';setFormStatus(form,'Progress saved, but the refreshed report could not be loaded. Use Refresh on the dashboard.','success');return;}
       const saved=(state.data.studyPlanLogs || []).find(l => l.log_date===values.log_date && l.start_time.slice(0,5)===values.start_time && l.end_time.slice(0,5)===values.end_time && l.planned_activity===values.planned_activity);
+      if(saved)form.querySelector('[data-actual-content]').dataset.originalDetails=JSON.stringify(saved.details || {});
       setFormStatus(form,'Progress saved.','success');
       // Refresh summaries without discarding other blocks that are being edited.
       const status=app.querySelector('.plan-progress > p');
