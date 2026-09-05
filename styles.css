@@ -1445,3 +1445,18 @@ button:disabled {
   .school-task-form button { min-height: 44px; }
 }
 .form-grid [hidden] { display: none; }
+.rich-study { display: grid; gap: 14px; }
+.topic-picker, .block-notes, .topic-history { padding-block: 12px; }
+.topic-picker [data-topic-group] { border-top: 1px solid #dce1e5; padding: 10px 0; }
+.topic-choice { display: flex; gap: 10px; align-items: start; padding: 10px 4px; }
+.topic-choice input, .mode-checks input { width: 20px; height: 20px; flex-shrink: 0; }
+.mode-checks { display: flex; flex-wrap: wrap; gap: 14px; }
+.mode-checks label { display: flex; gap: 8px; align-items: center; }
+.topic-evidence { border: 1px solid #ccd6df; border-radius: 6px; margin: 16px 0; padding: 14px; display: grid; gap: 12px; min-width: 0; }
+.topic-evidence legend { font-weight: 600; max-width: 100%; overflow-wrap: anywhere; }
+.topic-evidence .form-grid { grid-template-columns: repeat(2,minmax(0,1fr)); }
+.plan-availability ul { display: grid; grid-template-columns: repeat(auto-fit,minmax(200px,1fr)); gap: 10px; padding: 0; list-style: none; }
+.plan-availability strong { color: #a03c24; }
+.topic-history article { padding: 12px 0; border-bottom: 1px solid #dce1e5; }
+[hidden] { display: none !important; }
+@media(max-width:600px) { .topic-evidence .form-grid { grid-template-columns: minmax(0,1fr); } }

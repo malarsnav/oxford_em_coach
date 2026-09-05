@@ -1,4 +1,5 @@
 import { bootstrap, getSession, signIn, signOut, saveAttempt, updateTask, addAcademicResult, updateSubject, addAcademicTopic, updateAcademicTopic, addJournalEntry, addReasoningSession, updateMilestone, addMilestone, saveWeeklyReview, addInterviewSession, updateProfile, saveTaraErrorAnalysis, saveStudyPlanLog } from './dataService.js';
+import { STUDY_AREAS, areaFor, displayActivity, availabilityHtml, richStudyFields, handleStudyInput, collectStudyDetails, customTopicsFor, topicHistoryHtml } from './planTracking.js';
 import { saveSchoolTask, schoolAttachmentUrl } from './schoolTaskService.js';
 import { questionBankManifest } from './questionBankManifest.generated.js';
 import { methodologyFor } from './methodologies.js';
@@ -37,6 +38,7 @@ const state = {
   reviewAttemptId: null,
   academicTopicFilter: 'all',
   schoolSubject: 'all', schoolStatus: 'all',
+  extraBlock: null,
   planMode: 'date', planDate: todayInput(), planSubject: 'Maths',
   planFrom: todayInput().slice(0,7) + '-01', planTo: todayInput(),
   journalMode: 'reading',
@@ -200,7 +202,7 @@ function thinkingPillarHtml() {
 }
 
 function programmeHtml() {
-  return `<header class="top"><div><p class="eyebrow">Plan Tracker</p><h2>Progress by subject or date</h2></div></header>${noticeHtml()}${studyPlanProgressHtml()}`;
+  return `<header class="top"><div><p class="eyebrow">Plan Tracker</p><h2>Progress by subject or date</h2></div></header>${noticeHtml()}<details class="panel"><summary>View standing timetable</summary>${studyRhythmHtml()}</details>${studyPlanProgressHtml()}`;
 }
 
 function studyRhythmSummaryHtml() {
@@ -209,11 +211,14 @@ function studyRhythmSummaryHtml() {
 }
 
 function studyRhythmHtml() {
-  return `<section class="panel study-rhythm"><div class="top mini"><div><p class="eyebrow">Standing Study Plan</p><h3>Weekday and weekend rhythm</h3><p class="muted">Use this as the fixed timetable. Progress tracking happens against these blocks, with spillover used only when needed.</p></div><span class="pill medium">${totalWeeklyTargetHours()}h/week</span></div><div class="target-strip">${WEEKLY_TARGETS.map(targetChipHtml).join('')}</div>${taraHasNoScheduledTime() ? '<p class="callout">Planning note: TARA has no standing slot yet. The tracker highlights this so a light admissions-test habit can be added deliberately when ready.</p>' : ''}<details><summary>Weekdays</summary>${timetableHtml(WEEKDAY_TIMETABLE, ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'])}</details><details><summary>Weekends</summary>${timetableHtml(WEEKEND_TIMETABLE, ['Saturday', 'Sunday'])}</details><details><summary>Reading plan</summary><div class="reading-plan">${READING_PLAN.map((item) => `<article><b>${escapeHtml(item.month)}</b><span>${escapeHtml(item.title)}</span></article>`).join('')}</div></details></section>`;
+  return `<div class="study-rhythm"><h3>Weekday and weekend plan</h3><p class="callout">The supplied weekday plan overlaps study (18:15-19:15) and dinner (19:00-20:00) by 15 minutes. Times are retained as provided.</p>
+    <details><summary>Weekdays</summary>${timetableHtml(WEEKDAY_TIMETABLE,['Monday','Tuesday','Wednesday','Thursday','Friday'])}</details>
+    <details><summary>Weekends</summary>${timetableHtml(WEEKEND_TIMETABLE,['Saturday','Sunday'])}</details>
+    <p>Super Curricular slots currently support Senior Maths Challenge preparation. Choose the activity in each block when the focus changes.</p></div>`;
 }
 
 function studyPlanProgressHtml() {
-  const activities = [...new Set([...WEEKDAY_TIMETABLE,...WEEKEND_TIMETABLE].flatMap(r => Object.entries(r).filter(([k]) => !['from','to'].includes(k)).map(([,v]) => v)).filter(v => v && !isRestActivity(v)))];
+  const activities = [...STUDY_AREAS, 'Spillover'];
   const blocks = selectedPlanBlocks();
   return `<section class="panel"><form data-action="plan-filter" class="form-grid">
     <label>View<select name="mode"><option value="date" ${sel(state.planMode,'date')}>By date</option><option value="subject" ${sel(state.planMode,'subject')}>By subject</option></select></label>
@@ -221,8 +226,18 @@ function studyPlanProgressHtml() {
     <label data-plan-subject ${state.planMode === 'date' ? 'hidden' : ''}>Subject / activity<select name="subject">${activities.map(a => `<option ${sel(a,state.planSubject)}>${escapeHtml(a)}</option>`).join('')}</select></label>
     <label data-plan-subject ${state.planMode === 'date' ? 'hidden' : ''}>From<input name="from" type="date" value="${state.planFrom}" required></label>
     <label data-plan-subject ${state.planMode === 'date' ? 'hidden' : ''}>To<input name="to" type="date" value="${state.planTo}" required></label><button>Show progress</button>
-    </form></section><section class="panel plan-progress"><h3>${state.planMode === 'date' ? formatLongDate(state.planDate) : escapeHtml(state.planSubject)}</h3><p>${blocks.filter(findStudyPlanLog).length} of ${blocks.length} blocks logged</p>
+    </form>${availabilityHtml(state.planMode,state.planDate,state.planSubject)}</section>${extraStudyHtml()}${state.planMode==='subject'?topicHistoryHtml(state.data.studyPlanLogs || [],state.planSubject):''}<section class="panel plan-progress"><h3>${state.planMode === 'date' ? formatLongDate(state.planDate) : escapeHtml(state.planSubject)}</h3><p>${blocks.filter(findStudyPlanLog).length} of ${blocks.length} blocks logged</p>
     <div class="plan-log-list">${blocks.map(studyPlanLogHtml).join('') || '<p>No planned blocks for this selection.</p>'}</div></section>`;
+}
+
+function extraStudyHtml() {
+  const x=state.extraBlock;
+  const alreadyListed=x && selectedPlanBlocks().some(b => b.date===x.date && b.from===x.from && b.to===x.to && b.activity===x.activity);
+  return `<details class="panel" ${x?'open':''}><summary>Log extra study</summary><form data-action="extra-block" class="form-grid">
+    <label>Date<input name="date" type="date" value="${state.planDate}" required></label>
+    <label>Area<select name="area">${STUDY_AREAS.map(a=>`<option ${sel(a,state.planSubject)}>${escapeHtml(a)}</option>`).join('')}</select></label>
+    <label>From<input name="from" type="time" required></label><label>To<input name="to" type="time" required></label><button>Open study block</button>
+    </form>${x ? alreadyListed ? '<p>This block is already listed below. Edit its existing entry.</p>' : studyPlanLogHtml(x) : ''}</details>`;
 }
 
 function selectedPlanBlocks() {
@@ -232,12 +247,12 @@ function selectedPlanBlocks() {
   for (let d = new Date(from+'T12:00:00'); dateInput(d) <= to; d.setDate(d.getDate()+1)) {
     const day = d.toLocaleDateString('en-GB',{weekday:'long'});
     for (const row of (['Saturday','Sunday'].includes(day) ? WEEKEND_TIMETABLE : WEEKDAY_TIMETABLE)) {
-      if (!row[day] || isRestActivity(row[day]) || (state.planMode === 'subject' && row[day] !== state.planSubject)) continue;
+      if (!row[day] || isRestActivity(row[day]) || (state.planMode === 'subject' && areaFor(row[day]) !== state.planSubject)) continue;
       blocks.push({date:dateInput(d),day,from:row.from,to:row.to,activity:row[day]});
     }
   }
   for (const log of state.data.studyPlanLogs || []) {
-    if (log.log_date < from || log.log_date > to || (state.planMode === 'subject' && log.planned_activity !== state.planSubject)) continue;
+    if (log.log_date < from || log.log_date > to || (state.planMode === 'subject' && areaFor(log.planned_activity) !== state.planSubject)) continue;
     if (!blocks.some(b => b.date === log.log_date && b.from === log.start_time.slice(0,5) && b.to === log.end_time.slice(0,5) && b.activity === log.planned_activity)) blocks.push({date:log.log_date,day:log.day_name,from:log.start_time.slice(0,5),to:log.end_time.slice(0,5),activity:log.planned_activity});
   }
   return blocks.sort((a,b) => (a.date+a.from).localeCompare(b.date+b.from));
@@ -252,12 +267,13 @@ function studyPlanLogHtml(block) {
     <input type="hidden" name="start_time" value="${block.from}">
     <input type="hidden" name="end_time" value="${block.to}">
     <input type="hidden" name="planned_activity" value="${escapeAttr(block.activity)}">
-    <div class="log-head"><div><b>${escapeHtml(block.activity)}</b><p>${formatLongDate(block.date)} · ${block.from}-${block.to}</p></div><label>RAG<select name="rag_status"><option value="">Unset</option><option value="green" ${sel(rag,'green')}>Green</option><option value="amber" ${sel(rag,'amber')}>Amber</option><option value="red" ${sel(rag,'red')}>Red</option></select></label></div>
-    <label>Learn<textarea name="topics_covered" placeholder="Topics covered">${escapeHtml(log?.topics_covered || '')}</textarea></label>
+    <div class="log-head"><div><b>${escapeHtml(displayActivity(block.activity))}</b><p>${formatLongDate(block.date)} · ${block.from}-${block.to}</p></div><label>RAG<select name="rag_status"><option value="">Unset</option><option value="green" ${sel(rag,'green')}>Green</option><option value="amber" ${sel(rag,'amber')}>Amber</option><option value="red" ${sel(rag,'red')}>Red</option></select></label></div>
+    ${richStudyFields(block.activity,log || {},state.data.tara.attempts,customTopicsFor(state.data.studyPlanLogs || [],areaFor(block.activity)))}
+    <details class="block-notes"><summary>Block notes / previous entries</summary><label>Learn<textarea name="topics_covered" placeholder="Topics covered">${escapeHtml(log?.topics_covered || '')}</textarea></label>
     <label>Practise<textarea name="topics_practised" placeholder="Questions, exercises or practice done">${escapeHtml(log?.topics_practised || '')}</textarea></label>
     <label>Assess<textarea name="topics_assessed" placeholder="Score, test result, timed attempt or self-check">${escapeHtml(log?.topics_assessed || '')}</textarea></label>
     <label>Reflect<textarea name="reflection" placeholder="What felt secure, what needs another pass?">${escapeHtml(log?.reflection || '')}</textarea></label>
-    <button>Save progress</button>
+    </details><button>Save progress</button><p class="form-status" aria-live="polite"></p>
   </form>`;
 }
 
@@ -327,7 +343,7 @@ function targetChipHtml(target) {
 }
 
 function timetableHtml(rows, days) {
-  return `<div class="timetable" style="--columns: 0.8fr repeat(${days.length}, minmax(112px, 1fr))"><div class="time-head">Time</div>${days.map((day) => `<div class="day-head">${day}</div>`).join('')}${rows.map((row) => `<div class="time-cell">${row.from}-${row.to}</div>${days.map((day) => `<div class="activity-cell ${activityClass(row[day])}"><span class="mobile-day">${day}</span>${escapeHtml(row[day] || '')}</div>`).join('')}`).join('')}</div>`;
+  return `<div class="timetable" style="--columns: 0.8fr repeat(${days.length}, minmax(112px, 1fr))"><div class="time-head">Time</div>${days.map((day) => `<div class="day-head">${day}</div>`).join('')}${rows.map((row) => `<div class="time-cell">${row.from}-${row.to}</div>${days.map((day) => `<div class="activity-cell ${activityClass(row[day])}"><span class="mobile-day">${day}</span>${escapeHtml(displayActivity(row[day] || ''))}</div>`).join('')}`).join('')}</div>`;
 }
 
 function activityClass(value) {
@@ -1265,7 +1281,10 @@ async function submitTara() {
   render();
 }
 
+app.addEventListener('input', event => handleStudyInput(event,state.data?.studyPlanLogs || []));
+
 app.addEventListener('click', async (event) => {
+  if(event.target.closest('[data-add-custom], [data-remove-topic]')) {handleStudyInput(event,state.data?.studyPlanLogs || []);return;}
   const target = event.target.closest('button');
   if (!target) return;
   if (target.dataset.schoolFile) {
@@ -1306,6 +1325,7 @@ app.addEventListener('click', async (event) => {
 });
 
 app.addEventListener('change', async (event) => {
+  handleStudyInput(event,state.data?.studyPlanLogs || []);
   if (event.target.name === 'mode' && event.target.form?.dataset.action === 'plan-filter') {
     const form = event.target.form;
     form.querySelector('[data-plan-date]').hidden = event.target.value === 'subject';
@@ -1378,7 +1398,15 @@ app.addEventListener('submit', async (event) => {
       if (values.from > values.to) throw new Error('End date must be after start date.');
       if ((new Date(values.to)-new Date(values.from))/86400000 > 366) throw new Error('Select up to one year at a time.');
       state.planMode=values.mode; state.planDate=values.date; state.planSubject=values.subject;
-      state.planFrom=values.from; state.planTo=values.to; render(); return;
+      state.planFrom=values.from; state.planTo=values.to; state.extraBlock=null; render(); return;
+    }
+    if (action === 'extra-block') {
+      if(!values.date || values.from>=values.to)throw new Error('Choose a date and an end time after the start time.');
+      state.extraBlock={date:values.date,day:new Date(values.date+'T12:00:00').toLocaleDateString('en-GB',{weekday:'long'}),from:values.from,to:values.to,activity:values.area};
+      state.planMode='date';state.planDate=values.date;
+      const same=selectedPlanBlocks().find(b=>b.date===values.date && b.from===values.from && b.to===values.to && areaFor(b.activity)===values.area);
+      if(same)state.extraBlock=same;
+      render();return;
     }
     if (action === 'school-filter') {state.schoolSubject=values.subject;state.schoolStatus=values.status;render();return;}
     if (button) button.disabled = true;
@@ -1407,7 +1435,18 @@ app.addEventListener('submit', async (event) => {
     if (action === 'save-review') await saveWeeklyReview(state.user, values);
     if (action === 'save-profile') await updateProfile(state.user, normalizeProfilePayload(values));
     if (action === 'save-error') await saveTaraErrorAnalysis(state.user, values);
-    if (action === 'save-study-log') await saveStudyPlanLog(state.user, values);
+    if (action === 'save-study-log') {
+      const details=collectStudyDetails(form);
+      await saveStudyPlanLog(state.user,{...values, ...(details ? {details} : {})});
+      state.data=await bootstrap(state.user);
+      const saved=(state.data.studyPlanLogs || []).find(l => l.log_date===values.log_date && l.start_time.slice(0,5)===values.start_time && l.end_time.slice(0,5)===values.end_time && l.planned_activity===values.planned_activity);
+      setFormStatus(form,'Progress saved.','success');
+      // Refresh summaries without discarding other blocks that are being edited.
+      const status=app.querySelector('.plan-progress > p');
+      if(status){const blocks=selectedPlanBlocks();status.textContent=blocks.filter(findStudyPlanLog).length+' of '+blocks.length+' blocks logged';}
+      if(saved)state.notice={type:'success',message:'Progress saved.'};
+      return;
+    }
     state.data = await bootstrap(state.user);
     form.reset();
     render();

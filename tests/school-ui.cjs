@@ -28,7 +28,7 @@ const names = [...dataSource.matchAll(/export (?:async )?function (\w+)/g)].map(
 const mockData = `const fixture=${JSON.stringify(fixture)};
  export async function getSession(){return {user:{id:'test-user',email:'student@example.test'}};}
  export async function bootstrap(){const data=structuredClone(fixture);const rows=JSON.parse(localStorage.getItem('test-tasks')||'[]');data.subjects.forEach(s=>s.academic_results=rows.filter(r=>r.subject_id===s.id));data.studyPlanLogs=JSON.parse(localStorage.getItem('test-logs')||'[]');return data;}
- export async function saveStudyPlanLog(user,row){const logs=JSON.parse(localStorage.getItem('test-logs')||'[]');logs.push(row);localStorage.setItem('test-logs',JSON.stringify(logs));}
+ export async function saveStudyPlanLog(user,row){const logs=JSON.parse(localStorage.getItem('test-logs')||'[]');const i=logs.findIndex(l=>l.log_date===row.log_date && l.start_time===row.start_time && l.end_time===row.end_time && l.planned_activity===row.planned_activity);if(i<0)logs.push(row);else logs[i]=row;localStorage.setItem('test-logs',JSON.stringify(logs));}
  ${names.filter(n=>!['getSession','bootstrap','saveStudyPlanLog'].includes(n)).map(n=>`export async function ${n}(){}`).join('\n')}`;
 (async()=>{
   await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
@@ -65,11 +65,47 @@ const mockData = `const fixture=${JSON.stringify(fixture)};
       let filter=page.locator('[data-action="plan-filter"]');
       await filter.locator('[name=date]').fill('2026-09-05');await filter.getByRole('button').click();
       assert.ok(await page.locator('[data-action="save-study-log"]').count()>0);
-      const log=page.locator('[data-action="save-study-log"]').first();await log.locator('[name=topics_covered]').fill('Quadratics');await log.getByRole('button').click();
+      const log=page.locator('[data-action="save-study-log"]').first();
+      await log.locator('.block-notes summary').click();await log.locator('[name=topics_covered]').fill('Quadratics');
+      await log.locator('.topic-picker > summary').click();
+      await log.locator('[data-topic-search]').fill('2.3');
+      await log.locator('[data-pick-topic="edexcel-9ma0-issue4:Pure:2.3"]').check();
+      const evidence=log.locator('[data-topic-id]').first();
+      await evidence.locator('[name=mode][value=practise]').check();
+      await evidence.locator('[name=attempted]').fill('8');await evidence.locator('[name=correct]').fill('6');
+      await log.locator('[data-topic-search]').fill('7.4');
+      await log.locator('[data-pick-topic="edexcel-9ma0-issue4:Pure:7.4"]').check();
+      await log.locator('[data-topic-id]').last().locator('[name=mode][value=learn]').check();
+      await evidence.scrollIntoViewIfNeeded();
+      assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
+      await page.screenshot({path:path.join(root,`../work/topic-evidence-${width}.png`),fullPage:false});
+      await log.getByRole('button',{name:'Save progress',exact:true}).click();
+      await log.getByText('Progress saved.',{exact:true}).waitFor();
+      assert.equal(await page.evaluate(()=>JSON.parse(localStorage.getItem('test-logs'))[0].details.entries.length),2);
       filter=page.locator('[data-action="plan-filter"]');await filter.locator('[name=mode]').selectOption('subject');await filter.locator('[name=subject]').selectOption('Maths');await filter.locator('[name=from]').fill('2026-09-01');await filter.locator('[name=to]').fill('2026-09-30');await filter.getByRole('button').click();
       assert.ok(await page.locator('[data-action="save-study-log"]').count()>4);
       assert.equal(await page.locator('[name=topics_covered]').first().inputValue(),'');
       assert.equal(await page.locator('[name=topics_covered]').evaluateAll(nodes=>nodes.some(n=>n.value==='Quadratics')),true);
+      assert.equal(await page.locator('[data-topic-id]').count(),2);
+      const history=page.locator('.topic-history');await history.locator('summary').click();await history.getByText(/6\/8 correct/).waitFor();
+      filter=page.locator('[data-action="plan-filter"]');await filter.locator('[name=subject]').selectOption('Super Curricular');await filter.getByRole('button').click();
+      const smc=page.locator('[data-action="save-study-log"]').first();
+      await smc.locator('[name=paper_year]').fill('2024');await smc.locator('[name=questions_completed]').fill('12');
+      await smc.getByRole('button',{name:'Save progress',exact:true}).click();await smc.getByText('Progress saved.',{exact:true}).waitFor();
+      await smc.locator('[name=activity_kind]').selectOption('Competition');await smc.locator('[name=activity_name]').fill('Essay competition');
+      await smc.getByRole('button',{name:'Save progress',exact:true}).click();
+      assert.equal(await page.evaluate(()=>JSON.parse(localStorage.getItem('test-logs')).find(l=>l.planned_activity==='SMC').details.paper_year),undefined);
+      filter=page.locator('[data-action="plan-filter"]');await filter.locator('[name=subject]').selectOption('Magazine');await filter.getByRole('button').click();
+      await page.getByText('No standing timetable slot',{exact:true}).waitFor();
+      await page.getByText('Log extra study',{exact:true}).click();
+      const extra=page.locator('[data-action="extra-block"]');await extra.locator('[name=from]').fill('15:30');await extra.locator('[name=to]').fill('15:45');await extra.getByRole('button').click();
+      const magazine=page.locator('[data-action="save-study-log"]').filter({has:page.locator('[data-rich-area="Magazine"]')});
+      await magazine.locator('[name=title]').fill('Economics article');await magazine.locator('[name=key_idea]').fill('Opportunity cost');await magazine.getByRole('button',{name:'Save progress',exact:true}).click();
+      await magazine.getByText('Progress saved.',{exact:true}).waitFor();
+      await page.reload();await page.getByRole('button',{name:'Plan Tracker',exact:true}).click();
+      filter=page.locator('[data-action="plan-filter"]');await filter.locator('[name=date]').fill('2026-09-05');await filter.getByRole('button').click();
+      assert.equal(await page.locator('[data-rich-area="Magazine"] [name=title]').inputValue(),'Economics article');
+      assert.equal(await page.locator('[data-topic-id]').count(),2);
       assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
       await page.screenshot({path:path.join(root,`../work/school-${width}.png`),fullPage:false});
       assert.deepEqual(errors,[]);

@@ -367,6 +367,7 @@ async function getTaraAnalytics(userId) {
 }
 
 export async function saveStudyPlanLog(user, payload) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(payload.log_date) || !/^\d{2}:\d{2}$/.test(payload.start_time) || !/^\d{2}:\d{2}$/.test(payload.end_time) || payload.start_time >= payload.end_time) throw new Error('Choose valid study block dates and times.');
   const row = {
     user_id: user.id,
     log_date: payload.log_date,
@@ -378,7 +379,8 @@ export async function saveStudyPlanLog(user, payload) {
     topics_practised: payload.topics_practised || null,
     topics_assessed: payload.topics_assessed || null,
     rag_status: payload.rag_status || null,
-    reflection: payload.reflection || null
+    reflection: payload.reflection || null,
+    ...(payload.details ? { details: payload.details } : {})
   };
   if (!supabase) {
     const db = readLocal();
@@ -395,7 +397,10 @@ export async function saveStudyPlanLog(user, payload) {
     .upsert(row, { onConflict: 'user_id,log_date,start_time,end_time,planned_activity' })
     .select()
     .single();
-  if (error) throw error;
+  if (error) {
+    if (['PGRST204','42703'].includes(error.code)) throw new Error('Structured study logs need the database update 007_study_block_details.sql. Your entry has not been saved; keep this form open until the update is run.');
+    throw error;
+  }
   return data;
 }
 
