@@ -112,10 +112,9 @@ function navButton(view, label) {
 
 function navigationHtml() {
   return `
-    ${navSection('Start', [['dashboard','Dashboard'], ['programme','Plan Tracker']])}
+    ${navSection('Dashboard', [['dashboard','Dashboard'], ['programme','Plan Tracker'], ['review','Weekly Review']])}
     ${navSection('Study', [['academics','A-Level Rigour'], ['tara','TARA Assessment']])}
     ${navSection('Analytics', [['readiness','Overall Analytics'], ['analytics','TARA Deep Dive']])}
-    ${navSection('Journey', [['milestones','Milestones'], ['interview','Interview'], ['review','Weekly Review']])}
     ${navSection('Account', [['parent','Parent View'], ['profile','Profile']])}`;
 }
 
@@ -130,8 +129,6 @@ function viewHtml() {
   if (state.view === 'academics') return academicsHtml();
 
   if (state.view === 'readiness') return readinessHtml();
-  if (state.view === 'milestones') return milestonesHtml();
-  if (state.view === 'interview') return interviewHtml();
   if (state.view === 'review') return weeklyReviewHtml();
   if (state.view === 'parent') return parentHtml();
   if (state.view === 'profile') return profileHtml();
@@ -255,7 +252,7 @@ function studyRhythmHtml() {
 }
 
 function studyPlanProgressHtml() {
-  const activities = [...STUDY_AREAS, 'Spillover'];
+  const activities = [...STUDY_AREAS, 'Buffer'];
   const blocks = selectedPlanBlocks();
   return `<section class="panel"><form data-action="plan-filter" class="form-grid">
     <label>View<select name="mode"><option value="date" ${sel(state.planMode,'date')}>By date</option><option value="subject" ${sel(state.planMode,'subject')}>By subject</option></select></label>

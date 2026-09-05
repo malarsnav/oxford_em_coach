@@ -5,14 +5,14 @@ export const STUDY_AREAS = ['Maths','Physics','Economics','History','AS-Further 
 const academic = ['Maths','Physics','Economics','History','AS-Further Maths'];
 const modes = ['learn','practise','assess','reflect'];
 const esc = v => String(v ?? '').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-export const areaFor = activity => activity === 'AS Maths' ? 'AS-Further Maths' : activity === 'Maths tuition' ? 'Maths' : ['SMC','Super-Curricular'].includes(activity) ? 'Super Curricular' : activity;
-export const displayActivity = activity => activity === 'AS Maths' ? 'AS-Further Maths' : activity === 'SMC' ? 'Super Curricular' : activity;
+export const areaFor = activity => activity === 'Spillover' ? 'Buffer' : activity === 'AS Maths' ? 'AS-Further Maths' : activity === 'Maths tuition' ? 'Maths' : ['SMC','Super-Curricular'].includes(activity) ? 'Super Curricular' : activity;
+export const displayActivity = activity => activity === 'Spillover' ? 'Buffer' : activity === 'AS Maths' ? 'AS-Further Maths' : activity === 'SMC' ? 'Super Curricular' : activity;
 export const logArea = log => log.details?.outcome==='skipped' ? null : areaFor(log.details?.actual_activity || log.planned_activity);
 
 export function deviationFields(block, log) {
   const d=log?.details || {}, outcome=d.outcome || 'followed';
   return `<label>What happened?<select data-plan-outcome name="plan_outcome">${[['followed','Followed plan'],['changed','Did something else'],['skipped','Skipped']].map(([v,l])=>`<option value="${v}" ${outcome===v?'selected':''}>${l}</option>`).join('')}</select></label>
-    <div data-actual-fields ${outcome!=='changed'?'hidden':''}><label>Actual subject / activity<select data-actual-area name="actual_activity">${[...STUDY_AREAS,'Spillover'].map(a=>`<option ${a===areaFor(d.actual_activity || block.activity)?'selected':''}>${a}</option>`).join('')}</select></label><div class="form-grid"><label>Actual start<input type="time" name="actual_from" value="${esc(d.actual_from || block.from)}"></label><label>Actual end<input type="time" name="actual_to" value="${esc(d.actual_to || block.to)}"></label></div></div>
+    <div data-actual-fields ${outcome!=='changed'?'hidden':''}><label>Actual subject / activity<select data-actual-area name="actual_activity">${[...STUDY_AREAS,'Buffer'].map(a=>`<option ${a===areaFor(d.actual_activity || block.activity)?'selected':''}>${a}</option>`).join('')}</select></label><div class="form-grid"><label>Actual start<input type="time" name="actual_from" value="${esc(d.actual_from || block.from)}"></label><label>Actual end<input type="time" name="actual_to" value="${esc(d.actual_to || block.to)}"></label></div></div>
     <label data-change-reason ${outcome==='followed'?'hidden':''}>Reason (optional)<input name="change_reason" value="${esc(d.change_reason)}"></label>`;
 }
 
@@ -85,6 +85,7 @@ function syllabusPickerHtml(area, scope, selected, paper = 'Core Pure') {
 
 export function richStudyFields(activity, log = {}, attempts = [], customTopics = [], schoolYear = 'Year 12') {
   const area = areaFor(activity), d=log.details || {};
+  if(area==='Buffer')return `<div class="rich-study" data-rich-area="Buffer">${textarea('work_done','What did you work on?',d.work_done)}</div>`;
   if (academic.includes(area)) {
     const selected = new Set((d.entries||[]).map(e=>e.id));
     const scope = d.syllabus_scope || (d.spec === 'edexcel-9ma0-issue4' || /13/.test(schoolYear) ? 'full' : 'as');
@@ -180,7 +181,7 @@ export function collectStudyDetails(form) {
     return {id:row.dataset.topicId,topic:row.dataset.topicName,label:row.dataset.subtopicName,ref:item?.ref||'',section:item?.section||'',spec:item?.spec || (item ? 'edexcel-9ma0-issue4' : null),focus:get(row,'focus'),modes:selected,attempted,correct,score,total,notes:get(row,'notes'),rag:get(row,'rag')};
   })};
   const d={version:1,area};
-  const fields = area==='Super Curricular'?['activity_kind','activity_name','paper_year','question_numbers','questions_completed','activity_score','activity_total','work_done','next_action']:area==='EPQ'?['project_title','project_stage','work_done','next_action']:area==='TARA'?['tara_attempt_id','work_done']:['title','section','key_idea'];
+  const fields = area==='Buffer'?['work_done']:area==='Super Curricular'?['activity_kind','activity_name','paper_year','question_numbers','questions_completed','activity_score','activity_total','work_done','next_action']:area==='EPQ'?['project_title','project_stage','work_done','next_action']:area==='TARA'?['tara_attempt_id','work_done']:['title','section','key_idea'];
   for(const key of fields)d[key]=get(container,key);
   if(area==='Super Curricular'){
     d.modes=[...container.querySelectorAll('[name="activity_mode"]:checked')].map(c=>c.value);
