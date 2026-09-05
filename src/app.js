@@ -272,7 +272,7 @@ function studyPlanProgressHtml() {
     <label data-plan-subject ${state.planMode === 'date' ? 'hidden' : ''}>Subject / activity<select name="subject">${activities.map(a => `<option ${sel(a,state.planSubject)}>${escapeHtml(a)}</option>`).join('')}</select></label>
     <label data-plan-subject ${state.planMode === 'date' ? 'hidden' : ''}>From<input name="from" type="date" value="${state.planFrom}" required></label>
     <label data-plan-subject ${state.planMode === 'date' ? 'hidden' : ''}>To<input name="to" type="date" value="${state.planTo}" required></label><button>Show progress</button>
-    </form>${state.planMode==='date'?`<div class="row"><button class="ghost" data-plan-shift="-1">Previous day</button><button class="ghost" data-plan-shift="today">Today</button><button class="ghost" data-plan-shift="1">Next day</button></div>`:''}</section><section class="panel plan-progress"><h3>${state.planMode === 'date' ? formatLongDate(state.planDate) : escapeHtml(state.planSubject)}</h3><p>${blocks.filter(findStudyPlanLog).length} of ${blocks.length} blocks logged</p>
+    </form>${state.planMode==='date'?`<div class="row"><button class="ghost" data-plan-shift="yesterday">Yesterday</button><button class="ghost" data-plan-shift="today">Today</button></div><div class="row"><button class="ghost" data-plan-shift="-1" title="One day before the selected date">Previous day</button><button class="ghost" data-plan-shift="1" title="One day after the selected date">Next day</button></div>`:''}</section><section class="panel plan-progress"><h3>${state.planMode === 'date' ? formatLongDate(state.planDate) : escapeHtml(state.planSubject)}</h3><p>${blocks.filter(findStudyPlanLog).length} of ${blocks.length} blocks logged</p>
     <div class="plan-log-list">${blocks.map(studyPlanBlockHtml).join('') || '<p>No planned blocks for this selection.</p>'}</div></section>${extraStudyHtml()}${state.planMode==='subject'?topicHistoryHtml(state.data.studyPlanLogs || [],state.planSubject):''}<details class="panel"><summary>Timetable and coverage</summary>${studyRhythmHtml()}${availabilityHtml(state.planMode,state.planDate,state.planSubject)}</details>`;
 }
 
@@ -1328,7 +1328,13 @@ app.addEventListener('click', async (event) => {
   const target = event.target.closest('button');
   if (!target) return;
   if(target.dataset.planMode){state.planMode=target.dataset.planMode;state.extraBlock=null;render();return;}
-  if(target.dataset.planShift){const date=new Date(state.planDate+'T12:00:00');date.setDate(date.getDate()+Number(target.dataset.planShift || 0));state.planDate=target.dataset.planShift==='today'?todayInput():dateInput(date);state.extraBlock=null;render();return;}
+  if(target.dataset.planShift){
+    const shift=target.dataset.planShift;
+    const relativeToToday=shift==='today'||shift==='yesterday';
+    const date=new Date((relativeToToday?todayInput():state.planDate)+'T12:00:00');
+    date.setDate(date.getDate()+(shift==='today'?0:shift==='yesterday'?-1:Number(shift)));
+    state.planDate=dateInput(date);state.extraBlock=null;render();return;
+  }
   if (target.hasAttribute('data-log-block')) {
     const [date,from,to,activity]=JSON.parse(target.dataset.logBlock);
     state.planMode='date';state.planDate=date;state.extraBlock=null;state.view='programme';render();

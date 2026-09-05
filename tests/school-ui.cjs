@@ -276,6 +276,12 @@ const mockData = `const fixture=${JSON.stringify(fixture)};
       assert.equal(await page.locator('[data-action="plan-filter"] [name=date]').inputValue(),'2026-09-06');
       await page.getByRole('button',{name:'Previous day',exact:true}).click();
       assert.equal(await page.locator('[data-action="plan-filter"] [name=date]').inputValue(),'2026-09-05');
+      await page.getByRole('button',{name:'Previous day',exact:true}).click();
+      assert.equal(await page.locator('[data-action="plan-filter"] [name=date]').inputValue(),'2026-09-04');
+      await page.getByRole('button',{name:'Yesterday',exact:true}).click();
+      assert.equal(await page.locator('[data-action="plan-filter"] [name=date]').inputValue(),'2026-09-05');
+      await page.getByRole('button',{name:'Yesterday',exact:true}).click();
+      assert.equal(await page.locator('[data-action="plan-filter"] [name=date]').inputValue(),'2026-09-05');
       await page.close();console.log(`School task save, upload, marking, refresh, date/subject tracker and layout passed at ${width}px (mock backend).`);
     }
   } finally {if(browser)await browser.close();server.close();}
