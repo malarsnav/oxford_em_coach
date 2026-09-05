@@ -23,16 +23,16 @@ const input = (name,label,value='',type='text') => `<label>${label}<input name="
 const textarea = (name,label,value='') => `<label>${label}<textarea name="${name}">${esc(value)}</textarea></label>`;
 
 export function evidenceRowHtml(entry) {
-  return `<fieldset class="topic-evidence" data-topic-id="${esc(entry.id)}" data-topic-name="${esc(entry.topic)}" data-subtopic-name="${esc(entry.label || '')}">
-    <legend>${esc(entry.topic)}${entry.ref ? ' · '+esc(entry.ref) : ''}</legend>
-    <p>${esc(entry.label || '')}</p>
+  return `<details class="topic-evidence" data-topic-id="${esc(entry.id)}" data-topic-name="${esc(entry.topic)}" data-subtopic-name="${esc(entry.label || '')}">
+    <summary>${esc(entry.topic)}${entry.label ? ' · '+esc(entry.label) : ''}</summary>
+    <p class="muted">Optional detail</p>
     ${input('focus','Specific skill / sub-topic (optional)',entry.focus)}
     <div class="mode-checks">${modes.map(mode=>`<label><input type="checkbox" name="mode" value="${mode}" ${(entry.modes||[]).includes(mode)?'checked':''}>${mode[0].toUpperCase()+mode.slice(1)}</label>`).join('')}</div>
     <div class="form-grid">${input('attempted','Questions attempted',entry.attempted,'number')}${input('correct','Correct answers',entry.correct,'number')}${input('score','Assessment marks',entry.score,'number')}${input('total','Total marks',entry.total,'number')}</div>
     ${textarea('notes','Evidence / reflection / next step',entry.notes)}
     <label>Topic RAG<select name="rag"><option value="">Unset</option>${['green','amber','red'].map(c=>`<option ${entry.rag===c?'selected':''}>${c}</option>`).join('')}</select></label>
     <button class="ghost" type="button" data-remove-topic>Remove topic</button>
-  </fieldset>`;
+  </details>`;
 }
 
 function syllabusPickerHtml(area, scope, selected) {
@@ -40,7 +40,7 @@ function syllabusPickerHtml(area, scope, selected) {
   if (!syllabus) return '';
   return `<p>${esc(syllabus.label)}${scope === 'as' ? ' · Year 12 / AS content' : area === 'Physics' ? ' · AS content supplied' : ' · Full supplied content'}</p>
     <label>Find a topic<input type="search" data-topic-search placeholder="Search topic or reference"></label>
-    ${syllabus.topics.map(g=>`<details data-topic-group><summary>${esc(g.section)} · ${esc(g.topic)}${g.level==='a_level'?' (A-level only)':''}</summary>${[syllabus.items.find(i=>i.id===g.id+':general'),...g.items].map(i=>`<label class="topic-choice" data-search-text="${esc((i.section+' '+i.topic+' '+i.ref+' '+i.label).toLowerCase())}"><input type="checkbox" data-pick-topic="${esc(i.id)}" ${selected.has(i.id)?'checked':''}>${esc(i.ref)} ${esc(i.label)}</label>`).join('')}</details>`).join('')}`;
+    ${syllabus.topics.map(g=>`<details data-topic-group><summary>${esc(g.topic)}${g.level==='a_level'?' (A-level only)':''}</summary>${[syllabus.items.find(i=>i.id===g.id+':general'),...g.items].map(i=>`<label class="topic-choice" data-search-text="${esc((i.section+' '+i.topic+' '+i.ref+' '+i.label).toLowerCase())}"><input type="checkbox" data-pick-topic="${esc(i.id)}" ${selected.has(i.id)?'checked':''}>${i.id.endsWith(':general')?'Whole topic / no specific sub-topic':esc(i.label)}</label>`).join('')}</details>`).join('')}`;
 }
 
 export function richStudyFields(activity, log = {}, attempts = [], customTopics = [], schoolYear = 'Year 12') {
@@ -49,13 +49,14 @@ export function richStudyFields(activity, log = {}, attempts = [], customTopics 
     const selected = new Set((d.entries||[]).map(e=>e.id));
     const scope = d.syllabus_scope || (d.spec === 'edexcel-9ma0-issue4' || /13/.test(schoolYear) ? 'full' : 'as');
     return `<div class="rich-study" data-rich-area="${esc(area)}">
-      <details class="topic-picker"><summary>Choose syllabus topics / sub-topics</summary>
-        <label>Content scope<select data-syllabus-scope><option value="as" ${scope==='as'?'selected':''}>Year 12 / AS</option><option value="full" ${scope==='full'?'selected':''}>All supplied content (including later A-level)</option></select></label>
+      <details class="topic-picker" open><summary>Which topics did you cover?</summary>
+        <details><summary>Change syllabus scope</summary><label>Content scope<select data-syllabus-scope><option value="as" ${scope==='as'?'selected':''}>Year 12 / AS</option><option value="full" ${scope==='full'?'selected':''}>All supplied content (including later A-level)</option></select></label></details>
         <div data-syllabus-picker>${syllabusPickerHtml(area,scope,selected)}</div>
       </details>
       <details><summary>Other / custom topic</summary>${input('custom_topic','Topic')}${input('custom_subtopic','Sub-topic (optional)')}<button type="button" class="ghost" data-add-custom>Add topic</button>
       ${customTopics.length ? `<label>Previously used<select data-reuse-topic><option value="">Choose a saved custom topic</option>${customTopics.map(e=>`<option value="${esc(e.id)}">${esc(e.topic)}${e.label?' / '+esc(e.label):''}</option>`).join('')}</select></label>`:''}</details>
-      <div data-topic-evidence>${(d.entries||[]).map(evidenceRowHtml).join('')}</div>
+      <details class="selected-topic-details"><summary>Selected topics / optional detail</summary><div data-topic-evidence>${(d.entries||[]).map(evidenceRowHtml).join('')}</div></details>
+      ${textarea('study_notes','Notes (optional)',d.study_notes)}
     </div>`;
   }
   if (area==='Super Curricular') return `<div class="rich-study" data-rich-area="${area}">
@@ -130,12 +131,11 @@ export function collectStudyDetails(form) {
     const n=Number(value);if(!Number.isFinite(n)||n<0||!Number.isInteger(n))throw new Error('Counts and marks must be whole numbers of zero or more.');return n;
   };
   const validateScore=(score,total)=>{if(score!==null&&(total===null||total<=0||score>total))throw new Error('Provide total marks greater than zero, with score no higher than the total.');};
-  if(academic.includes(area))return {version:1,area,syllabus_scope:container.querySelector('[data-syllabus-scope]')?.value || 'as',spec:syllabusFor(area,container.querySelector('[data-syllabus-scope]')?.value)?.id || null,entries:[...container.querySelectorAll('[data-topic-id]')].map(row=>{
+  if(academic.includes(area))return {version:1,area,study_notes:get(container,'study_notes'),syllabus_scope:container.querySelector('[data-syllabus-scope]')?.value || 'as',spec:syllabusFor(area,container.querySelector('[data-syllabus-scope]')?.value)?.id || null,entries:[...container.querySelectorAll('[data-topic-id]')].map(row=>{
     const item=SYLLABUS_ITEMS.find(i=>i.id===row.dataset.topicId);
     const attempted=number(row,'attempted'),correct=number(row,'correct'),score=number(row,'score'),total=number(row,'total');
     if(correct!==null&&(attempted===null||correct>attempted))throw new Error('Correct answers cannot exceed questions attempted.');validateScore(score,total);
     const selected=[...row.querySelectorAll('[name="mode"]:checked')].map(c=>c.value);
-    if(!selected.length)throw new Error('Choose Learn, Practise, Assess or Reflect for each selected topic.');
     return {id:row.dataset.topicId,topic:row.dataset.topicName,label:row.dataset.subtopicName,ref:item?.ref||'',section:item?.section||'',spec:item?.spec || (item ? 'edexcel-9ma0-issue4' : null),focus:get(row,'focus'),modes:selected,attempted,correct,score,total,notes:get(row,'notes'),rag:get(row,'rag')};
   })};
   const d={version:1,area};
