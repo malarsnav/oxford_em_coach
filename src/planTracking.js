@@ -96,7 +96,7 @@ export function richStudyFields(activity, log = {}, attempts = [], customTopics 
       </details>
       <details><summary>Other / custom topic</summary>${input('custom_topic','Topic')}${input('custom_subtopic','Sub-topic (optional)')}<button type="button" class="ghost" data-add-custom>Add topic</button>
       ${customTopics.length ? `<label>Previously used<select data-reuse-topic><option value="">Choose a saved custom topic</option>${customTopics.map(e=>`<option value="${esc(e.id)}">${esc(e.topic)}${e.label?' / '+esc(e.label):''}</option>`).join('')}</select></label>`:''}</details>
-      <details class="selected-topic-details"><summary>Selected topics / optional detail</summary><div data-topic-evidence>${(d.entries||[]).map(evidenceRowHtml).join('')}</div></details>
+      <details class="selected-topic-details" open><summary>Selected topics / optional detail</summary><div data-topic-evidence>${(d.entries||[]).map(evidenceRowHtml).join('')}</div></details>
       ${textarea('study_notes','Notes (optional)',d.study_notes)}
     </div>`;
   }

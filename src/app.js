@@ -248,7 +248,7 @@ function thinkingPillarHtml() {
 }
 
 function programmeHtml() {
-  return `<header class="top"><div><p class="eyebrow">Plan Tracker · ${escapeHtml(state.data.profile?.current_school_year || 'Year 12')}</p><h2>Progress by subject or date</h2></div></header>${noticeHtml()}<details class="panel"><summary>View standing timetable</summary>${studyRhythmHtml()}</details>${studyPlanProgressHtml()}`;
+  return `<header class="top"><div><p class="eyebrow">Plan Tracker · ${escapeHtml(state.data.profile?.current_school_year || 'Year 12')}</p><h2>Progress by subject or date</h2></div></header>${noticeHtml()}${studyPlanProgressHtml()}`;
 }
 
 function studyRhythmSummaryHtml() {
@@ -266,14 +266,14 @@ function studyRhythmHtml() {
 function studyPlanProgressHtml() {
   const activities = [...STUDY_AREAS, 'Buffer'];
   const blocks = selectedPlanBlocks();
-  return `<section class="panel"><form data-action="plan-filter" class="form-grid">
-    <label>View<select name="mode"><option value="date" ${sel(state.planMode,'date')}>By date</option><option value="subject" ${sel(state.planMode,'subject')}>By subject</option></select></label>
+  return `<section class="panel"><div class="row" role="group" aria-label="Tracker view"><button type="button" data-plan-mode="date" aria-pressed="${state.planMode==='date'}">By date</button><button type="button" data-plan-mode="subject" aria-pressed="${state.planMode==='subject'}">By subject</button></div><form data-action="plan-filter" class="form-grid">
+    <label hidden>View<select name="mode"><option value="date" ${sel(state.planMode,'date')}>By date</option><option value="subject" ${sel(state.planMode,'subject')}>By subject</option></select></label>
     <label data-plan-date ${state.planMode === 'subject' ? 'hidden' : ''}>Date<input name="date" type="date" value="${state.planDate}" required></label>
     <label data-plan-subject ${state.planMode === 'date' ? 'hidden' : ''}>Subject / activity<select name="subject">${activities.map(a => `<option ${sel(a,state.planSubject)}>${escapeHtml(a)}</option>`).join('')}</select></label>
     <label data-plan-subject ${state.planMode === 'date' ? 'hidden' : ''}>From<input name="from" type="date" value="${state.planFrom}" required></label>
     <label data-plan-subject ${state.planMode === 'date' ? 'hidden' : ''}>To<input name="to" type="date" value="${state.planTo}" required></label><button>Show progress</button>
-    </form>${availabilityHtml(state.planMode,state.planDate,state.planSubject)}</section>${extraStudyHtml()}${state.planMode==='subject'?topicHistoryHtml(state.data.studyPlanLogs || [],state.planSubject):''}<section class="panel plan-progress"><h3>${state.planMode === 'date' ? formatLongDate(state.planDate) : escapeHtml(state.planSubject)}</h3><p>${blocks.filter(findStudyPlanLog).length} of ${blocks.length} blocks logged</p>
-    <div class="plan-log-list">${blocks.map(studyPlanLogHtml).join('') || '<p>No planned blocks for this selection.</p>'}</div></section>`;
+    </form>${state.planMode==='date'?`<div class="row"><button class="ghost" data-plan-shift="-1">Previous day</button><button class="ghost" data-plan-shift="today">Today</button><button class="ghost" data-plan-shift="1">Next day</button></div>`:''}</section><section class="panel plan-progress"><h3>${state.planMode === 'date' ? formatLongDate(state.planDate) : escapeHtml(state.planSubject)}</h3><p>${blocks.filter(findStudyPlanLog).length} of ${blocks.length} blocks logged</p>
+    <div class="plan-log-list">${blocks.map(studyPlanBlockHtml).join('') || '<p>No planned blocks for this selection.</p>'}</div></section>${extraStudyHtml()}${state.planMode==='subject'?topicHistoryHtml(state.data.studyPlanLogs || [],state.planSubject):''}<details class="panel"><summary>Timetable and coverage</summary>${studyRhythmHtml()}${availabilityHtml(state.planMode,state.planDate,state.planSubject)}</details>`;
 }
 
 function extraStudyHtml() {
@@ -306,6 +306,17 @@ function selectedPlanBlocks() {
   return blocks.sort((a,b) => (a.date+a.from).localeCompare(b.date+b.from));
 }
 
+function blockSummaryHtml(block,log) {
+  const skipped=log?.details?.outcome==='skipped';
+  const topics=skipped?[]:[...new Set((log?.details?.entries || []).map(e=>e.topic))];
+  const status=skipped?'Skipped':log?'Logged':'Not logged';
+  return `<span><b>${escapeHtml(displayActivity(block.activity))}</b><small>${formatDate(block.date)} · ${block.from}-${block.to}</small>${topics.length?`<small>${escapeHtml(topics.slice(0,2).join(', '))}${topics.length>2?' +'+(topics.length-2):''}</small>`:''}</span><span><strong>${status}${!skipped&&log?.rag_status?' · '+escapeHtml(log.rag_status):''}</strong><small>${log?'Edit':'Log progress'}</small></span>`;
+}
+function studyPlanBlockHtml(block) {
+  const log=findStudyPlanLog(block);
+  return `<details class="tracker-block" data-block="${escapeAttr(JSON.stringify(block))}"><summary>${blockSummaryHtml(block,log)}</summary>${studyPlanLogHtml(block)}</details>`;
+}
+
 function studyPlanLogHtml(block) {
   const log = findStudyPlanLog(block);
   const rag = log?.rag_status || '';
@@ -315,7 +326,6 @@ function studyPlanLogHtml(block) {
     <input type="hidden" name="start_time" value="${block.from}">
     <input type="hidden" name="end_time" value="${block.to}">
     <input type="hidden" name="planned_activity" value="${escapeAttr(block.activity)}">
-    <div class="log-head"><div><b>${escapeHtml(displayActivity(block.activity))}</b><p>${formatLongDate(block.date)} · ${block.from}-${block.to}</p></div><label>RAG<select name="rag_status"><option value="">Unset</option><option value="green" ${sel(rag,'green')}>Green</option><option value="amber" ${sel(rag,'amber')}>Amber</option><option value="red" ${sel(rag,'red')}>Red</option></select></label></div>
     ${deviationFields(block,log)}
     <div data-actual-content data-area="${escapeAttr(logArea(log || {planned_activity:block.activity}) || areaFor(block.activity))}" data-original-details="${escapeAttr(JSON.stringify(log?.details || {}))}" ${log?.details?.outcome==='skipped'?'hidden':''}>
     ${richStudyFields(log?.details?.actual_activity || block.activity,log || {},state.data.tara.attempts,customTopicsFor(state.data.studyPlanLogs || [],logArea(log || {planned_activity:block.activity})),state.data.profile?.current_school_year || 'Year 12')}
@@ -324,7 +334,7 @@ function studyPlanLogHtml(block) {
     <label>Practise<textarea name="topics_practised" placeholder="Questions, exercises or practice done">${escapeHtml(log?.topics_practised || '')}</textarea></label>
     <label>Assess<textarea name="topics_assessed" placeholder="Score, test result, timed attempt or self-check">${escapeHtml(log?.topics_assessed || '')}</textarea></label>
     <label>Reflect<textarea name="reflection" placeholder="What felt secure, what needs another pass?">${escapeHtml(log?.reflection || '')}</textarea></label>
-    </details><button>Save progress</button><p class="form-status" aria-live="polite"></p>
+    </details><div class="tracker-save"><label>RAG<select name="rag_status"><option value="">Unset</option><option value="green" ${sel(rag,'green')}>Green</option><option value="amber" ${sel(rag,'amber')}>Amber</option><option value="red" ${sel(rag,'red')}>Red</option></select></label><button>Save progress</button></div><p class="form-status" aria-live="polite"></p>
   </form>`;
 }
 
@@ -1306,17 +1316,25 @@ async function submitTara() {
 }
 
 app.addEventListener('input', event => handleStudyInput(event,state.data?.studyPlanLogs || []));
+app.addEventListener('toggle', event => {
+  const block=event.target;
+  if(block.matches('.tracker-block') && block.open) app.querySelectorAll('.tracker-block[open]').forEach(other=>{if(other!==block)other.open=false;});
+},true);
 
 app.addEventListener('click', async (event) => {
+  const summary=event.target.closest('.tracker-block > summary');
+  if(summary)app.querySelectorAll('.tracker-block[open]').forEach(block=>{if(block!==summary.parentElement)block.open=false;});
   if(event.target.closest('[data-add-custom], [data-remove-topic]')) {handleStudyInput(event,state.data?.studyPlanLogs || []);return;}
   const target = event.target.closest('button');
   if (!target) return;
+  if(target.dataset.planMode){state.planMode=target.dataset.planMode;state.extraBlock=null;render();return;}
+  if(target.dataset.planShift){const date=new Date(state.planDate+'T12:00:00');date.setDate(date.getDate()+Number(target.dataset.planShift || 0));state.planDate=target.dataset.planShift==='today'?todayInput():dateInput(date);state.extraBlock=null;render();return;}
   if (target.hasAttribute('data-log-block')) {
     const [date,from,to,activity]=JSON.parse(target.dataset.logBlock);
     state.planMode='date';state.planDate=date;state.extraBlock=null;state.view='programme';render();
     const form=[...app.querySelectorAll('[data-action="save-study-log"]')].find(f=>f.elements.start_time.value===from && f.elements.end_time.value===to && f.elements.planned_activity.value===activity);
     // A topic's input named "focus" shadows HTMLFormElement.focus.
-    if(form){form.tabIndex=-1;HTMLElement.prototype.focus.call(form,{preventScroll:true});form.scrollIntoView({block:'start'});}
+    if(form){const block=form.closest('.tracker-block');if(block)block.open=true;form.tabIndex=-1;HTMLElement.prototype.focus.call(form,{preventScroll:true});form.scrollIntoView({block:'start'});}
     return;
   }
   if (target.hasAttribute('data-today-plan')) { state.planMode='date';state.planDate=state.reportDate || todayInput();state.extraBlock=null;state.view='programme';render();return; }
@@ -1450,7 +1468,9 @@ app.addEventListener('submit', async (event) => {
       state.planMode='date';state.planDate=values.date;
       const same=selectedPlanBlocks().find(b=>b.date===values.date && b.from===values.from && b.to===values.to && areaFor(b.activity)===values.area);
       if(same)state.extraBlock=same;
-      render();return;
+      render();
+      if(same){const block=[...app.querySelectorAll('.tracker-block')].find(el=>el.dataset.block===JSON.stringify(same));if(block){block.open=true;block.scrollIntoView({block:'start'});}}
+      return;
     }
     if (action === 'school-filter') {state.schoolSubject=values.subject;state.schoolStatus=values.status;render();return;}
     if (button) button.disabled = true;
@@ -1485,6 +1505,8 @@ app.addEventListener('submit', async (event) => {
       catch(error){state.refreshError='Progress saved, but the report refresh failed. Showing the previous report.';setFormStatus(form,'Progress saved, but the refreshed report could not be loaded. Use Refresh on the dashboard.','success');return;}
       const saved=(state.data.studyPlanLogs || []).find(l => l.log_date===values.log_date && l.start_time.slice(0,5)===values.start_time && l.end_time.slice(0,5)===values.end_time && l.planned_activity===values.planned_activity);
       if(saved)form.querySelector('[data-actual-content]').dataset.originalDetails=JSON.stringify(saved.details || {});
+      const block=form.closest('.tracker-block');
+      if(saved&&block)block.querySelector('summary').innerHTML=blockSummaryHtml(JSON.parse(block.dataset.block),saved);
       setFormStatus(form,'Progress saved.','success');
       // Refresh summaries without discarding other blocks that are being edited.
       const status=app.querySelector('.plan-progress > p');
