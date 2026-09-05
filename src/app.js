@@ -1,5 +1,4 @@
 import { bootstrap, getSession, signIn, signOut, saveAttempt, updateTask, createProgramme, addAcademicResult, updateSubject, addAcademicTopic, updateAcademicTopic, addJournalEntry, addReasoningSession, updateMilestone, addMilestone, saveWeeklyReview, addInterviewSession, updateProfile, saveTaraErrorAnalysis } from './dataService.js';
-import { questions } from './questions.js';
 import { questionBankManifest } from './questionBankManifest.generated.js';
 import { methodologyFor } from './methodologies.js';
 import { createProgrammeDraft } from './weeklyGeneratorService.js';
@@ -9,6 +8,8 @@ import { ALL_SUBTYPES, PROBLEM_SOLVING_TOPIC_TAGS, TOP_LEVEL_TYPES } from './tag
 import { READING_PLAN, WEEKDAY_TIMETABLE, WEEKEND_TIMETABLE, WEEKLY_TARGETS, taraHasNoScheduledTime, totalWeeklyTargetHours } from './studentStudyPlan.js';
 
 const app = document.querySelector('#app');
+let questions = [];
+let questionBankLoadPromise = null;
 const MAGIC_LINK_THROTTLE_MINUTES = 30;
 const MAGIC_LINK_THROTTLE_MS = MAGIC_LINK_THROTTLE_MINUTES * 60 * 1000;
 const magicLinkStorageKey = 'oxford-em-coach-magic-link-sends-v1';
@@ -37,6 +38,8 @@ const state = {
   reviewAttemptId: null,
   academicTopicFilter: 'all',
   journalMode: 'reading',
+  questionBankLoaded: false,
+  questionBankLoading: false,
   taraFilters: { year: 'all', family: 'all', type: 'all', topic: 'all', pattern: 'all' },
   preferences: { minutes: 180, workload: 'standard', schoolWeek: 'normal', priority: 'none' }
 };
@@ -60,7 +63,7 @@ async function init() {
 
 function renderError(error) {
   app.className = 'auth-screen';
-  app.innerHTML = `<main class="login"><section class="panel hero"><p class="eyebrow">Setup needed</p><h1>Supabase is connected, but the app could not load its tables.</h1><p>${escapeHtml(error.message || error)}</p><p class="callout">Run the SQL migration in Supabase SQL Editor, then refresh this page.</p><button onclick="location.reload()">Refresh</button></section></main>`;
+  app.innerHTML = `<main class="login"><section class="panel hero"><p class="eyebrow">Connection check</p><h1>The app opened, but Supabase did not respond.</h1><p>${escapeHtml(friendlyError(error))}</p><p class="callout">If your internet is fine, open the Supabase project once and confirm it is not paused. Then refresh this page.</p><button onclick="location.reload()">Refresh</button></section></main>`;
 }
 
 function render() {
@@ -187,7 +190,7 @@ function aLevelPillarHtml() {
 }
 
 function taraPillarHtml() {
-  return `<p class="metric">${state.data.tara.overallAccuracy}%</p><p>${state.data.tara.totalQuestions} questions answered · ${coveragePercent()}% bank covered</p><small>Weakest skill: ${escapeHtml(state.data.tara.weakestSubtype?.name || 'Not enough data')}</small>`;
+  return `<p class="metric">${state.data.tara.overallAccuracy}%</p><p>${state.data.tara.totalQuestions} questions answered · ${coveragePercent()}% bank covered</p><small>${questionBankStatusText()} · weakest skill: ${escapeHtml(state.data.tara.weakestSubtype?.name || 'Not enough data')}</small>`;
 }
 
 function supercurricularPillarHtml() {
@@ -284,7 +287,7 @@ function taskHtml(t) {
 }
 
 function taraHtml() {
-  if (!state.practice) return `<header class="top"><div><p class="eyebrow">TARA Assessment Practice</p><h2>5-question methodology set</h2><p class="muted">TARA/TSA-style practice is one of the four weekly indicators, alongside A-levels, super-curricular depth and reading/thinking readiness.</p></div><div class="actions"><button data-action="start-smart" title="Prioritise unseen questions, then weak questions">Smart coverage set</button><button class="ghost" data-action="start-tara" title="Start a filtered practice set using the filters below">Start filtered set</button></div></header>${noticeHtml()}${taraFilterHtml()}<section class="grid">${card('Question bank coverage', `${coveragePercent()}%`, `${answeredQuestionKeys().size}/${questions.length} questions seen at least once`)}${card('Current filter match', `${filteredQuestions().length}`, 'Questions available for the selected filters')}</section><section class="panel"><h3>How smart coverage works</h3><p class="muted">Smart coverage chooses unseen questions first, then questions from weak types and patterns, then mastered questions only when needed.</p></section>`;
+  if (!state.practice) return `<header class="top"><div><p class="eyebrow">TARA Assessment Practice</p><h2>5-question methodology set</h2><p class="muted">TARA/TSA-style practice is one of the four weekly indicators, alongside A-levels, super-curricular depth and reading/thinking readiness.</p></div><div class="actions"><button data-action="start-smart" title="Prioritise unseen questions, then weak questions">${state.questionBankLoading ? 'Loading question bank...' : 'Smart coverage set'}</button><button class="ghost" data-action="start-tara" title="Start a filtered practice set using the filters below">${state.questionBankLoading ? 'Loading...' : 'Start filtered set'}</button></div></header>${noticeHtml()}${taraFilterHtml()}<section class="grid">${card('Question bank coverage', `${coveragePercent()}%`, `${answeredQuestionKeys().size}/${questionBankManifest.totalQuestions} questions seen at least once`)}${card('Question bank', questionBankStatusText(), state.questionBankLoaded ? `${filteredQuestions().length} questions match current filters` : 'The full question bank loads only when TARA practice starts, making login and dashboard faster.')}</section><section class="panel"><h3>How smart coverage works</h3><p class="muted">Smart coverage chooses unseen questions first, then questions from weak types and patterns, then mastered questions only when needed.</p></section>`;
   if (state.practice.report) return reportHtml();
   const q = state.practice.set[state.practice.index];
   const selected = state.practice.answers[q.id];
@@ -939,7 +942,7 @@ function taraFilterHtml() {
 }
 
 function topicTagOptions() {
-  return unique([...PROBLEM_SOLVING_TOPIC_TAGS, ...questions.map((q) => q.topic_tag)]);
+  return unique([...PROBLEM_SOLVING_TOPIC_TAGS, ...questionBankManifest.topicTags, ...questions.map((q) => q.topic_tag)]);
 }
 
 function sessionHistoryHtml() {
@@ -988,7 +991,38 @@ function subjectSelect() {
   return `<select name="subject_id">${state.data.subjects.map((s)=>`<option value="${s.id}">${s.name}</option>`).join('')}</select>`;
 }
 
-function startTara() {
+async function ensureQuestionBankLoaded() {
+  if (state.questionBankLoaded && questions.length) return questions;
+  if (!questionBankLoadPromise) {
+    state.questionBankLoading = true;
+    render();
+    questionBankLoadPromise = import('./questions.js')
+      .then((module) => {
+        questions = module.questions;
+        state.questionBankLoaded = true;
+        return questions;
+      })
+      .finally(() => {
+        state.questionBankLoading = false;
+      });
+  }
+  try {
+    return await questionBankLoadPromise;
+  } catch (error) {
+    questionBankLoadPromise = null;
+    state.notice = { type: 'error', message: `Could not load the TARA question bank. ${friendlyError(error)}` };
+    throw error;
+  }
+}
+
+function questionBankStatusText() {
+  if (state.questionBankLoading) return 'Loading question bank';
+  if (state.questionBankLoaded) return `${questions.length} questions loaded`;
+  return `${questionBankManifest.totalQuestions} questions available`;
+}
+
+async function startTara() {
+  await ensureQuestionBankLoaded();
   syncTaraFiltersFromDom();
   const filtered = filteredQuestions();
   if (!filtered.length) {
@@ -1005,22 +1039,24 @@ function startTara() {
   state.view = 'tara';
 }
 
-function startSmartTara() {
+async function startSmartTara() {
+  await ensureQuestionBankLoaded();
   const pool = smartQuestionPool();
   state.practice = { set: pool.slice(0,5), index: 0, answers: {}, startedAt: new Date().toISOString(), report: false };
   state.view = 'tara';
 }
 
-function startRecommendedTara() {
+async function startRecommendedTara() {
   const weakSubtype = state.data.tara.weakestSubtype?.name;
   if (weakSubtype) {
     state.taraFilters = { ...state.taraFilters, type: weakSubtype, topic: 'all' };
     state.notice = { type: 'info', message: `Starting a focused set for ${weakSubtype}.` };
   }
-  startTara();
+  await startTara();
 }
 
-function startRetryTara() {
+async function startRetryTara() {
+  await ensureQuestionBankLoaded();
   const pool = missedQuestionPool();
   if (!pool.length) {
     state.notice = { type: 'info', message: 'No missed questions are available for retry yet.' };
@@ -1041,6 +1077,7 @@ function missedQuestionPool() {
 }
 
 function filteredQuestions() {
+  if (!questions.length) return [];
   return questions.filter((q) =>
     (state.taraFilters.year === 'all' || String(q.paper_year) === state.taraFilters.year) &&
     (state.taraFilters.family === 'all' || q.type === state.taraFilters.family) &&
@@ -1056,6 +1093,7 @@ function syncTaraFiltersFromDom() {
 }
 
 function smartQuestionPool() {
+  if (!questions.length) return [];
   const answered = answeredQuestionKeys();
   const weakType = state.data.tara.weakestType?.name;
   const weakPattern = state.data.tara.weakestSubtype?.name;
@@ -1093,13 +1131,23 @@ app.addEventListener('click', async (event) => {
   if (target.dataset.journalMode) { state.journalMode = target.dataset.journalMode; render(); return; }
   if (target.dataset.fillPrompt) { fillPrompt(target.dataset.fillPrompt, target.dataset.prompt); return; }
   if (target.dataset.removeDraft) { state.draft.tasks.splice(Number(target.dataset.removeDraft), 1); render(); return; }
-  if (target.dataset.reviewAttempt) { state.reviewAttemptId = target.dataset.reviewAttempt; state.view = 'analytics'; render(); return; }
+  if (target.dataset.reviewAttempt) {
+    try {
+      await ensureQuestionBankLoaded();
+      state.reviewAttemptId = target.dataset.reviewAttempt;
+      state.view = 'analytics';
+    } catch {
+      state.view = 'analytics';
+    }
+    render();
+    return;
+  }
   const action = target.dataset.action;
   if (action === 'signout') { await signOut(); location.reload(); }
-  if (action === 'start-tara') { startTara(); render(); }
-  if (action === 'start-smart') { startSmartTara(); render(); }
-  if (action === 'start-recommended-tara') { startRecommendedTara(); render(); }
-  if (action === 'start-retry-tara') { startRetryTara(); render(); }
+  if (action === 'start-tara') { try { await startTara(); } catch {} render(); }
+  if (action === 'start-smart') { try { await startSmartTara(); } catch {} render(); }
+  if (action === 'start-recommended-tara') { try { await startRecommendedTara(); } catch {} render(); }
+  if (action === 'start-retry-tara') { try { await startRetryTara(); } catch {} render(); }
   if (action === 'prev-question') { state.practice.index = Math.max(0, state.practice.index - 1); render(); }
   if (action === 'next-question') { state.practice.index = Math.min(state.practice.set.length - 1, state.practice.index + 1); render(); }
   if (action === 'submit-tara') await submitTara();
@@ -1182,7 +1230,14 @@ app.addEventListener('submit', async (event) => {
       return;
     }
     if (action === 'draft-programme') { state.preferences = values; state.draft = createProgrammeDraft(state.data, values); state.notice = null; render(); return; }
-    if (action === 'tara-filters') { state.taraFilters = values; state.notice = { type: 'success', message: `${filteredQuestions().length} questions match the selected filters.` }; render(); return; }
+    if (action === 'tara-filters') {
+      state.taraFilters = values;
+      state.notice = state.questionBankLoaded
+        ? { type: 'success', message: `${filteredQuestions().length} questions match the selected filters.` }
+        : { type: 'success', message: 'Filters saved. The full question bank will load when you start the set.' };
+      render();
+      return;
+    }
     if (button) button.disabled = true;
     if (action === 'update-subject') {
       const subject = findSubject(values.subject_id);
@@ -1398,7 +1453,7 @@ function normalizeProfilePayload(values) {
 function friendlyError(error) {
   const message = error?.message || String(error);
   if (message.toLowerCase().includes('rate limit')) return `Supabase email limit reached. Wait about 1 hour before trying again, or configure custom SMTP. The app now also avoids repeat magic-link requests inside ${MAGIC_LINK_THROTTLE_MINUTES} minutes on the same device.`;
-  if (message.toLowerCase().includes('failed to fetch')) return 'Could not reach Supabase. Check internet connection and try again.';
+  if (message.toLowerCase().includes('failed to fetch') || message.toLowerCase().includes('networkerror') || message.toLowerCase().includes('no such host')) return 'Could not reach Supabase. This can happen if the phone/browser network blocks Supabase, DNS is slow, the project is paused, or Supabase is temporarily unreachable. Check the project is awake in Supabase, then refresh on a stable network.';
   if (message.toLowerCase().includes('redirect')) return 'Sign-in redirect is not allowed yet. Check Supabase Authentication URL Configuration.';
   if (message.toLowerCase().includes('email')) return message;
   return `Something went wrong: ${message}`;
