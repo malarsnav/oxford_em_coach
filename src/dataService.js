@@ -27,7 +27,7 @@ export async function bootstrap(user) {
   await ensureProfile(user);
   await seedSubjects(user.id);
   await seedMilestones(user.id);
-  const [profile, tara, programme, subjects, journal, reasoning, milestones, weeklyReviews, interviews, parentStudents] = await Promise.all([
+  const [profile, tara, programme, subjects, journal, reasoning, milestones, weeklyReviews, interviews, studyPlanLogs, parentStudents] = await Promise.all([
     single('user_profiles', 'user_id', user.id),
     getTaraAnalytics(user.id),
     getCurrentProgramme(user.id),
@@ -37,9 +37,10 @@ export async function bootstrap(user) {
     list('milestones', user.id, 'target_date', true),
     list('weekly_reviews', user.id, 'week_start', false),
     list('interview_sessions', user.id, 'session_date', false),
+    optionalList('study_plan_logs', user.id, 'log_date', true),
     getParentStudentSummaries(user.id)
   ]);
-  return buildState({ profile, tara, programme, subjects, journal, reasoning, milestones, weeklyReviews, interviews, parentStudents });
+  return buildState({ profile, tara, programme, subjects, journal, reasoning, milestones, weeklyReviews, interviews, studyPlanLogs, parentStudents });
 }
 
 export async function saveAttempt(user, set, responses, startedAt) {
@@ -365,6 +366,43 @@ async function getTaraAnalytics(userId) {
   return summarizeTara(attempts || [], responses || [], errors || []);
 }
 
+export async function saveStudyPlanLog(user, payload) {
+  const row = {
+    user_id: user.id,
+    log_date: payload.log_date,
+    day_name: payload.day_name,
+    start_time: payload.start_time,
+    end_time: payload.end_time,
+    planned_activity: payload.planned_activity,
+    topics_covered: payload.topics_covered || null,
+    topics_practised: payload.topics_practised || null,
+    topics_assessed: payload.topics_assessed || null,
+    rag_status: payload.rag_status || null,
+    reflection: payload.reflection || null
+  };
+  if (!supabase) {
+    const db = readLocal();
+    const key = studyPlanLogKey(row);
+    const existingIndex = db.study_plan_logs.findIndex((item) => studyPlanLogKey(item) === key);
+    const saved = { ...row, id: db.study_plan_logs[existingIndex]?.id || crypto.randomUUID(), updated_at: new Date().toISOString() };
+    if (existingIndex === -1) db.study_plan_logs.push({ ...saved, created_at: new Date().toISOString() });
+    else db.study_plan_logs[existingIndex] = { ...db.study_plan_logs[existingIndex], ...saved };
+    writeLocal(db);
+    return saved;
+  }
+  const { data, error } = await supabase
+    .from('study_plan_logs')
+    .upsert(row, { onConflict: 'user_id,log_date,start_time,end_time,planned_activity' })
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+function studyPlanLogKey(row) {
+  return [row.user_id, row.log_date, row.start_time, row.end_time, row.planned_activity].join('|');
+}
+
 async function claimParentLinks() {
   if (!supabase) return;
   const { error } = await supabase.rpc('claim_parent_links');
@@ -463,6 +501,20 @@ async function list(table, userId, order, nullsFirst = false) {
   return data || [];
 }
 
+async function optionalList(table, userId, order, nullsFirst = false) {
+  const { data, error } = await supabase.from(table).select('*').eq('user_id', userId).order(order, { ascending: !nullsFirst });
+  if (error) {
+    if (isMissingOptionalTable(error, table)) return [];
+    throw error;
+  }
+  return data || [];
+}
+
+function isMissingOptionalTable(error, table) {
+  const message = error?.message || '';
+  return message.includes(table) || /schema cache|relation .* does not exist|Could not find the table/i.test(message);
+}
+
 function localBootstrap() {
   const db = readLocal();
   if (!db.subjects.length) seedLocal(db);
@@ -482,11 +534,12 @@ function localBootstrap() {
     reasoning: db.oxford_reasoning_sessions,
     milestones: db.milestones,
     weeklyReviews: db.weekly_reviews,
-    interviews: db.interview_sessions
+    interviews: db.interview_sessions,
+    studyPlanLogs: db.study_plan_logs
   }, user);
 }
 
-function buildState({ profile, tara, programme, subjects, journal, reasoning, milestones, weeklyReviews, interviews = [], parentStudents = [] }) {
+function buildState({ profile, tara, programme, subjects, journal, reasoning, milestones, weeklyReviews, interviews = [], studyPlanLogs = [], parentStudents = [] }) {
   const tasks = programme?.weekly_tasks || programme?.tasks || readLocal().weekly_tasks.filter((t) => t.programme_id === programme?.id);
   return {
     profile,
@@ -499,9 +552,10 @@ function buildState({ profile, tara, programme, subjects, journal, reasoning, mi
     milestones,
     weeklyReviews,
     interviews,
+    studyPlanLogs,
     parentStudents,
-    readiness: readiness({ tara, subjects, journal, reasoning, milestones, tasks }),
-    recommendations: recommendations({ tara, subjects, journal, tasks, milestones })
+    readiness: readiness({ tara, subjects, journal, reasoning, milestones, tasks, studyPlanLogs }),
+    recommendations: recommendations({ tara, subjects, journal, tasks, milestones, studyPlanLogs })
   };
 }
 
@@ -549,27 +603,32 @@ function typeAccuracy(rows, type) {
   return selected.length ? Math.round((selected.filter((r) => r.is_correct).length / selected.length) * 100) : 0;
 }
 
-function recommendations({ tara, subjects, journal, tasks }) {
+function recommendations({ tara, subjects, journal, tasks, studyPlanLogs = [] }) {
   const recs = [];
   if (tara.weakestSubtype && tara.weakestSubtype.total >= 3 && tara.weakestSubtype.accuracy < 65) recs.push(`TARA Assessment ${tara.weakestSubtype.name} is below 65%, so schedule two targeted 5-question sets and one methodology review.`);
   if (!journal.length || daysSince(journal[0].date_completed) >= 14) recs.push('No recent E&M journal entry in 14 days, so complete one CLAIM-MECHANISM-EVIDENCE-OBJECTION-RESPONSE entry.');
   const maths = subjects.find((s) => s.name === 'Mathematics');
   if (maths && maths.predicted_grade !== 'A*') recs.push('Maths is not yet predicted A*, so protect one high-priority quantitative revision block this week.');
   const completion = tasks.length ? tasks.filter((t) => t.status === 'completed').length / tasks.length : 1;
+  const redLogs = studyPlanLogs.filter((log) => log.rag_status === 'red');
+  const amberLogs = studyPlanLogs.filter((log) => log.rag_status === 'amber');
+  if (redLogs.length) recs.push(`${redLogs.length} study-plan block${redLogs.length === 1 ? '' : 's'} marked red. Use the next spillover slot for reteaching or slower practice.`);
+  if (!redLogs.length && amberLogs.length >= 3) recs.push(`${amberLogs.length} study-plan blocks are amber. Choose the most repeated topic and move it into deliberate practice.`);
   if (completion < 0.6) recs.push('Weekly completion is below 60%, so reduce next week’s workload and prioritise fewer high-value tasks.');
   return recs.slice(0, 4);
 }
 
-function readiness({ tara, subjects, journal, reasoning, milestones, tasks }) {
+function readiness({ tara, subjects, journal, reasoning, milestones, tasks, studyPlanLogs = [] }) {
   const academic = subjects.length ? Math.round(subjects.reduce((s, item) => s + (latestPercent(item) || 0), 0) / subjects.length) : 0;
   const taskCompletion = tasks.length ? Math.round((tasks.filter((t) => t.status === 'completed').length / tasks.length) * 100) : 0;
+  const planLogging = studyPlanLogs.length ? Math.min(100, studyPlanLogs.length * 4) : 0;
   const milestoneCompletion = milestones.length ? Math.round((milestones.filter((m) => m.status === 'completed').length / milestones.length) * 100) : 0;
   return {
     'Academic Strength': band(academic),
     'TARA Assessment Readiness': band(tara.overallAccuracy),
     'Supercurricular Depth': band(Math.min(100, journal.length * 18)),
     'Reading / Thinking Readiness': band(reasoning.length ? 45 : 0),
-    'Application Readiness': band(Math.max(taskCompletion, milestoneCompletion)),
+    'Application Readiness': band(Math.max(taskCompletion, milestoneCompletion, planLogging)),
     'Interview Readiness': band(reasoning.length && milestoneCompletion > 30 ? 45 : 0)
   };
 }
@@ -584,8 +643,9 @@ function band(score) {
 }
 
 function readLocal() {
-  const db = JSON.parse(localStorage.getItem(localKey) || '{"user_profiles":[],"attempts":[],"responses":[],"weekly_programmes":[],"weekly_tasks":[],"subjects":[],"academic_results":[],"academic_topics":[],"journal_entries":[],"oxford_reasoning_sessions":[],"milestones":[],"weekly_reviews":[],"interview_sessions":[],"tara_error_analysis":[]}');
+  const db = JSON.parse(localStorage.getItem(localKey) || '{"user_profiles":[],"attempts":[],"responses":[],"weekly_programmes":[],"weekly_tasks":[],"subjects":[],"academic_results":[],"academic_topics":[],"journal_entries":[],"oxford_reasoning_sessions":[],"milestones":[],"weekly_reviews":[],"interview_sessions":[],"tara_error_analysis":[],"study_plan_logs":[]}');
   db.user_profiles = (db.user_profiles || []).map((profile) => ({ parent_digest_enabled: false, parent_digest_time: '06:00', ...profile }));
+  db.study_plan_logs ||= [];
   return db;
 }
 

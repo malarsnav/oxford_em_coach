@@ -1,4 +1,4 @@
-import { bootstrap, getSession, signIn, signOut, saveAttempt, updateTask, createProgramme, addAcademicResult, updateSubject, addAcademicTopic, updateAcademicTopic, addJournalEntry, addReasoningSession, updateMilestone, addMilestone, saveWeeklyReview, addInterviewSession, updateProfile, saveTaraErrorAnalysis } from './dataService.js';
+import { bootstrap, getSession, signIn, signOut, saveAttempt, updateTask, createProgramme, addAcademicResult, updateSubject, addAcademicTopic, updateAcademicTopic, addJournalEntry, addReasoningSession, updateMilestone, addMilestone, saveWeeklyReview, addInterviewSession, updateProfile, saveTaraErrorAnalysis, saveStudyPlanLog } from './dataService.js';
 import { questionBankManifest } from './questionBankManifest.generated.js';
 import { methodologyFor } from './methodologies.js';
 import { createProgrammeDraft } from './weeklyGeneratorService.js';
@@ -106,7 +106,7 @@ function navButton(view, label) {
 
 function navigationHtml() {
   return `
-    ${navSection('Start', [['dashboard','Dashboard'], ['programme','Weekly Programme']])}
+    ${navSection('Start', [['dashboard','Dashboard'], ['programme','Plan Tracker']])}
     ${navSection('Four Pillars', [['academics','A-Level Rigour'], ['tara','TARA Assessment'], ['journal','Super-Curricular'], ['reasoning','Reading / Thinking']])}
     ${navSection('Analytics', [['readiness','Overall Analytics'], ['analytics','TARA Deep Dive']])}
     ${navSection('Journey', [['milestones','Milestones'], ['interview','Interview'], ['review','Weekly Review']])}
@@ -141,16 +141,16 @@ function dashboardHtml() {
   return `
     <header class="top">
       <div><p class="eyebrow">Oxford E&M Coaching Dashboard</p><h2>What needs attention now?</h2><p class="muted">Track four success indicators each week: A-levels, TARA Assessment, Super-Curricular depth, and Reading/Thinking Readiness.</p></div>
-      <button data-view="programme">Open Weekly Programme</button>
+      <button data-view="programme">Open Plan Tracker</button>
     </header>
     <section class="panel focus-card">
       <div>
         <p class="eyebrow">This Week</p>
-        <h3>${data.programme?.weekly_focus || 'No weekly programme yet'}</h3>
-        <p class="muted">${done}/${tasks.length} tasks completed · ${remaining.length} still open</p>
+        <h3>${studyPlanTodayTitle()}</h3>
+        <p class="muted">${studyPlanStats().logged}/${studyPlanStats().total} planned study blocks logged this week · ${studyPlanStats().red} red</p>
       </div>
-      <div class="bar"><span style="width:${percent(done, tasks.length)}%"></span></div>
-      <div class="next-actions">${remaining.slice(0,2).map((t) => `<article><b>${escapeHtml(t.title)}</b><small>${label(t.category)} · ${t.estimated_minutes || 0} min</small></article>`).join('') || '<p class="muted">Generate a programme to begin.</p>'}</div>
+      <div class="bar"><span style="width:${studyPlanStats().loggedPercent}%"></span></div>
+      <div class="next-actions">${nextStudyBlocks().slice(0,2).map((block) => `<article><b>${escapeHtml(block.activity)}</b><small>${block.day} · ${block.from}-${block.to}</small></article>`).join('') || '<p class="muted">No remaining study blocks today.</p>'}</div>
     </section>
     ${dashboardSignalsHtml()}
     ${studyRhythmSummaryHtml()}
@@ -164,14 +164,12 @@ function dashboardHtml() {
 }
 
 function dashboardSignalsHtml() {
-  const tasks = state.data.tasks || [];
-  const openHigh = tasks.filter((task) => task.priority === 'high' && !['completed', 'skipped'].includes(task.status));
-  const skipped = tasks.filter((task) => task.status === 'skipped');
+  const stats = studyPlanStats();
   const nextMilestone = nextOpenMilestone();
   const latestReview = recentRows(state.data.weeklyReviews || [], 'week_start')[0];
-  const improving = latestReview?.biggest_improvement || (state.data.tara.totalQuestions ? `TARA overall accuracy is ${state.data.tara.overallAccuracy}%.` : 'Start with one small win this week.');
+  const improving = latestReview?.biggest_improvement || (stats.green ? `${stats.green} study block${stats.green === 1 ? '' : 's'} marked green this week.` : 'Start with one logged study block this week.');
   return `<section class="signal-grid">
-    <article class="panel signal-card"><p class="eyebrow">Slipping</p><h3>${openHigh.length + skipped.length}</h3><p>${openHigh.length} high-priority open · ${skipped.length} skipped</p><small>${openHigh[0] ? escapeHtml(openHigh[0].title) : 'Nothing urgent is currently slipping.'}</small></article>
+    <article class="panel signal-card"><p class="eyebrow">Slipping</p><h3>${stats.amber + stats.red}</h3><p>${stats.amber} amber · ${stats.red} red</p><small>${stats.red ? 'Review the red blocks and use spillover deliberately.' : 'No red blocks logged this week.'}</small></article>
     <article class="panel signal-card"><p class="eyebrow">Improving</p><h3>Latest signal</h3><p>${escapeHtml(improving)}</p><small>Use Weekly Review to make this more precise.</small></article>
     <article class="panel signal-card"><p class="eyebrow">Next Deadline</p><h3>${nextMilestone ? formatDate(nextMilestone.target_date) : 'Unset'}</h3><p>${nextMilestone ? escapeHtml(nextMilestone.title) : 'Add Oxford and school milestones.'}</p><small>${nextMilestone ? `${daysUntil(nextMilestone.target_date)} days to go` : 'Milestones keep the plan time-aware.'}</small></article>
   </section>`;
@@ -206,19 +204,15 @@ function thinkingPillarHtml() {
 }
 
 function programmeHtml() {
-  const p = state.data.programme;
-  if (!p) return generatorHtml('No programme has been created for this week yet.');
-  const tasks = state.data.tasks;
-  const total = tasks.reduce((s,t)=>s+(t.estimated_minutes||0),0);
-  const completed = tasks.filter((t)=>t.status==='completed').reduce((s,t)=>s+(t.estimated_minutes||0),0);
+  const stats = studyPlanStats();
   return `
-    <header class="top"><div><p class="eyebrow">Weekly Programme</p><h2>${formatDate(p.week_start)} - ${formatDate(p.week_end)}</h2><p>${p.phase}: ${p.weekly_focus}</p></div><button data-action="show-generator">Generate Weekly Programme</button></header>
+    <header class="top"><div><p class="eyebrow">Plan Tracker</p><h2>${formatDate(currentWeek().week_start)} - ${formatDate(currentWeek().week_end)}</h2><p class="muted">The standing timetable is now the plan. The student records what was learnt, practised, assessed and reflected after each study block.</p></div></header>
     ${noticeHtml()}
-    <section class="panel"><h3>${percent(tasks.filter(t=>t.status==='completed').length,tasks.length)}% complete</h3><div class="bar"><span style="width:${percent(tasks.filter(t=>t.status==='completed').length,tasks.length)}%"></span></div><p>${completed}/${total} minutes completed. ${total-completed} minutes remaining.</p><p>${p.coach_summary || ''}</p>${allocationStripHtml(tasks)}</section>
+    <section class="grid six">${card('Blocks logged', `${stats.logged}/${stats.total}`, `${stats.loggedPercent}% of this week captured`)}${card('Green / Amber / Red', `${stats.green}/${stats.amber}/${stats.red}`, 'RAG is the weekly health signal.')}${card('Today', nextStudyBlocks().length, 'study blocks still to log today')}</section>
+    ${studyPlanProgressHtml()}
     ${studyRhythmHtml()}
     ${aLevelTopicPlanHtml()}
-    ${state.draft ? draftHtml() : ''}
-    <section class="grid">${groupTasks(tasks)}</section>`;
+    ${legacyProgrammeHtml()}`;
 }
 
 function generatorHtml(message='Generate a personalised weekly programme') {
@@ -237,7 +231,91 @@ function studyRhythmSummaryHtml() {
 }
 
 function studyRhythmHtml() {
-  return `<section class="panel study-rhythm"><div class="top mini"><div><p class="eyebrow">Standing Study Plan</p><h3>Weekday and weekend rhythm</h3><p class="muted">Use this as the fixed timetable. Weekly Programme tasks should sit inside the matching subject blocks, with spillover used only when needed.</p></div><span class="pill medium">${totalWeeklyTargetHours()}h/week</span></div><div class="target-strip">${WEEKLY_TARGETS.map(targetChipHtml).join('')}</div>${taraHasNoScheduledTime() ? '<p class="callout">Planning note: TARA has no standing slot yet. The weekly generator adds a small TARA task so the habit starts without disturbing the A-Level-heavy routine.</p>' : ''}<details><summary>Weekdays</summary>${timetableHtml(WEEKDAY_TIMETABLE, ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'])}</details><details><summary>Weekends</summary>${timetableHtml(WEEKEND_TIMETABLE, ['Saturday', 'Sunday'])}</details><details><summary>Reading plan</summary><div class="reading-plan">${READING_PLAN.map((item) => `<article><b>${escapeHtml(item.month)}</b><span>${escapeHtml(item.title)}</span></article>`).join('')}</div></details></section>`;
+  return `<section class="panel study-rhythm"><div class="top mini"><div><p class="eyebrow">Standing Study Plan</p><h3>Weekday and weekend rhythm</h3><p class="muted">Use this as the fixed timetable. Progress tracking happens against these blocks, with spillover used only when needed.</p></div><span class="pill medium">${totalWeeklyTargetHours()}h/week</span></div><div class="target-strip">${WEEKLY_TARGETS.map(targetChipHtml).join('')}</div>${taraHasNoScheduledTime() ? '<p class="callout">Planning note: TARA has no standing slot yet. The tracker highlights this so a light admissions-test habit can be added deliberately when ready.</p>' : ''}<details><summary>Weekdays</summary>${timetableHtml(WEEKDAY_TIMETABLE, ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'])}</details><details><summary>Weekends</summary>${timetableHtml(WEEKEND_TIMETABLE, ['Saturday', 'Sunday'])}</details><details><summary>Reading plan</summary><div class="reading-plan">${READING_PLAN.map((item) => `<article><b>${escapeHtml(item.month)}</b><span>${escapeHtml(item.title)}</span></article>`).join('')}</div></details></section>`;
+}
+
+function studyPlanProgressHtml() {
+  const blocks = plannedStudyBlocksForWeek();
+  return `<section class="panel plan-progress"><div class="top mini"><div><p class="eyebrow">Daily Progress Capture</p><h3>Learn · Practise · Assess · Reflect</h3><p class="muted">Save short notes after each planned block. RAG means Green = secure, Amber = needs another pass, Red = stuck or missed.</p></div></div><div class="plan-log-list">${blocks.map(studyPlanLogHtml).join('')}</div></section>`;
+}
+
+function studyPlanLogHtml(block) {
+  const log = findStudyPlanLog(block);
+  const rag = log?.rag_status || '';
+  return `<form class="study-log ${rag ? `rag-${rag}` : ''}" data-action="save-study-log">
+    <input type="hidden" name="log_date" value="${block.date}">
+    <input type="hidden" name="day_name" value="${block.day}">
+    <input type="hidden" name="start_time" value="${block.from}">
+    <input type="hidden" name="end_time" value="${block.to}">
+    <input type="hidden" name="planned_activity" value="${escapeAttr(block.activity)}">
+    <div class="log-head"><div><b>${escapeHtml(block.activity)}</b><p>${formatLongDate(block.date)} · ${block.from}-${block.to}</p></div><label>RAG<select name="rag_status"><option value="">Unset</option><option value="green" ${sel(rag,'green')}>Green</option><option value="amber" ${sel(rag,'amber')}>Amber</option><option value="red" ${sel(rag,'red')}>Red</option></select></label></div>
+    <label>Learn<textarea name="topics_covered" placeholder="Topics covered">${escapeHtml(log?.topics_covered || '')}</textarea></label>
+    <label>Practise<textarea name="topics_practised" placeholder="Questions, exercises or practice done">${escapeHtml(log?.topics_practised || '')}</textarea></label>
+    <label>Assess<textarea name="topics_assessed" placeholder="Score, test result, timed attempt or self-check">${escapeHtml(log?.topics_assessed || '')}</textarea></label>
+    <label>Reflect<textarea name="reflection" placeholder="What felt secure, what needs another pass?">${escapeHtml(log?.reflection || '')}</textarea></label>
+    <button>Save progress</button>
+  </form>`;
+}
+
+function plannedStudyBlocksForWeek() {
+  const week = currentWeek();
+  const start = new Date(`${week.week_start}T12:00:00`);
+  const blocks = [];
+  for (let offset = 0; offset < 7; offset += 1) {
+    const date = new Date(start);
+    date.setDate(start.getDate() + offset);
+    const day = date.toLocaleDateString(undefined, { weekday: 'long' });
+    const rows = day === 'Saturday' || day === 'Sunday' ? WEEKEND_TIMETABLE : WEEKDAY_TIMETABLE;
+    for (const row of rows) {
+      const activity = row[day];
+      if (!activity || isRestActivity(activity)) continue;
+      blocks.push({ date: dateInput(date), day, from: row.from, to: row.to, activity });
+    }
+  }
+  return blocks;
+}
+
+function findStudyPlanLog(block) {
+  return (state.data.studyPlanLogs || []).find((log) =>
+    log.log_date === block.date &&
+    log.start_time === block.from &&
+    log.end_time === block.to &&
+    log.planned_activity === block.activity
+  );
+}
+
+function studyPlanStats() {
+  const blocks = plannedStudyBlocksForWeek();
+  const logs = blocks.map(findStudyPlanLog).filter(Boolean);
+  return {
+    total: blocks.length,
+    logged: logs.length,
+    loggedPercent: percent(logs.length, blocks.length),
+    green: logs.filter((log) => log.rag_status === 'green').length,
+    amber: logs.filter((log) => log.rag_status === 'amber').length,
+    red: logs.filter((log) => log.rag_status === 'red').length
+  };
+}
+
+function nextStudyBlocks() {
+  const today = todayInput();
+  return plannedStudyBlocksForWeek().filter((block) => block.date === today && !findStudyPlanLog(block));
+}
+
+function studyPlanTodayTitle() {
+  const remaining = nextStudyBlocks();
+  if (!remaining.length) return 'Today is fully logged';
+  return `${remaining.length} study block${remaining.length === 1 ? '' : 's'} to log today`;
+}
+
+function isRestActivity(value) {
+  return ['break', 'breakfast', 'lunch', 'dinner'].includes(String(value || '').toLowerCase());
+}
+
+function legacyProgrammeHtml() {
+  const tasks = state.data.tasks || [];
+  if (!tasks.length) return '';
+  return `<details class="panel legacy-programme"><summary>Older generated tasks</summary><p class="muted">This section is kept only so any previous task history remains visible. New planning should use the fixed plan tracker above.</p><div class="grid">${groupTasks(tasks)}</div></details>`;
 }
 
 function targetChipHtml(target) {
@@ -683,15 +761,43 @@ function readinessHtml() {
 }
 
 function overallAnalyticsSummaryHtml() {
-  const tasks = state.data.tasks || [];
-  const missed = tasks.filter((task) => task.status === 'skipped').length;
-  const incompleteHigh = tasks.filter((task) => task.priority === 'high' && !['completed', 'skipped'].includes(task.status)).length;
-  return `<section class="grid six">${card('Weekly goals', `${percent(tasks.filter((task) => task.status === 'completed').length, tasks.length)}%`, `${missed} skipped · ${incompleteHigh} high-priority still open`)}${card('Growth focus', '', state.data.recommendations.slice(0, 2).join('<br>') || 'Complete more activity to generate growth focus.')}${card('Historical signal', `${state.data.weeklyReviews.length}`, 'weekly review records saved')}</section>`;
+  const stats = studyPlanStats();
+  return `<section class="grid six">${card('Plan logging', `${stats.loggedPercent}%`, `${stats.logged}/${stats.total} standing timetable blocks captured`)}${card('RAG health', `${stats.green}/${stats.amber}/${stats.red}`, 'green / amber / red this week')}${card('Growth focus', '', state.data.recommendations.slice(0, 2).join('<br>') || 'Complete more activity to generate growth focus.')}${card('Historical signal', `${state.data.weeklyReviews.length}`, 'weekly review records saved')}</section>`;
 }
 
 function pillarAnalyticsHtml() {
-  const rows = pillarRows(state.data.tasks || []);
-  return `<section class="panel"><div class="top mini"><div><p class="eyebrow">Four-Pillar Evidence</p><h3>Weekly balance and missed targets</h3></div><span class="pill medium">50 / 25 / 15 / 10</span></div><div class="pillar-analytics">${rows.map((row) => `<article><div><b>${row.name}</b><small>${row.completed}/${row.total} complete · ${row.minutes} min planned</small></div><div class="bar"><span style="width:${row.percent}%"></span></div></article>`).join('')}</div></section>`;
+  const rows = pillarLogRows();
+  return `<section class="panel"><div class="top mini"><div><p class="eyebrow">Four-Pillar Evidence</p><h3>Standing plan completion evidence</h3></div><span class="pill medium">RAG tracked</span></div><div class="pillar-analytics">${rows.map((row) => `<article><div><b>${row.name}</b><small>${row.logged}/${row.total} logged · ${row.green} green · ${row.red} red</small></div><div class="bar"><span style="width:${row.percent}%"></span></div></article>`).join('')}</div></section>`;
+}
+
+function pillarLogRows() {
+  const buckets = [
+    { key: 'a_level', name: 'A-Level Rigour' },
+    { key: 'tara', name: 'TARA Assessment' },
+    { key: 'supercurricular', name: 'Super-Curricular' },
+    { key: 'thinking', name: 'Reading / Thinking' }
+  ];
+  const blocks = plannedStudyBlocksForWeek();
+  return buckets.map((bucket) => {
+    const rows = blocks.filter((block) => pillarForActivity(block.activity) === bucket.key);
+    const logs = rows.map(findStudyPlanLog).filter(Boolean);
+    return {
+      ...bucket,
+      total: rows.length,
+      logged: logs.length,
+      green: logs.filter((log) => log.rag_status === 'green').length,
+      red: logs.filter((log) => log.rag_status === 'red').length,
+      percent: percent(logs.length, rows.length)
+    };
+  });
+}
+
+function pillarForActivity(activity) {
+  const text = String(activity || '').toLowerCase();
+  if (text.includes('tara')) return 'tara';
+  if (text.includes('epq') || text.includes('smc')) return 'supercurricular';
+  if (text.includes('book') || text.includes('spillover')) return 'thinking';
+  return 'a_level';
 }
 
 function readinessCardHtml(name, value) {
@@ -891,9 +997,9 @@ function recentRows(rows, dateField) {
 
 function parentHtml() {
   if (state.data.parentStudents?.length) return parentLinkedStudentsHtml();
-  const tasks = state.data.tasks || [];
+  const plan = studyPlanStats();
   const t = state.data.tara;
-  return `<header class="top"><div><p class="eyebrow">Parent / Coach View</p><h2>Progress summary without private reflections</h2></div></header><section class="grid six">${card('This week', `${percent(tasks.filter((task)=>task.status==='completed').length, tasks.length)}%`, `${tasks.filter((task)=>task.status !== 'completed').length} tasks still open`)}${card('TARA Assessment', `${t.overallAccuracy}%`, `Weakest sub-type: ${t.weakestSubtype?.name || 'Not enough data'}<br>Questions: ${t.totalQuestions}`)}${card('A-Level', '', state.data.subjects.map((s)=>`${s.name}: ${s.predicted_grade || 'Not set'}`).join('<br>'))}${card('E&M consistency', `${state.data.journal.length} entries`, state.data.journal[0]?.title || 'No journal entries yet')}${card('Milestones', `${state.data.milestones.filter((m)=>m.status==='completed').length}/${state.data.milestones.length}`, 'Completed admissions milestones')}${card('Recommendations', '', state.data.recommendations.slice(0,2).join('<br>') || 'No recommendation yet')}</section>${digestPreviewHtml()}<section class="panel"><h3>Privacy note</h3><p class="muted">This view deliberately summarises progress. Student reflections are not shown here by default.</p></section>`;
+  return `<header class="top"><div><p class="eyebrow">Parent / Coach View</p><h2>Progress summary without private reflections</h2></div></header><section class="grid six">${card('Plan tracking', `${plan.loggedPercent}%`, `${plan.logged}/${plan.total} blocks logged<br>${plan.green}/${plan.amber}/${plan.red} green/amber/red`)}${card('TARA Assessment', `${t.overallAccuracy}%`, `Weakest sub-type: ${t.weakestSubtype?.name || 'Not enough data'}<br>Questions: ${t.totalQuestions}`)}${card('A-Level', '', state.data.subjects.map((s)=>`${s.name}: ${s.predicted_grade || 'Not set'}`).join('<br>'))}${card('E&M consistency', `${state.data.journal.length} entries`, state.data.journal[0]?.title || 'No journal entries yet')}${card('Milestones', `${state.data.milestones.filter((m)=>m.status==='completed').length}/${state.data.milestones.length}`, 'Completed admissions milestones')}${card('Recommendations', '', state.data.recommendations.slice(0,2).join('<br>') || 'No recommendation yet')}</section>${digestPreviewHtml()}<section class="panel"><h3>Privacy note</h3><p class="muted">This view deliberately summarises progress. Student reflections are not shown here by default.</p></section>`;
 }
 
 function parentLinkedStudentsHtml() {
@@ -926,7 +1032,7 @@ function digestSummaryHtml(digest) {
   return `<div class="digest-grid">
     ${digestBlock('TARA Assessment', digest.tara.totalSets ? `${digest.tara.totalSets} set${digest.tara.totalSets === 1 ? '' : 's'} · ${digest.tara.correct}/${digest.tara.totalQuestions} correct · ${digest.tara.accuracy}%` : 'No TARA Assessment set completed.')}
     ${digestBlock('Weakest Sub-type', digest.tara.weakSubtypes[0] ? `${escapeHtml(digest.tara.weakSubtypes[0].name)} · ${digest.tara.weakSubtypes[0].accuracy}%` : 'No weak sub-type identified yesterday.')}
-    ${digestBlock('Weekly Programme', `${digest.weeklyProgramme.completedTasks.length} completed · ${digest.weeklyProgramme.skippedTasks.length} skipped · ${digest.weeklyProgramme.completedMinutes} minutes`)}
+    ${digestBlock('Plan Tracker', `${digest.studyPlan.logs.length} blocks logged · ${digest.studyPlan.green}/${digest.studyPlan.amber}/${digest.studyPlan.red} green/amber/red`)}
     ${digestBlock('Academics', digest.academics.length ? digest.academics.map((item) => `${escapeHtml(item.subject_name)}: ${escapeHtml(item.assessment_name || item.topic || 'assessment')} ${escapeHtml(item.percentage || '')}%`).join('<br>') : 'No academic result added.')}
     ${digestBlock('E&M / Reasoning', `${digest.journal.length} journal entr${digest.journal.length === 1 ? 'y' : 'ies'} · ${digest.reasoning.length} reasoning session${digest.reasoning.length === 1 ? '' : 's'}`)}
     ${digestBlock('Suggested Focus', digest.recommendations.map((item) => escapeHtml(item)).join('<br>') || 'Keep the current weekly programme moving.')}
@@ -1256,6 +1362,7 @@ app.addEventListener('submit', async (event) => {
     if (action === 'save-review') await saveWeeklyReview(state.user, values);
     if (action === 'save-profile') await updateProfile(state.user, normalizeProfilePayload(values));
     if (action === 'save-error') await saveTaraErrorAnalysis(state.user, values);
+    if (action === 'save-study-log') await saveStudyPlanLog(state.user, values);
     state.data = await bootstrap(state.user);
     form.reset();
     render();
@@ -1335,6 +1442,19 @@ function formatTime(value) {
 
 function todayInput() {
   return new Date().toISOString().slice(0, 10);
+}
+
+function dateInput(date) {
+  return new Date(date).toISOString().slice(0, 10);
+}
+
+function currentWeek() {
+  const start = new Date(`${todayInput()}T12:00:00`);
+  const day = start.getDay() || 7;
+  start.setDate(start.getDate() - day + 1);
+  const end = new Date(start);
+  end.setDate(start.getDate() + 6);
+  return { week_start: dateInput(start), week_end: dateInput(end) };
 }
 
 function weekStartDate() {
@@ -1453,6 +1573,7 @@ function normalizeProfilePayload(values) {
 function friendlyError(error) {
   const message = error?.message || String(error);
   if (message.toLowerCase().includes('rate limit')) return `Supabase email limit reached. Wait about 1 hour before trying again, or configure custom SMTP. The app now also avoids repeat magic-link requests inside ${MAGIC_LINK_THROTTLE_MINUTES} minutes on the same device.`;
+  if (message.includes('study_plan_logs') || message.toLowerCase().includes('could not find the table')) return 'The plan tracker needs the latest SQL migration. Run 005_study_plan_logs.sql in Supabase, then refresh.';
   if (message.toLowerCase().includes('failed to fetch') || message.toLowerCase().includes('networkerror') || message.toLowerCase().includes('no such host')) return 'Could not reach Supabase. This can happen if the phone/browser network blocks Supabase, DNS is slow, the project is paused, or Supabase is temporarily unreachable. Check the project is awake in Supabase, then refresh on a stable network.';
   if (message.toLowerCase().includes('redirect')) return 'Sign-in redirect is not allowed yet. Check Supabase Authentication URL Configuration.';
   if (message.toLowerCase().includes('email')) return message;

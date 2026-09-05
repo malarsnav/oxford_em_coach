@@ -9,15 +9,16 @@ export function buildDailyDigest(data, date = previousLocalDate()) {
   const academicResults = rowsForDate(flatResults(data.subjects || []), date, ['assessment_date', 'created_at']);
   const journalEntries = rowsForDate(data.journal || [], date, ['date_completed', 'created_at']);
   const reasoningSessions = rowsForDate(data.reasoning || [], date, ['date', 'created_at']);
+  const studyPlanLogs = (data.studyPlanLogs || []).filter((log) => log.log_date === date);
   const totalQuestions = responses.length;
   const correct = responses.filter((response) => response.is_correct).length;
   const weakTypes = weakestGroups(responses, 'question_type');
   const weakSubtypes = weakestGroups(responses, 'reasoning_pattern');
-  const recommendations = buildDigestRecommendations({ attempts, responses, weakSubtypes, completedTasks, skippedTasks, journalEntries, reasoningSessions, appRecommendations: data.recommendations || [] });
+  const recommendations = buildDigestRecommendations({ attempts, responses, weakSubtypes, completedTasks, skippedTasks, journalEntries, reasoningSessions, studyPlanLogs, appRecommendations: data.recommendations || [] });
 
   return {
     date,
-    hasActivity: Boolean(attempts.length || completedTasks.length || skippedTasks.length || academicResults.length || journalEntries.length || reasoningSessions.length),
+    hasActivity: Boolean(attempts.length || completedTasks.length || skippedTasks.length || academicResults.length || journalEntries.length || reasoningSessions.length || studyPlanLogs.length),
     tara: {
       attempts,
       totalSets: attempts.length,
@@ -31,6 +32,12 @@ export function buildDailyDigest(data, date = previousLocalDate()) {
       completedTasks,
       skippedTasks,
       completedMinutes: completedTasks.reduce((sum, task) => sum + Number(task.estimated_minutes || 0), 0)
+    },
+    studyPlan: {
+      logs: studyPlanLogs,
+      green: studyPlanLogs.filter((log) => log.rag_status === 'green').length,
+      amber: studyPlanLogs.filter((log) => log.rag_status === 'amber').length,
+      red: studyPlanLogs.filter((log) => log.rag_status === 'red').length
     },
     academics: academicResults,
     journal: journalEntries,
@@ -87,11 +94,13 @@ function weakestGroups(rows, key) {
     .slice(0, 3);
 }
 
-function buildDigestRecommendations({ attempts, responses, weakSubtypes, completedTasks, skippedTasks, journalEntries, reasoningSessions, appRecommendations }) {
+function buildDigestRecommendations({ attempts, responses, weakSubtypes, completedTasks, skippedTasks, journalEntries, reasoningSessions, studyPlanLogs, appRecommendations }) {
   const recs = [];
   if (attempts.length && weakSubtypes[0]?.accuracy < 70) recs.push(`Review ${weakSubtypes[0].name}: yesterday's accuracy was ${weakSubtypes[0].accuracy}%.`);
   if (responses.some((response) => !response.is_correct)) recs.push('Spend 10 minutes reviewing every missed TARA Assessment question before starting a new set.');
   if (skippedTasks.length) recs.push('Look at skipped weekly tasks and either reschedule or deliberately remove them from this week.');
+  if (studyPlanLogs.some((log) => log.rag_status === 'red')) recs.push('Review the red study-plan blocks and decide what needs reteaching, extra practice or spillover time.');
+  if (!studyPlanLogs.length) recs.push('No standing-plan blocks were logged yesterday, so capture Learn / Practise / Assess / RAG for the next study block.');
   if (!journalEntries.length && !reasoningSessions.length) recs.push('Add one short E&M journal or Oxford reasoning reflection today to keep depth building.');
   if (!completedTasks.length && !attempts.length) recs.push('Start with one small task today: either a 5-question TARA Assessment set or one high-priority weekly task.');
   return [...recs, ...appRecommendations].slice(0, 4);
