@@ -1,7 +1,6 @@
-import { bootstrap, getSession, signIn, signOut, saveAttempt, updateTask, createProgramme, addAcademicResult, updateSubject, addAcademicTopic, updateAcademicTopic, addJournalEntry, addReasoningSession, updateMilestone, addMilestone, saveWeeklyReview, addInterviewSession, updateProfile, saveTaraErrorAnalysis, saveStudyPlanLog } from './dataService.js';
+import { bootstrap, getSession, signIn, signOut, saveAttempt, updateTask, addAcademicResult, updateSubject, addAcademicTopic, updateAcademicTopic, addJournalEntry, addReasoningSession, updateMilestone, addMilestone, saveWeeklyReview, addInterviewSession, updateProfile, saveTaraErrorAnalysis, saveStudyPlanLog } from './dataService.js';
 import { questionBankManifest } from './questionBankManifest.generated.js';
 import { methodologyFor } from './methodologies.js';
-import { createProgrammeDraft } from './weeklyGeneratorService.js';
 import { buildDailyDigest, previousLocalDate } from './dailyDigestService.js';
 import { getAlevelTopicPlan } from './aLevelTopicPlan.js';
 import { ALL_SUBTYPES, PROBLEM_SOLVING_TOPIC_TAGS, TOP_LEVEL_TYPES } from './tagTaxonomy.js';
@@ -33,15 +32,13 @@ const state = {
   error: null,
   view: 'dashboard',
   practice: null,
-  draft: null,
   notice: null,
   reviewAttemptId: null,
   academicTopicFilter: 'all',
   journalMode: 'reading',
   questionBankLoaded: false,
   questionBankLoading: false,
-  taraFilters: { year: 'all', family: 'all', type: 'all', topic: 'all', pattern: 'all' },
-  preferences: { minutes: 180, workload: 'standard', schoolWeek: 'normal', priority: 'none' }
+  taraFilters: { year: 'all', family: 'all', type: 'all', topic: 'all', pattern: 'all' }
 };
 
 init();
@@ -215,16 +212,6 @@ function programmeHtml() {
     ${legacyProgrammeHtml()}`;
 }
 
-function generatorHtml(message='Generate a personalised weekly programme') {
-  return `<section class="panel"><h2>${message}</h2><p class="muted">The draft uses the Oxford E&M split: 50% A-Level Rigour, 25% TARA Assessment, 15% Super-Curricular, and 10% Reading/Thinking. It adapts around weak areas and open high-priority tasks, while respecting the standing weekday/weekend rhythm below.</p>${taraHasNoScheduledTime() ? '<p class="callout">Your standing plan currently gives TARA 0 hours. The generator will add one small protected TARA block so admissions-test practice does not disappear.</p>' : ''}<form data-action="draft-programme" class="form-grid">
-    <label>Available minutes<input name="minutes" type="number" value="${state.preferences.minutes}"></label>
-    <label>Workload<select name="workload"><option value="light">Light</option><option value="standard" selected>Standard</option><option value="intensive">Intensive</option></select></label>
-    <label>School week<select name="schoolWeek"><option value="normal">Normal</option><option value="exam">Exam-heavy</option><option value="holiday">Holiday</option></select></label>
-    <label>Priority<select name="priority"><option value="none">No preference</option><option value="tara">More admissions-test practice</option><option value="economics">More Economics</option><option value="management">More Management</option><option value="a_level">More A-Level</option><option value="oxford_reasoning">More Oxford Reasoning</option><option value="application">More Application/Interview</option></select></label>
-    <button>Generate draft</button>
-  </form></section>${studyRhythmHtml()}${aLevelTopicPlanHtml()}${state.draft ? draftHtml() : ''}`;
-}
-
 function studyRhythmSummaryHtml() {
   const taraTarget = WEEKLY_TARGETS.find((target) => target.name === 'TARA');
   return `<section class="panel rhythm-summary"><div class="top mini"><div><p class="eyebrow">Personal Study Rhythm</p><h3>${totalWeeklyTargetHours()} hours planned each week</h3></div><button class="ghost" data-view="programme" title="Open the full weekly timetable">View timetable</button></div><div class="target-strip">${WEEKLY_TARGETS.slice(0, 6).map(targetChipHtml).join('')}</div>${taraTarget?.hours === 0 ? '<p class="callout">TARA is currently set to 0 hours in the standing plan. Keep it light for now, but protect at least one short practice block each week.</p>' : ''}</section>`;
@@ -341,11 +328,6 @@ function activityClass(value) {
 function aLevelTopicPlanHtml() {
   const topics = getAlevelTopicPlan(state.data);
   return `<section class="panel topic-plan"><div class="top mini"><div><p class="eyebrow">A-Level Topics To Master</p><h3>This week's academic focus</h3></div><span class="pill high">${topics.length} topics</span></div><div class="topic-list">${topics.map((item) => `<article><b>${escapeHtml(item.subject)}</b><p>${escapeHtml(item.topic)}</p><small>${escapeHtml(item.reason)}</small></article>`).join('')}</div></section>`;
-}
-
-function draftHtml() {
-  const minutes = state.draft.tasks.reduce((sum, task) => sum + Number(task.estimated_minutes || 0), 0);
-  return `<section class="panel draft"><div class="top mini"><div><h3>Draft programme review</h3><p>${state.draft.programme.weekly_focus}</p></div><span class="pill success">${minutes} min</span></div>${state.draft.tasks.map((t,i)=>`<article class="task"><input data-draft="${i}" data-field="title" value="${escapeAttr(t.title)}"><textarea data-draft="${i}" data-field="description">${t.description}</textarea>${t.recommendation_reason ? `<p class="why"><b>Why this task:</b> ${escapeHtml(t.recommendation_reason)}</p>` : ''}<div class="row"><input data-draft="${i}" data-field="estimated_minutes" type="number" value="${t.estimated_minutes}"><select data-draft="${i}" data-field="priority"><option ${sel(t.priority,'high')}>high</option><option ${sel(t.priority,'medium')}>medium</option><option ${sel(t.priority,'low')}>low</option></select><button data-remove-draft="${i}" class="ghost">Remove</button></div></article>`).join('')}<div class="actions"><button data-action="accept-draft">Accept programme</button><button class="ghost" data-action="draft-programme">Regenerate</button></div></section>`;
 }
 
 function noticeHtml() {
@@ -1236,7 +1218,6 @@ app.addEventListener('click', async (event) => {
   if (target.dataset.topicFilter) { state.academicTopicFilter = target.dataset.topicFilter; render(); return; }
   if (target.dataset.journalMode) { state.journalMode = target.dataset.journalMode; render(); return; }
   if (target.dataset.fillPrompt) { fillPrompt(target.dataset.fillPrompt, target.dataset.prompt); return; }
-  if (target.dataset.removeDraft) { state.draft.tasks.splice(Number(target.dataset.removeDraft), 1); render(); return; }
   if (target.dataset.reviewAttempt) {
     try {
       await ensureQuestionBankLoaded();
@@ -1258,22 +1239,6 @@ app.addEventListener('click', async (event) => {
   if (action === 'next-question') { state.practice.index = Math.min(state.practice.set.length - 1, state.practice.index + 1); render(); }
   if (action === 'submit-tara') await submitTara();
   if (action === 'close-review') { state.reviewAttemptId = null; render(); }
-  if (action === 'show-generator') { state.draft = null; state.view = 'programme'; app.querySelector('.main').insertAdjacentHTML('afterbegin', generatorHtml()); }
-  if (action === 'accept-draft') {
-    if (state.data.programme && !confirm('Archive the current active programme and replace it with this draft? Completed historical data will be preserved.')) return;
-    target.disabled = true;
-    target.textContent = 'Saving programme...';
-    try {
-      await createProgramme(state.user, state.draft, Boolean(state.data.programme));
-      state.draft = null;
-      state.data = await bootstrap(state.user);
-      state.notice = { type: 'success', message: 'Programme saved. Your active weekly programme has been updated with the new tasks.' };
-      render();
-    } catch (error) {
-      state.notice = { type: 'error', message: friendlyError(error) };
-      render();
-    }
-  }
 });
 
 app.addEventListener('change', async (event) => {
@@ -1294,9 +1259,6 @@ app.addEventListener('change', async (event) => {
     await updateAcademicTopic(state.user, topic, { confidence: event.target.value });
     state.data = await bootstrap(state.user);
     render();
-  }
-  if (event.target.dataset.draft) {
-    state.draft.tasks[Number(event.target.dataset.draft)][event.target.dataset.field] = event.target.type === 'number' ? Number(event.target.value) : event.target.value;
   }
 });
 
@@ -1335,7 +1297,6 @@ app.addEventListener('submit', async (event) => {
       setFormStatus(form, `Magic link sent to ${email}. Check inbox and spam/junk.`, 'success');
       return;
     }
-    if (action === 'draft-programme') { state.preferences = values; state.draft = createProgrammeDraft(state.data, values); state.notice = null; render(); return; }
     if (action === 'tara-filters') {
       state.taraFilters = values;
       state.notice = state.questionBankLoaded
