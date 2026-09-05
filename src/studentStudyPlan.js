@@ -25,6 +25,18 @@ export const WEEKEND_TIMETABLE = [
   { from: '20:45', to: '21:45', Saturday: 'Spillover', Sunday: 'Spillover' }
 ];
 
+// Effective dates are local calendar dates, not device first-visit timestamps.
+// Append a new snapshot for future timetable changes; never edit a historical version.
+export const STUDY_PLAN_VERSIONS = [{
+  effectiveFrom: '2026-09-05',
+  weekdays: WEEKDAY_TIMETABLE.map(row => ({...row})),
+  weekends: WEEKEND_TIMETABLE.map(row => ({...row}))
+}];
+export const TRACKING_START_DATE = STUDY_PLAN_VERSIONS[0].effectiveFrom;
+export function studyPlanForDate(date) {
+  return [...STUDY_PLAN_VERSIONS].reverse().find(plan => plan.effectiveFrom <= date);
+}
+
 export const WEEKLY_TARGETS = [
   { name: 'Maths', hours: 5, pillar: 'A-Level Rigour' },
   { name: 'Physics', hours: 6, pillar: 'A-Level Rigour' },

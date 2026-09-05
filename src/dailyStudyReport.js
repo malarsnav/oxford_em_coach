@@ -1,4 +1,4 @@
-import { WEEKDAY_TIMETABLE, WEEKEND_TIMETABLE } from './studentStudyPlan.js';
+import { TRACKING_START_DATE, studyPlanForDate } from './studentStudyPlan.js';
 import { areaFor, logArea } from './planTracking.js';
 
 export function weeklyStudyReport(logs = [], now = new Date(), selectedDate) {
@@ -9,13 +9,14 @@ export function weeklyStudyReport(logs = [], now = new Date(), selectedDate) {
     const key = `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`;
     return dailyStudyReport(logs,now,key);
   });
-  const sum = field => days.reduce((total,day)=>total+day[field],0);
+  const sum = field => days.filter(day=>day.trackingStarted).reduce((total,day)=>total+day[field],0);
   const subjects = new Map();
   const subject = name => {
     if(!subjects.has(name)) subjects.set(name,{name,planned:0,logged:0,actual:0,missed:0});
     return subjects.get(name);
   };
   days.forEach(day=>{
+    if(!day.trackingStarted) return;
     day.blocks.forEach(block=>{
       const row=subject(areaFor(block.activity)); row.planned++;
       if(block.log) row.logged++;
@@ -26,10 +27,10 @@ export function weeklyStudyReport(logs = [], now = new Date(), selectedDate) {
     });
   });
   const total=sum('total'),logged=sum('logged');
-  return {start:days[0].date,end:days[6].date,days,subjects:[...subjects.values()],total,logged,
+  return {start:days[0].date,end:days[6].date,trackingStart:TRACKING_START_DATE,partial:days[0].date<TRACKING_START_DATE && days[6].date>=TRACKING_START_DATE,days,subjects:[...subjects.values()],total,logged,
     percent:total?Math.round(100*logged/total):0,missed:sum('overdue'),upcoming:sum('upcoming'),
     followed:sum('followed'),changed:sum('changed'),skipped:sum('skipped'),
-    green:sum('green'),amber:sum('amber'),red:sum('red'),extra:days.reduce((n,d)=>n+d.extra.length,0)};
+    green:sum('green'),amber:sum('amber'),red:sum('red'),extra:days.filter(d=>d.trackingStarted).reduce((n,d)=>n+d.extra.length,0)};
 }
 
 export function dailyStudyReport(logs = [], now = new Date(), selectedDate) {
@@ -40,7 +41,8 @@ export function dailyStudyReport(logs = [], now = new Date(), selectedDate) {
   const clock = date<today?1440:date>today?-1:now.getHours()*60+now.getMinutes();
   const key = (from,to,activity) => JSON.stringify([from.slice(0,5),to.slice(0,5),activity]);
   const todayLogs = [...new Map(logs.filter(l=>l.log_date===date).map(l=>[key(l.start_time,l.end_time,l.planned_activity),l])).values()];
-  const rows = ['Saturday','Sunday'].includes(day)?WEEKEND_TIMETABLE:WEEKDAY_TIMETABLE;
+  const plan = studyPlanForDate(date);
+  const rows = plan ? (['Saturday','Sunday'].includes(day)?plan.weekends:plan.weekdays) : [];
   const blocks = rows.filter(r=>r[day]&&!['break','breakfast','lunch','dinner'].includes(r[day].toLowerCase())).map(r=>{
     const log=todayLogs.find(l=>key(l.start_time,l.end_time,l.planned_activity)===key(r.from,r.to,r[day]));
     return {date,activity:r[day],from:r.from,to:r.to,log,minutes:minutes(r.to)-minutes(r.from),
@@ -48,7 +50,7 @@ export function dailyStudyReport(logs = [], now = new Date(), selectedDate) {
   });
   const extra=todayLogs.filter(l=>!blocks.some(b=>key(b.from,b.to,b.activity)===key(l.start_time,l.end_time,l.planned_activity)));
   const logged=blocks.filter(b=>b.log).length;
-  return {date,blocks,extra,logged,total:blocks.length,percent:blocks.length?Math.round(100*logged/blocks.length):0,
+  return {date,trackingStarted:!!plan,trackingStart:TRACKING_START_DATE,blocks,extra,logged,total:blocks.length,percent:blocks.length?Math.round(100*logged/blocks.length):0,
     overdue:blocks.filter(b=>b.status==='Not logged').length,
     upcoming:blocks.filter(b=>b.status==='Upcoming').length,
     plannedMinutes:blocks.reduce((sum,b)=>sum+b.minutes,0),

@@ -1481,3 +1481,5 @@ button:disabled {
 .report-controls p { font-size:13px; margin:10px 0 0; overflow-wrap:anywhere; }
  .weekly-block { padding: 12px; border: 1px solid #d9e2e5; border-radius: 6px; overflow-wrap: anywhere; }
  .weekly-report summary { line-height: 1.6; overflow-wrap: anywhere; }
+ .focus-card p { margin-block: 8px; }
+ .report-controls p[role="status"] { font-size: 0.8rem; margin-block: 8px; }

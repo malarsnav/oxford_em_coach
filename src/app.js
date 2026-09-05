@@ -8,7 +8,7 @@ import { methodologyFor } from './methodologies.js';
 import { buildDailyDigest, previousLocalDate } from './dailyDigestService.js';
 import { getAlevelTopicPlan } from './aLevelTopicPlan.js';
 import { ALL_SUBTYPES, PROBLEM_SOLVING_TOPIC_TAGS, TOP_LEVEL_TYPES } from './tagTaxonomy.js';
-import { READING_PLAN, WEEKDAY_TIMETABLE, WEEKEND_TIMETABLE, WEEKLY_TARGETS, taraHasNoScheduledTime, totalWeeklyTargetHours } from './studentStudyPlan.js';
+import { READING_PLAN, WEEKDAY_TIMETABLE, WEEKEND_TIMETABLE, WEEKLY_TARGETS, taraHasNoScheduledTime, totalWeeklyTargetHours, studyPlanForDate } from './studentStudyPlan.js';
 
 const app = document.querySelector('#app');
 let questions = [];
@@ -123,6 +123,7 @@ function navSection(title, items) {
 }
 
 function viewHtml() {
+  if (state.view === 'weekly-report') return `<header class="top"><div><p class="eyebrow">Dashboard / Reports</p><h2>Weekly progress</h2></div><button class="ghost" data-view="dashboard">Back to Dashboard</button></header><section class="report-controls"><label>Week containing<input type="date" data-report-date value="${state.reportDate || todayInput()}"></label><div class="row"><button class="ghost" data-week-shift="-7">Previous week</button><button class="ghost" data-report-today>This week</button><button class="ghost" data-week-shift="7">Next week</button></div></section>${weeklyReportHtml(weeklyStudyReport(state.data.studyPlanLogs || [],new Date(),state.reportDate))}`;
   if (state.view === 'programme') return programmeHtml();
   if (state.view === 'tara') return taraHtml();
   if (state.view === 'analytics') return analyticsHtml();
@@ -138,49 +139,59 @@ function dashboardHtml() {
   const data = state.data;
   const today = dailyStudyReport(data.studyPlanLogs || [],new Date(),state.reportDate);
   const period=today.date===todayInput()?'today':'on '+formatDate(today.date);
-  const tasks = data.tasks || [];
-  const done = tasks.filter((t) => t.status === 'completed').length;
-  const remaining = tasks.filter((t) => !['completed', 'skipped'].includes(t.status));
+  const week = weeklyStudyReport(data.studyPlanLogs || [],new Date(),state.reportDate);
   return `
     <header class="top">
-      <div><p class="eyebrow">Oxford E&M Coaching Dashboard</p><h2>What needs attention now?</h2><p class="muted">Track homework, assessments, your study plan and TARA practice.</p></div>
-      <button data-view="programme">Open Plan Tracker</button>
+      <div><h2>${today.date===todayInput()?"Today's progress":'Daily progress'}</h2></div>
     </header>
     <section class="panel report-controls"><label>Report date<input type="date" data-report-date value="${today.date}"></label><div class="row"><button class="ghost" data-report-yesterday>Yesterday</button><button class="ghost" data-report-today>Today</button><button class="ghost" data-report-refresh ${state.refreshing?'disabled':''}>${state.refreshing?'Refreshing…':state.refreshError?'Retry refresh':'Refresh'}</button></div><p role="status">${state.refreshError?escapeHtml(state.refreshError):state.lastRefresh?'Last refreshed '+state.lastRefresh.toLocaleString():'Not refreshed yet'}</p></section>
-    <section class="panel focus-card">
+    ${today.trackingStarted?`<section class="panel focus-card">
       <div>
         <p class="eyebrow">${formatLongDate(today.date)}</p>
         <h3>${today.logged}/${today.total} planned study blocks logged ${period}</h3>
-        <p class="muted">${today.percent}% logged · ${today.total-today.logged} remaining · ${today.extra.length} extra study blocks</p>
+        <p class="muted">${today.percent}% logged · ${today.followed+today.changed} studied · ${today.total-today.logged} not yet logged · ${today.extra.length} extra study blocks</p>
       </div>
       <div class="bar" role="progressbar" aria-label="Today's planned blocks logged" aria-valuenow="${today.percent}" aria-valuemin="0" aria-valuemax="100"><span style="width:${today.percent}%"></span></div>
       <p>${today.overdue} earlier blocks not logged · ${today.upcoming} upcoming</p>
       <p>${today.followed} followed plan · ${today.changed} changed · ${today.skipped} skipped</p>
-      <p class="muted">${today.loggedMinutes} of ${today.plannedMinutes} planned minutes covered by logs. Logged time is not measured study time.</p>
-    </section>
-    ${weeklyReportHtml(weeklyStudyReport(data.studyPlanLogs || [],new Date(),state.reportDate))}
+      <details><summary>Study time</summary><p class="muted">${today.loggedMinutes} of ${today.plannedMinutes} planned minutes covered by logs. Logged time is not measured study time.</p></details>
+    </section>`:`<section class="panel focus-card"><h3>Tracking had not started</h3><p>This plan starts on ${formatDate(today.trackingStart)}. No missed blocks are counted for this date.</p></section>`}
     ${dailyReportHtml(today)}
+    ${attentionReportHtml(today)}
     <section class="pillar-grid">
       ${pillarCard('A-Level Rigour', 'Homework and assessments', aLevelPillarHtml(), 'academics')}
       ${pillarCard('TARA Assessment', 'Accuracy, coverage and methodology', taraPillarHtml(), 'tara')}
 
     </section>
-    <section class="panel"><h3>School tasks remaining</h3>${schoolTasks().filter(t => (t.status || 'completed') !== 'completed').slice(0,3).map(t => `<p>${escapeHtml(t.subject_name)}: ${escapeHtml(t.assessment_name)}</p>`).join('') || '<p>No outstanding tasks.</p>'}</section>`;
+    <section class="panel"><h3>School tasks remaining</h3>${schoolTasks().filter(t => (t.status || 'completed') !== 'completed').slice(0,3).map(t => `<p>${escapeHtml(t.subject_name)}: ${escapeHtml(t.assessment_name)}</p>`).join('') || '<p>No outstanding tasks.</p>'}</section>
+    <section class="panel dashboard-reports"><h3>Reports</h3><p>${formatDate(week.start)}–${formatDate(week.end)} · ${week.logged}/${week.total} planned blocks logged</p>${week.partial?`<p>Partial week · tracking from ${formatDate(week.trackingStart)}</p>`:''}<button class="ghost" data-view="weekly-report">View weekly report</button></section>`;
+}
+
+function attentionReportHtml(report) {
+  const overdue=schoolTasks().filter(t=>(t.status || 'completed')!=='completed' && t.due_date && t.due_date<todayInput());
+  return `<section class="panel attention-report"><h3>Needs attention</h3>
+    ${report.overdue?`<p>${report.overdue} elapsed study blocks not logged on ${formatDate(report.date)}.</p>`:''}
+    ${report.amber+report.red?`<p>${report.amber} amber and ${report.red} red reflections on ${formatDate(report.date)}.</p>`:''}
+    ${overdue.length?`<p>${overdue.length} overdue homework or assessment tasks.</p><button class="ghost" data-view="academics">Review school tasks</button>`:''}
+    ${!report.overdue&&!report.amber&&!report.red&&!overdue.length?'<p>Nothing flagged for attention.</p>':''}</section>`;
 }
 
 function weeklyReportHtml(report) {
-  return `<details class="panel weekly-report"><summary>Weekly report · ${formatDate(report.start)}–${formatDate(report.end)} · ${report.logged}/${report.total} blocks logged</summary>
-    <p>${report.percent}% of the full week's planned blocks logged · ${report.extra} extra blocks</p>
+  return `<section class="panel weekly-report"><h3>${formatDate(report.start)}–${formatDate(report.end)} · ${report.logged}/${report.total} blocks logged</h3>
+    ${report.partial?`<p class="callout">Partial week · tracking from ${formatDate(report.trackingStart)}</p>`:''}
+    ${!report.total?'<p>Tracking had not started. No missed targets for this week.</p>':''}
+    <p>${report.percent}% of eligible planned blocks logged · ${report.followed+report.changed} studied · ${report.extra} extra blocks</p>
     <div class="bar" role="progressbar" aria-label="Weekly planned blocks logged" aria-valuenow="${report.percent}" aria-valuemin="0" aria-valuemax="100"><span style="width:${report.percent}%"></span></div>
     <p>${report.followed} followed plan · ${report.changed} changed · ${report.skipped} skipped</p>
     <p>${report.missed} elapsed blocks not logged · ${report.upcoming} upcoming</p>
     <p>${report.green} green · ${report.amber} amber · ${report.red} red reflections</p>
-    <h3>Daily breakdown</h3><div class="daily-report-list">${report.days.map(day=>`<article class="weekly-block weekly-${day.red?'red':day.amber?'amber':day.logged?'logged':'upcoming'}"><b>${formatLongDate(day.date)}</b><p>${day.logged}/${day.total} logged · ${day.overdue} elapsed not logged · ${day.skipped} skipped</p></article>`).join('')}</div>
+    <h3>Daily breakdown</h3><div class="daily-report-list">${report.days.map(day=>`<article class="weekly-block weekly-${day.red?'red':day.amber?'amber':day.logged?'logged':'upcoming'}"><b>${formatLongDate(day.date)}</b><p>${day.trackingStarted?`${day.logged}/${day.total} logged · ${day.overdue} elapsed not logged · ${day.skipped} skipped`:'Tracking had not started'}</p></article>`).join('')}</div>
     <h3>Subject coverage</h3><div class="daily-report-list">${report.subjects.map(s=>`<article class="weekly-block"><b>${escapeHtml(s.name)}</b><p>${s.logged}/${s.planned} planned slots logged · ${s.actual} blocks studied · ${s.missed} elapsed not logged</p></article>`).join('')}</div>
-    <p class="muted">Skipped slots count as logged, not studied. Blocks studied follow the actual subject, including extra study. Future blocks are not missed targets.</p></details>`;
+    <p class="muted">Skipped slots count as logged, not studied. Blocks studied follow the actual subject, including extra study. Future blocks are not missed targets.</p></section>`;
 }
 
 function dailyReportHtml(report) {
+  if(!report.trackingStarted) return report.extra.length?`<section class="panel"><p>${report.extra.length} earlier records preserved outside this plan.</p><button class="ghost" data-today-plan>View earlier records</button></section>`:'';
   const period=report.date===todayInput()?"Today's":formatDate(report.date);
   const openButton = (b,caption) => `<button class="ghost" data-log-block="${escapeAttr(JSON.stringify([b.date,b.from,b.to,b.activity]))}" title="${escapeAttr(`${caption}: ${displayActivity(b.activity)}, ${b.from}-${b.to}`)}">${caption}</button>`;
   const next = report.blocks.find(b=>b.status==='Current block') || report.blocks.find(b=>b.status==='Not logged') || report.blocks.find(b=>!b.log);
@@ -191,7 +202,7 @@ function dailyReportHtml(report) {
     return `${topics.length?`<p>${topics.map(escapeHtml).join('; ')}</p>`:''}${notes?`<p class="muted">${escapeHtml(notes)}</p>`:''}${log.rag_status?`<small>Reflection: ${escapeHtml(log.rag_status)}</small>`:''}`;
   };
   return `<section class="panel daily-report"><h3>${period} progress against the plan</h3>
-    ${next?`<div class="daily-next"><div><small>Next action</small><b>${escapeHtml(displayActivity(next.activity))}</b><small>${next.from}-${next.to} · ${next.status}</small></div>${openButton(next,'Log progress')}</div>`:'<p>All planned blocks are logged.</p>'}
+    ${next?`<div class="daily-next"><div><small>Your next block</small><b>${escapeHtml(displayActivity(next.activity))}</b><small>${next.from}-${next.to} · ${next.status}</small></div>${openButton(next,'Log progress')}</div>`:'<p>All planned blocks are logged.</p>'}
     <p>${report.green} green · ${report.amber} amber · ${report.red} red block reflections</p>
     <div class="daily-report-list">${report.blocks.map(b=>{
       const rag=['green','amber','red'].includes(b.log?.rag_status)?b.log.rag_status:null;
@@ -281,7 +292,9 @@ function selectedPlanBlocks() {
   const blocks = [];
   for (let d = new Date(from+'T12:00:00'); dateInput(d) <= to; d.setDate(d.getDate()+1)) {
     const day = d.toLocaleDateString('en-GB',{weekday:'long'});
-    for (const row of (['Saturday','Sunday'].includes(day) ? WEEKEND_TIMETABLE : WEEKDAY_TIMETABLE)) {
+    const plan = studyPlanForDate(dateInput(d));
+    if(!plan) continue;
+    for (const row of (['Saturday','Sunday'].includes(day) ? plan.weekends : plan.weekdays)) {
       if (!row[day] || isRestActivity(row[day]) || (state.planMode === 'subject' && areaFor(row[day]) !== state.planSubject)) continue;
       blocks.push({date:dateInput(d),day,from:row.from,to:row.to,activity:row[day]});
     }
@@ -322,8 +335,10 @@ function plannedStudyBlocksForWeek() {
   for (let offset = 0; offset < 7; offset += 1) {
     const date = new Date(start);
     date.setDate(start.getDate() + offset);
-    const day = date.toLocaleDateString(undefined, { weekday: 'long' });
-    const rows = day === 'Saturday' || day === 'Sunday' ? WEEKEND_TIMETABLE : WEEKDAY_TIMETABLE;
+    const day = date.toLocaleDateString('en-GB', { weekday: 'long' });
+    const plan = studyPlanForDate(dateInput(date));
+    if(!plan) continue;
+    const rows = day === 'Saturday' || day === 'Sunday' ? plan.weekends : plan.weekdays;
     for (const row of rows) {
       const activity = row[day];
       if (!activity || isRestActivity(activity)) continue;
@@ -1322,7 +1337,8 @@ app.addEventListener('click', async (event) => {
     } catch(error) {setFormStatus(target.closest('form'),friendlyError(error),'error');}
     return;
   }
-  if (target.dataset.view) { state.view = target.dataset.view; render(); return; }
+  if (target.dataset.weekShift) { const date=new Date((state.reportDate || todayInput())+'T12:00:00'); date.setDate(date.getDate()+Number(target.dataset.weekShift)); state.reportDate=`${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`; render(); return; }
+  if (target.dataset.view) { state.view = target.dataset.view; render(); window.scrollTo(0,0); return; }
   if (target.dataset.answer) { state.practice.answers[state.practice.set[state.practice.index].id] = target.dataset.answer; render(); return; }
   if (target.dataset.topicFilter) { state.academicTopicFilter = target.dataset.topicFilter; render(); return; }
   if (target.dataset.journalMode) { state.journalMode = target.dataset.journalMode; render(); return; }
