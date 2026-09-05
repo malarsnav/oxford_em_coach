@@ -6,6 +6,7 @@ import { createProgrammeDraft } from './weeklyGeneratorService.js';
 import { buildDailyDigest, previousLocalDate } from './dailyDigestService.js';
 import { getAlevelTopicPlan } from './aLevelTopicPlan.js';
 import { ALL_SUBTYPES, PROBLEM_SOLVING_TOPIC_TAGS, TOP_LEVEL_TYPES } from './tagTaxonomy.js';
+import { READING_PLAN, WEEKDAY_TIMETABLE, WEEKEND_TIMETABLE, WEEKLY_TARGETS, taraHasNoScheduledTime, totalWeeklyTargetHours } from './studentStudyPlan.js';
 
 const app = document.querySelector('#app');
 const MAGIC_LINK_THROTTLE_MINUTES = 30;
@@ -149,6 +150,7 @@ function dashboardHtml() {
       <div class="next-actions">${remaining.slice(0,2).map((t) => `<article><b>${escapeHtml(t.title)}</b><small>${label(t.category)} · ${t.estimated_minutes || 0} min</small></article>`).join('') || '<p class="muted">Generate a programme to begin.</p>'}</div>
     </section>
     ${dashboardSignalsHtml()}
+    ${studyRhythmSummaryHtml()}
     <section class="pillar-grid">
       ${pillarCard('A-Level Rigour', 'Subject goals and mastery', aLevelPillarHtml(), 'academics')}
       ${pillarCard('TARA Assessment', 'Accuracy, coverage and methodology', taraPillarHtml(), 'tara')}
@@ -210,19 +212,49 @@ function programmeHtml() {
     <header class="top"><div><p class="eyebrow">Weekly Programme</p><h2>${formatDate(p.week_start)} - ${formatDate(p.week_end)}</h2><p>${p.phase}: ${p.weekly_focus}</p></div><button data-action="show-generator">Generate Weekly Programme</button></header>
     ${noticeHtml()}
     <section class="panel"><h3>${percent(tasks.filter(t=>t.status==='completed').length,tasks.length)}% complete</h3><div class="bar"><span style="width:${percent(tasks.filter(t=>t.status==='completed').length,tasks.length)}%"></span></div><p>${completed}/${total} minutes completed. ${total-completed} minutes remaining.</p><p>${p.coach_summary || ''}</p>${allocationStripHtml(tasks)}</section>
+    ${studyRhythmHtml()}
     ${aLevelTopicPlanHtml()}
     ${state.draft ? draftHtml() : ''}
     <section class="grid">${groupTasks(tasks)}</section>`;
 }
 
 function generatorHtml(message='Generate a personalised weekly programme') {
-  return `<section class="panel"><h2>${message}</h2><p class="muted">The draft uses the Oxford E&M split: 50% A-Level Rigour, 25% TARA Assessment, 15% Super-Curricular, and 10% Reading/Thinking. It adapts around weak areas and open high-priority tasks.</p><form data-action="draft-programme" class="form-grid">
+  return `<section class="panel"><h2>${message}</h2><p class="muted">The draft uses the Oxford E&M split: 50% A-Level Rigour, 25% TARA Assessment, 15% Super-Curricular, and 10% Reading/Thinking. It adapts around weak areas and open high-priority tasks, while respecting the standing weekday/weekend rhythm below.</p>${taraHasNoScheduledTime() ? '<p class="callout">Your standing plan currently gives TARA 0 hours. The generator will add one small protected TARA block so admissions-test practice does not disappear.</p>' : ''}<form data-action="draft-programme" class="form-grid">
     <label>Available minutes<input name="minutes" type="number" value="${state.preferences.minutes}"></label>
     <label>Workload<select name="workload"><option value="light">Light</option><option value="standard" selected>Standard</option><option value="intensive">Intensive</option></select></label>
     <label>School week<select name="schoolWeek"><option value="normal">Normal</option><option value="exam">Exam-heavy</option><option value="holiday">Holiday</option></select></label>
     <label>Priority<select name="priority"><option value="none">No preference</option><option value="tara">More admissions-test practice</option><option value="economics">More Economics</option><option value="management">More Management</option><option value="a_level">More A-Level</option><option value="oxford_reasoning">More Oxford Reasoning</option><option value="application">More Application/Interview</option></select></label>
     <button>Generate draft</button>
-  </form></section>${aLevelTopicPlanHtml()}${state.draft ? draftHtml() : ''}`;
+  </form></section>${studyRhythmHtml()}${aLevelTopicPlanHtml()}${state.draft ? draftHtml() : ''}`;
+}
+
+function studyRhythmSummaryHtml() {
+  const taraTarget = WEEKLY_TARGETS.find((target) => target.name === 'TARA');
+  return `<section class="panel rhythm-summary"><div class="top mini"><div><p class="eyebrow">Personal Study Rhythm</p><h3>${totalWeeklyTargetHours()} hours planned each week</h3></div><button class="ghost" data-view="programme" title="Open the full weekly timetable">View timetable</button></div><div class="target-strip">${WEEKLY_TARGETS.slice(0, 6).map(targetChipHtml).join('')}</div>${taraTarget?.hours === 0 ? '<p class="callout">TARA is currently set to 0 hours in the standing plan. Keep it light for now, but protect at least one short practice block each week.</p>' : ''}</section>`;
+}
+
+function studyRhythmHtml() {
+  return `<section class="panel study-rhythm"><div class="top mini"><div><p class="eyebrow">Standing Study Plan</p><h3>Weekday and weekend rhythm</h3><p class="muted">Use this as the fixed timetable. Weekly Programme tasks should sit inside the matching subject blocks, with spillover used only when needed.</p></div><span class="pill medium">${totalWeeklyTargetHours()}h/week</span></div><div class="target-strip">${WEEKLY_TARGETS.map(targetChipHtml).join('')}</div>${taraHasNoScheduledTime() ? '<p class="callout">Planning note: TARA has no standing slot yet. The weekly generator adds a small TARA task so the habit starts without disturbing the A-Level-heavy routine.</p>' : ''}<details><summary>Weekdays</summary>${timetableHtml(WEEKDAY_TIMETABLE, ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'])}</details><details><summary>Weekends</summary>${timetableHtml(WEEKEND_TIMETABLE, ['Saturday', 'Sunday'])}</details><details><summary>Reading plan</summary><div class="reading-plan">${READING_PLAN.map((item) => `<article><b>${escapeHtml(item.month)}</b><span>${escapeHtml(item.title)}</span></article>`).join('')}</div></details></section>`;
+}
+
+function targetChipHtml(target) {
+  return `<span class="target-chip" title="${escapeAttr(target.pillar)}">${escapeHtml(target.name)} <b>${target.hours}h</b></span>`;
+}
+
+function timetableHtml(rows, days) {
+  return `<div class="timetable" style="--columns: 0.8fr repeat(${days.length}, minmax(112px, 1fr))"><div class="time-head">Time</div>${days.map((day) => `<div class="day-head">${day}</div>`).join('')}${rows.map((row) => `<div class="time-cell">${row.from}-${row.to}</div>${days.map((day) => `<div class="activity-cell ${activityClass(row[day])}"><span class="mobile-day">${day}</span>${escapeHtml(row[day] || '')}</div>`).join('')}`).join('')}</div>`;
+}
+
+function activityClass(value) {
+  const text = String(value || '').toLowerCase();
+  if (['break', 'breakfast', 'lunch', 'dinner'].includes(text)) return 'rest';
+  if (text.includes('math')) return 'maths';
+  if (text.includes('economics')) return 'economics';
+  if (text.includes('physics')) return 'physics';
+  if (text.includes('history')) return 'history';
+  if (text.includes('epq') || text.includes('book') || text.includes('smc')) return 'super';
+  if (text.includes('spillover')) return 'spillover';
+  return '';
 }
 
 function aLevelTopicPlanHtml() {
