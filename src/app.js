@@ -1,6 +1,7 @@
 import { bootstrap, getSession, signIn, signOut, saveAttempt, updateTask, addAcademicResult, updateSubject, addAcademicTopic, updateAcademicTopic, addJournalEntry, addReasoningSession, updateMilestone, addMilestone, saveWeeklyReview, addInterviewSession, updateProfile, saveTaraErrorAnalysis, saveStudyPlanLog } from './dataService.js';
 import { STUDY_AREAS, areaFor, displayActivity, availabilityHtml, richStudyFields, handleStudyInput, collectStudyDetails, customTopicsFor, topicHistoryHtml } from './planTracking.js';
 import { saveSchoolTask, schoolAttachmentUrl } from './schoolTaskService.js';
+import { dailyStudyReport } from './dailyStudyReport.js';
 import { questionBankManifest } from './questionBankManifest.generated.js';
 import { methodologyFor } from './methodologies.js';
 import { buildDailyDigest, previousLocalDate } from './dailyDigestService.js';
@@ -137,6 +138,7 @@ function viewHtml() {
 
 function dashboardHtml() {
   const data = state.data;
+  const today = dailyStudyReport(data.studyPlanLogs || []);
   const tasks = data.tasks || [];
   const done = tasks.filter((t) => t.status === 'completed').length;
   const remaining = tasks.filter((t) => !['completed', 'skipped'].includes(t.status));
@@ -147,21 +149,35 @@ function dashboardHtml() {
     </header>
     <section class="panel focus-card">
       <div>
-        <p class="eyebrow">This Week</p>
-        <h3>${studyPlanTodayTitle()}</h3>
-        <p class="muted">${studyPlanStats().logged}/${studyPlanStats().total} planned study blocks logged this week · ${studyPlanStats().red} red</p>
+        <p class="eyebrow">Today · ${formatLongDate(today.date)}</p>
+        <h3>${today.logged}/${today.total} planned study blocks logged today</h3>
+        <p class="muted">${today.percent}% logged · ${today.total-today.logged} remaining · ${today.extra.length} extra study blocks</p>
       </div>
-      <div class="bar"><span style="width:${studyPlanStats().loggedPercent}%"></span></div>
-      <div class="next-actions">${nextStudyBlocks().slice(0,2).map((block) => `<article><b>${escapeHtml(block.activity)}</b><small>${block.day} · ${block.from}-${block.to}</small></article>`).join('') || '<p class="muted">No remaining study blocks today.</p>'}</div>
+      <div class="bar" role="progressbar" aria-label="Today's planned blocks logged" aria-valuenow="${today.percent}" aria-valuemin="0" aria-valuemax="100"><span style="width:${today.percent}%"></span></div>
+      <p>${today.overdue} earlier blocks not logged · ${today.upcoming} upcoming</p>
+      <p class="muted">${today.loggedMinutes} of ${today.plannedMinutes} planned minutes covered by logs. Logged time is not measured study time.</p>
     </section>
-    ${dashboardSignalsHtml()}
-    ${studyRhythmSummaryHtml()}
+    ${dailyReportHtml(today)}
     <section class="pillar-grid">
       ${pillarCard('A-Level Rigour', 'Homework and assessments', aLevelPillarHtml(), 'academics')}
       ${pillarCard('TARA Assessment', 'Accuracy, coverage and methodology', taraPillarHtml(), 'tara')}
 
     </section>
     <section class="panel"><h3>School tasks remaining</h3>${schoolTasks().filter(t => (t.status || 'completed') !== 'completed').slice(0,3).map(t => `<p>${escapeHtml(t.subject_name)}: ${escapeHtml(t.assessment_name)}</p>`).join('') || '<p>No outstanding tasks.</p>'}</section>`;
+}
+
+function dailyReportHtml(report) {
+  const detail = log => {
+    if(!log)return '';
+    const topics=(log.details?.entries || []).map(e=>`${e.topic}${e.label?' / '+e.label:''}`);
+    const notes=log.details?.study_notes || log.details?.work_done || log.details?.key_idea || log.topics_covered || log.topics_practised || '';
+    return `${topics.length?`<p>${topics.map(escapeHtml).join('; ')}</p>`:''}${notes?`<p class="muted">${escapeHtml(notes)}</p>`:''}${log.rag_status?`<small>Reflection: ${escapeHtml(log.rag_status)}</small>`:''}`;
+  };
+  return `<section class="panel daily-report"><h3>Today's progress against the plan</h3>
+    <p>${report.green} green · ${report.amber} amber · ${report.red} red block reflections today</p>
+    <div class="daily-report-list">${report.blocks.map(b=>`<article><div class="top mini"><div><b>${escapeHtml(displayActivity(b.activity))}</b><small>${b.from}-${b.to}</small></div><strong>${b.status}</strong></div>${detail(b.log)}</article>`).join('') || '<p>No study blocks planned today.</p>'}</div>
+    ${report.extra.length?`<details><summary>Extra study today (${report.extra.length})</summary>${report.extra.map(l=>`<article><b>${escapeHtml(displayActivity(l.planned_activity))}</b><small>${escapeHtml(l.start_time.slice(0,5))}-${escapeHtml(l.end_time.slice(0,5))}</small>${detail(l)}</article>`).join('')}</details>`:''}
+    <button class="ghost" data-today-plan>Update today's progress</button></section>`;
 }
 
 function dashboardSignalsHtml() {
@@ -1287,6 +1303,7 @@ app.addEventListener('click', async (event) => {
   if(event.target.closest('[data-add-custom], [data-remove-topic]')) {handleStudyInput(event,state.data?.studyPlanLogs || []);return;}
   const target = event.target.closest('button');
   if (!target) return;
+  if (target.hasAttribute('data-today-plan')) { state.planMode='date';state.planDate=todayInput();state.extraBlock=null;state.view='programme';render();return; }
   if (target.dataset.schoolFile) {
     try {
       const task = schoolTasks().find(t => t.id === target.dataset.schoolFile);

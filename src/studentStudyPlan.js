@@ -30,7 +30,7 @@ export const WEEKLY_TARGETS = [
   { name: 'Physics', hours: 6, pillar: 'A-Level Rigour' },
   { name: 'Economics', hours: 5, pillar: 'A-Level Rigour' },
   { name: 'History', hours: 6, pillar: 'A-Level Rigour' },
-  { name: 'AS Maths', hours: 3, pillar: 'A-Level Rigour' },
+  { name: 'AS-Further Maths', hours: 3, pillar: 'A-Level Rigour' },
   { name: 'EPQ', hours: 5.5, pillar: 'Super-Curricular' },
   { name: 'Super-Curricular', hours: 3, pillar: 'Super-Curricular' },
   { name: 'Book', hours: 3, pillar: 'Reading / Thinking' },

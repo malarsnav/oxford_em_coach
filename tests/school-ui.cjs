@@ -40,7 +40,9 @@ const mockData = `const fixture=${JSON.stringify(fixture)};
       const errors=[];page.on('pageerror',e=>errors.push(e.message));
       await page.route('**/src/dataService.js',r=>r.fulfill({contentType:'text/javascript',body:mockData}));
       await page.route('**/src/supabaseClient.js',r=>r.fulfill({contentType:'text/javascript',body:mockSdk}));
+      await page.clock.setFixedTime(new Date(2026,8,5,12));
       await page.goto(`http://127.0.0.1:${server.address().port}/oxford_em_coach/`);
+      await page.getByText('0/8 planned study blocks logged today',{exact:true}).waitFor();
       await page.getByRole('button',{name:'A-Level Rigour',exact:true}).click();
       assert.equal(await page.locator('nav').getByText('Super-Curricular').count(),0);
       await page.getByText('Add homework or assessment',{exact:true}).click();
@@ -113,13 +115,19 @@ const mockData = `const fixture=${JSON.stringify(fixture)};
       assert.equal(await page.locator('[data-rich-area="Magazine"] [name=title]').inputValue(),'Economics article');
       assert.equal(await page.locator('[data-topic-id]').count(),2);
       assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
-      for (const [subject,query,fragment] of [['Physics','4.5.2','4.5.2'],['Economics','1.2.3','1.2.3'],['History','Henry VII','1C-H7.1'],['AS Maths','9.1','9.1']]) {
+      for (const [subject,query,fragment] of [['Physics','4.5.2','4.5.2'],['Economics','1.2.3','1.2.3'],['History','Henry VII','1C-H7.1'],['AS-Further Maths','Complex arithmetic','2.2']]) {
         filter=page.locator('[data-action="plan-filter"]');
         await filter.locator('[name=mode]').selectOption('subject');
+        await filter.locator('[name=from]').fill('2026-09-05');await filter.locator('[name=to]').fill('2026-09-05');
         await filter.locator('[name=subject]').selectOption(subject);await filter.getByRole('button').click();
         const block=page.locator('[data-action="save-study-log"]').first();
         await block.locator('[data-topic-search]').fill(query);
         await block.locator(`[data-pick-topic$=":${fragment}"]`).first().check();
+        if(subject==='AS-Further Maths') {
+          await block.locator('[data-further-paper]').selectOption('Further Mechanics 1 (optional)');
+          await block.locator('[data-topic-search]').fill('impulse');
+          await block.locator('[data-pick-topic="edexcel-8fm0-issue5:Further Mechanics 1 (optional):1.1"]').check();
+        }
         await block.locator('[name=study_notes]').fill('Covered today without per-topic forms.');
         if(subject==='History') {
           await block.locator('[data-topic-search]').fill('Great Turn');
@@ -142,6 +150,15 @@ const mockData = `const fixture=${JSON.stringify(fixture)};
         assert.equal(await page.locator('[data-action="save-study-log"]').first().locator('[name=study_notes]').inputValue(),'Covered today without per-topic forms.');
         assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
       }
+      await page.getByRole('button',{name:'Dashboard',exact:true}).click();
+      await page.getByText('6/8 planned study blocks logged today',{exact:true}).waitFor();
+      await page.getByText('Extra study today (1)',{exact:true}).waitFor();
+      await page.getByRole('button',{name:"Update today's progress",exact:true}).click();
+      assert.equal(await page.locator('[data-action="plan-filter"] [name=mode]').inputValue(),'date');
+      assert.equal(await page.locator('[data-action="plan-filter"] [name=date]').inputValue(),'2026-09-05');
+      await page.getByRole('button',{name:'Dashboard',exact:true}).click();
+      assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
+      await page.evaluate(()=>window.scrollTo(0,0));
       await page.screenshot({path:path.join(root,`../work/school-${width}.png`),fullPage:false});
       assert.deepEqual(errors,[]);
       await page.close();console.log(`School task save, upload, marking, refresh, date/subject tracker and layout passed at ${width}px (mock backend).`);

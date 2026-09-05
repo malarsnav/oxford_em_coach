@@ -1,4 +1,5 @@
 import { MATHS_SPEC, MATHS_TOPICS, MATHS_ITEMS } from './mathsSyllabus.js';
+import { FURTHER_MATHS_ROWS } from './furtherMathsTopics.js';
 
 // Source references and scope decisions are documented in docs/year12-syllabuses.md.
 // Labels summarise specification content; IDs never alias AS and A-level numbering.
@@ -138,11 +139,12 @@ export const HISTORY = catalogue('aqa-history-1c-2n', 'AQA History: 1C Tudors an
 ]);
 
 const fullMaths = { ...MATHS_SPEC, topics: MATHS_TOPICS, items: MATHS_ITEMS };
+export const AS_FURTHER_MATHS = catalogue('edexcel-8fm0-issue5', 'Edexcel AS Further Mathematics (8FM0), Issue 5', FURTHER_MATHS_ROWS);
 export function syllabusFor(area, scope = 'as') {
-  const source = ['Maths','AS Maths'].includes(area) ? (scope === 'full' ? fullMaths : AS_MATHS)
+  const source = ['AS Maths','AS-Further Maths'].includes(area) ? AS_FURTHER_MATHS : area==='Maths' ? (scope === 'full' ? fullMaths : AS_MATHS)
     : area === 'Physics' ? AS_PHYSICS : area === 'Economics' ? ECONOMICS : area === 'History' ? HISTORY : null;
   if (!source) return null;
   return { ...source, topics: source.topics.filter(g => scope === 'full' || g.level !== 'a_level'),
     items: source.items.filter(i => scope === 'full' || i.level !== 'a_level') };
 }
-export const SYLLABUS_ITEMS = [...MATHS_ITEMS, ...AS_MATHS.items, ...AS_PHYSICS.items, ...ECONOMICS.items, ...HISTORY.items];
+export const SYLLABUS_ITEMS = [...MATHS_ITEMS, ...AS_MATHS.items, ...AS_PHYSICS.items, ...ECONOMICS.items, ...HISTORY.items, ...AS_FURTHER_MATHS.items];

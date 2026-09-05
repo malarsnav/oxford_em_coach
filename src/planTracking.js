@@ -1,12 +1,12 @@
 import { WEEKDAY_TIMETABLE, WEEKEND_TIMETABLE } from './studentStudyPlan.js';
 import { syllabusFor, SYLLABUS_ITEMS } from './studySyllabuses.js';
 
-export const STUDY_AREAS = ['Maths','Physics','Economics','History','AS Maths','EPQ','Super Curricular','Book','TARA','Magazine'];
-const academic = ['Maths','Physics','Economics','History','AS Maths'];
+export const STUDY_AREAS = ['Maths','Physics','Economics','History','AS-Further Maths','EPQ','Super Curricular','Book','TARA','Magazine'];
+const academic = ['Maths','Physics','Economics','History','AS-Further Maths'];
 const modes = ['learn','practise','assess','reflect'];
 const esc = v => String(v ?? '').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-export const areaFor = activity => activity === 'Maths tuition' ? 'Maths' : ['SMC','Super-Curricular'].includes(activity) ? 'Super Curricular' : activity;
-export const displayActivity = activity => activity === 'SMC' ? 'Super Curricular' : activity;
+export const areaFor = activity => activity === 'AS Maths' ? 'AS-Further Maths' : activity === 'Maths tuition' ? 'Maths' : ['SMC','Super-Curricular'].includes(activity) ? 'Super Curricular' : activity;
+export const displayActivity = activity => activity === 'AS Maths' ? 'AS-Further Maths' : activity === 'SMC' ? 'Super Curricular' : activity;
 export function scheduledAreas(day) {
   const rows = day ? (['Saturday','Sunday'].includes(day) ? WEEKEND_TIMETABLE : WEEKDAY_TIMETABLE) : [...WEEKDAY_TIMETABLE,...WEEKEND_TIMETABLE];
   return new Set(rows.flatMap(row=> day ? [areaFor(row[day])] : Object.entries(row).filter(([k])=>!['from','to'].includes(k)).map(([,v])=>areaFor(v))));
@@ -35,12 +35,13 @@ export function evidenceRowHtml(entry) {
   </details>`;
 }
 
-function syllabusPickerHtml(area, scope, selected) {
+function syllabusPickerHtml(area, scope, selected, paper = 'Core Pure') {
   const syllabus = syllabusFor(area, scope);
   if (!syllabus) return '';
   return `<p>${esc(syllabus.label)}${scope === 'as' ? ' · Year 12 / AS content' : area === 'Physics' ? ' · AS content supplied' : ' · Full supplied content'}</p>
+    ${area==='AS-Further Maths'?`<label>Paper<select data-further-paper>${[...new Set(syllabus.topics.map(g=>g.section))].map(p=>`<option ${p===paper?'selected':''}>${esc(p)}</option>`).join('')}</select></label>`:''}
     <label>Find a topic<input type="search" data-topic-search placeholder="Search topic or reference"></label>
-    ${syllabus.topics.map(g=>`<details data-topic-group><summary>${esc(g.topic)}${g.level==='a_level'?' (A-level only)':''}</summary>${[syllabus.items.find(i=>i.id===g.id+':general'),...g.items].map(i=>`<label class="topic-choice" data-search-text="${esc((i.section+' '+i.topic+' '+i.ref+' '+i.label).toLowerCase())}"><input type="checkbox" data-pick-topic="${esc(i.id)}" ${selected.has(i.id)?'checked':''}>${i.id.endsWith(':general')?'Whole topic / no specific sub-topic':esc(i.label)}</label>`).join('')}</details>`).join('')}`;
+    ${syllabus.topics.map(g=>`<details data-topic-group data-paper="${esc(g.section)}" ${area==='AS-Further Maths'&&g.section!==paper?'hidden':''}><summary>${esc(g.topic)}${g.level==='a_level'?' (A-level only)':''}</summary>${[syllabus.items.find(i=>i.id===g.id+':general'),...g.items].map(i=>`<label class="topic-choice" data-search-text="${esc((i.section+' '+i.topic+' '+i.ref+' '+i.label).toLowerCase())}"><input type="checkbox" data-pick-topic="${esc(i.id)}" ${selected.has(i.id)?'checked':''}>${i.id.endsWith(':general')?'Whole topic / no specific sub-topic':esc(i.label)}</label>`).join('')}</details>`).join('')}`;
 }
 
 export function richStudyFields(activity, log = {}, attempts = [], customTopics = [], schoolYear = 'Year 12') {
@@ -51,7 +52,7 @@ export function richStudyFields(activity, log = {}, attempts = [], customTopics 
     return `<div class="rich-study" data-rich-area="${esc(area)}">
       <details class="topic-picker" open><summary>Which topics did you cover?</summary>
         <details><summary>Change syllabus scope</summary><label>Content scope<select data-syllabus-scope><option value="as" ${scope==='as'?'selected':''}>Year 12 / AS</option><option value="full" ${scope==='full'?'selected':''}>All supplied content (including later A-level)</option></select></label></details>
-        <div data-syllabus-picker>${syllabusPickerHtml(area,scope,selected)}</div>
+        <div data-syllabus-picker>${syllabusPickerHtml(area,scope,selected,d.further_paper || 'Core Pure')}</div>
       </details>
       <details><summary>Other / custom topic</summary>${input('custom_topic','Topic')}${input('custom_subtopic','Sub-topic (optional)')}<button type="button" class="ghost" data-add-custom>Add topic</button>
       ${customTopics.length ? `<label>Previously used<select data-reuse-topic><option value="">Choose a saved custom topic</option>${customTopics.map(e=>`<option value="${esc(e.id)}">${esc(e.topic)}${e.label?' / '+esc(e.label):''}</option>`).join('')}</select></label>`:''}</details>
@@ -93,11 +94,12 @@ export function handleStudyInput(event, logs) {
     const selected = new Set([...form.querySelectorAll('[data-topic-id]')].map(r=>r.dataset.topicId));
     form.querySelector('[data-syllabus-picker]').innerHTML=syllabusPickerHtml(area,t.value,selected);
   }
-  if (t.matches('[data-topic-search]')) {
-    const query=t.value.toLowerCase().trim();
+  if (t.matches('[data-topic-search], [data-further-paper]')) {
+    const query=form.querySelector('[data-topic-search]').value.toLowerCase().trim();
+    const paper=form.querySelector('[data-further-paper]')?.value;
     form.querySelectorAll('[data-topic-group]').forEach(g=>{
       g.querySelectorAll('[data-search-text]').forEach(label=>label.hidden=!label.dataset.searchText.includes(query));
-      g.hidden=![...g.querySelectorAll('[data-search-text]')].some(label=>!label.hidden);
+      g.hidden=(paper && g.dataset.paper!==paper)||![...g.querySelectorAll('[data-search-text]')].some(label=>!label.hidden);
       if(query)g.open=!g.hidden;
     });
   }
@@ -131,7 +133,7 @@ export function collectStudyDetails(form) {
     const n=Number(value);if(!Number.isFinite(n)||n<0||!Number.isInteger(n))throw new Error('Counts and marks must be whole numbers of zero or more.');return n;
   };
   const validateScore=(score,total)=>{if(score!==null&&(total===null||total<=0||score>total))throw new Error('Provide total marks greater than zero, with score no higher than the total.');};
-  if(academic.includes(area))return {version:1,area,study_notes:get(container,'study_notes'),syllabus_scope:container.querySelector('[data-syllabus-scope]')?.value || 'as',spec:syllabusFor(area,container.querySelector('[data-syllabus-scope]')?.value)?.id || null,entries:[...container.querySelectorAll('[data-topic-id]')].map(row=>{
+  if(academic.includes(area))return {version:1,area,further_paper:container.querySelector('[data-further-paper]')?.value || null,study_notes:get(container,'study_notes'),syllabus_scope:container.querySelector('[data-syllabus-scope]')?.value || 'as',spec:syllabusFor(area,container.querySelector('[data-syllabus-scope]')?.value)?.id || null,entries:[...container.querySelectorAll('[data-topic-id]')].map(row=>{
     const item=SYLLABUS_ITEMS.find(i=>i.id===row.dataset.topicId);
     const attempted=number(row,'attempted'),correct=number(row,'correct'),score=number(row,'score'),total=number(row,'total');
     if(correct!==null&&(attempted===null||correct>attempted))throw new Error('Correct answers cannot exceed questions attempted.');validateScore(score,total);

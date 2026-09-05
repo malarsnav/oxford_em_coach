@@ -1460,3 +1460,6 @@ button:disabled {
 .topic-history article { padding: 12px 0; border-bottom: 1px solid #dce1e5; }
 [hidden] { display: none !important; }
 @media(max-width:600px) { .topic-evidence .form-grid { grid-template-columns: minmax(0,1fr); } }
+.daily-report-list article, .daily-report > details article { padding: 12px 0; border-bottom: 1px solid #dce3e5; overflow-wrap: anywhere; }
+.daily-report small { display: block; }
+.daily-report .top.mini { flex-wrap: wrap; gap: 8px; }
