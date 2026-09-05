@@ -167,6 +167,8 @@ function dashboardHtml() {
 }
 
 function dailyReportHtml(report) {
+  const openButton = (b,caption) => `<button class="ghost" data-log-block="${escapeAttr(JSON.stringify([b.date,b.from,b.to,b.activity]))}" title="${escapeAttr(`${caption}: ${displayActivity(b.activity)}, ${b.from}-${b.to}`)}">${caption}</button>`;
+  const next = report.blocks.find(b=>b.status==='Current block') || report.blocks.find(b=>b.status==='Not logged') || report.blocks.find(b=>!b.log);
   const detail = log => {
     if(!log)return '';
     const topics=(log.details?.entries || []).map(e=>`${e.topic}${e.label?' / '+e.label:''}`);
@@ -174,8 +176,18 @@ function dailyReportHtml(report) {
     return `${topics.length?`<p>${topics.map(escapeHtml).join('; ')}</p>`:''}${notes?`<p class="muted">${escapeHtml(notes)}</p>`:''}${log.rag_status?`<small>Reflection: ${escapeHtml(log.rag_status)}</small>`:''}`;
   };
   return `<section class="panel daily-report"><h3>Today's progress against the plan</h3>
+    ${next?`<div class="daily-next"><div><small>Next action</small><b>${escapeHtml(displayActivity(next.activity))}</b><small>${next.from}-${next.to} · ${next.status}</small></div>${openButton(next,'Log progress')}</div>`:'<p>All planned blocks are logged.</p>'}
     <p>${report.green} green · ${report.amber} amber · ${report.red} red block reflections today</p>
-    <div class="daily-report-list">${report.blocks.map(b=>`<article><div class="top mini"><div><b>${escapeHtml(displayActivity(b.activity))}</b><small>${b.from}-${b.to}</small></div><strong>${b.status}</strong></div>${detail(b.log)}</article>`).join('') || '<p>No study blocks planned today.</p>'}</div>
+    <div class="daily-report-list">${report.blocks.map(b=>{
+      const rag=['green','amber','red'].includes(b.log?.rag_status)?b.log.rag_status:null;
+      const tone=b.log?(rag || 'logged'):b.status==='Current block'?'current':b.status==='Not logged'?'unlogged':'upcoming';
+      const label=b.log?`✓ Logged${rag?' · '+rag[0].toUpperCase()+rag.slice(1):' · RAG unset'}`:b.status==='Current block'?'Now':b.status;
+      const topics=[...new Set((b.log?.details?.entries || []).map(e=>e.topic))];
+      return `<article class="daily-block daily-${tone}"><div class="top mini"><div><b>${escapeHtml(displayActivity(b.activity))}</b><small>${b.from}-${b.to}</small></div><strong class="daily-status">${label}</strong></div>
+        ${topics.length?`<p class="daily-topic-preview">${escapeHtml(topics.slice(0,2).join(', '))}${topics.length>2?` +${topics.length-2} more`:''}</p>`:''}
+        ${b.log?`<details><summary>View logged details</summary>${detail(b.log) || '<p>No additional notes.</p>'}</details>`:''}
+        ${openButton(b,b.log?'Edit log':'Log progress')}</article>`;
+    }).join('') || '<p>No study blocks planned today.</p>'}</div>
     ${report.extra.length?`<details><summary>Extra study today (${report.extra.length})</summary>${report.extra.map(l=>`<article><b>${escapeHtml(displayActivity(l.planned_activity))}</b><small>${escapeHtml(l.start_time.slice(0,5))}-${escapeHtml(l.end_time.slice(0,5))}</small>${detail(l)}</article>`).join('')}</details>`:''}
     <button class="ghost" data-today-plan>Update today's progress</button></section>`;
 }
@@ -1303,6 +1315,14 @@ app.addEventListener('click', async (event) => {
   if(event.target.closest('[data-add-custom], [data-remove-topic]')) {handleStudyInput(event,state.data?.studyPlanLogs || []);return;}
   const target = event.target.closest('button');
   if (!target) return;
+  if (target.hasAttribute('data-log-block')) {
+    const [date,from,to,activity]=JSON.parse(target.dataset.logBlock);
+    state.planMode='date';state.planDate=date;state.extraBlock=null;state.view='programme';render();
+    const form=[...app.querySelectorAll('[data-action="save-study-log"]')].find(f=>f.elements.start_time.value===from && f.elements.end_time.value===to && f.elements.planned_activity.value===activity);
+    // A topic's input named "focus" shadows HTMLFormElement.focus.
+    if(form){form.tabIndex=-1;HTMLElement.prototype.focus.call(form,{preventScroll:true});form.scrollIntoView({block:'start'});}
+    return;
+  }
   if (target.hasAttribute('data-today-plan')) { state.planMode='date';state.planDate=todayInput();state.extraBlock=null;state.view='programme';render();return; }
   if (target.dataset.schoolFile) {
     try {

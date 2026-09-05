@@ -1463,3 +1463,16 @@ button:disabled {
 .daily-report-list article, .daily-report > details article { padding: 12px 0; border-bottom: 1px solid #dce3e5; overflow-wrap: anywhere; }
 .daily-report small { display: block; }
 .daily-report .top.mini { flex-wrap: wrap; gap: 8px; }
+.daily-next { display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px; padding:14px 0; border-bottom:1px solid #ccd6dc; }
+.daily-report-list .daily-block { margin:12px 0; padding:14px; border:1px solid #dce3e5; border-left:5px solid var(--status-color); border-radius:6px; background:var(--status-bg); }
+.daily-green { --status-color:#28713e; --status-bg:#eef8ef; }
+.daily-amber { --status-color:#986000; --status-bg:#fff7e2; }
+.daily-red { --status-color:#ad303b; --status-bg:#fff0f1; }
+.daily-logged { --status-color:#11736c; --status-bg:#eaf6f4; }
+.daily-unlogged { --status-color:#707982; --status-bg:#f0f2f4; }
+.daily-current { --status-color:#2169ac; --status-bg:#edf5ff; }
+.daily-upcoming { --status-color:#c0c8cf; --status-bg:#fff; }
+.daily-status { color:#26333e; font-size:14px; }
+.daily-topic-preview { margin:8px 0; }
+.daily-block > button { margin-top:10px; min-height:44px; }
+.study-log { scroll-margin-top:280px; }
