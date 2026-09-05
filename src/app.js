@@ -1,4 +1,5 @@
 import { bootstrap, getSession, signIn, signOut, saveAttempt, updateTask, addAcademicResult, updateSubject, addAcademicTopic, updateAcademicTopic, addJournalEntry, addReasoningSession, updateMilestone, addMilestone, saveWeeklyReview, addInterviewSession, updateProfile, saveTaraErrorAnalysis, saveStudyPlanLog } from './dataService.js';
+import { saveSchoolTask, schoolAttachmentUrl } from './schoolTaskService.js';
 import { questionBankManifest } from './questionBankManifest.generated.js';
 import { methodologyFor } from './methodologies.js';
 import { buildDailyDigest, previousLocalDate } from './dailyDigestService.js';
@@ -35,6 +36,9 @@ const state = {
   notice: null,
   reviewAttemptId: null,
   academicTopicFilter: 'all',
+  schoolSubject: 'all', schoolStatus: 'all',
+  planMode: 'date', planDate: todayInput(), planSubject: 'Maths',
+  planFrom: todayInput().slice(0,7) + '-01', planTo: todayInput(),
   journalMode: 'reading',
   questionBankLoaded: false,
   questionBankLoading: false,
@@ -86,7 +90,7 @@ function renderLogin() {
       <section class="panel hero">
         <p class="eyebrow">Oxford E&M Coach</p>
         <h1>Track the indicators that matter for Oxford E&M.</h1>
-        <p>A coaching dashboard for A-Level strength, admissions-test readiness, E&M depth, reasoning, milestones and interview preparation.</p>
+        <p>Track homework, assessments, study progress and TARA practice.</p>
         <form data-action="login" class="stack">
           <input name="email" type="email" placeholder="Student email" autocomplete="email" inputmode="email" required />
           <button type="submit">Send magic link</button>
@@ -104,7 +108,7 @@ function navButton(view, label) {
 function navigationHtml() {
   return `
     ${navSection('Start', [['dashboard','Dashboard'], ['programme','Plan Tracker']])}
-    ${navSection('Four Pillars', [['academics','A-Level Rigour'], ['tara','TARA Assessment'], ['journal','Super-Curricular'], ['reasoning','Reading / Thinking']])}
+    ${navSection('Study', [['academics','A-Level Rigour'], ['tara','TARA Assessment']])}
     ${navSection('Analytics', [['readiness','Overall Analytics'], ['analytics','TARA Deep Dive']])}
     ${navSection('Journey', [['milestones','Milestones'], ['interview','Interview'], ['review','Weekly Review']])}
     ${navSection('Account', [['parent','Parent View'], ['profile','Profile']])}`;
@@ -119,8 +123,7 @@ function viewHtml() {
   if (state.view === 'tara') return taraHtml();
   if (state.view === 'analytics') return analyticsHtml();
   if (state.view === 'academics') return academicsHtml();
-  if (state.view === 'journal') return journalHtml();
-  if (state.view === 'reasoning') return reasoningHtml();
+
   if (state.view === 'readiness') return readinessHtml();
   if (state.view === 'milestones') return milestonesHtml();
   if (state.view === 'interview') return interviewHtml();
@@ -137,7 +140,7 @@ function dashboardHtml() {
   const remaining = tasks.filter((t) => !['completed', 'skipped'].includes(t.status));
   return `
     <header class="top">
-      <div><p class="eyebrow">Oxford E&M Coaching Dashboard</p><h2>What needs attention now?</h2><p class="muted">Track four success indicators each week: A-levels, TARA Assessment, Super-Curricular depth, and Reading/Thinking Readiness.</p></div>
+      <div><p class="eyebrow">Oxford E&M Coaching Dashboard</p><h2>What needs attention now?</h2><p class="muted">Track homework, assessments, your study plan and TARA practice.</p></div>
       <button data-view="programme">Open Plan Tracker</button>
     </header>
     <section class="panel focus-card">
@@ -152,12 +155,11 @@ function dashboardHtml() {
     ${dashboardSignalsHtml()}
     ${studyRhythmSummaryHtml()}
     <section class="pillar-grid">
-      ${pillarCard('A-Level Rigour', 'Subject goals and mastery', aLevelPillarHtml(), 'academics')}
+      ${pillarCard('A-Level Rigour', 'Homework and assessments', aLevelPillarHtml(), 'academics')}
       ${pillarCard('TARA Assessment', 'Accuracy, coverage and methodology', taraPillarHtml(), 'tara')}
-      ${pillarCard('Super-Curricular', 'Economics, management and competitions', supercurricularPillarHtml(), 'journal')}
-      ${pillarCard('Reading / Thinking', 'Reasoning, reflection and interview habits', thinkingPillarHtml(), 'reasoning')}
+
     </section>
-    <section class="panel"><h3>What should change next?</h3>${data.recommendations.length ? data.recommendations.map((r) => `<p class="callout">${r}</p>`).join('') : '<p class="muted">Complete sessions and tasks to build recommendations.</p>'}</section>`;
+    <section class="panel"><h3>School tasks remaining</h3>${schoolTasks().filter(t => (t.status || 'completed') !== 'completed').slice(0,3).map(t => `<p>${escapeHtml(t.subject_name)}: ${escapeHtml(t.assessment_name)}</p>`).join('') || '<p>No outstanding tasks.</p>'}</section>`;
 }
 
 function dashboardSignalsHtml() {
@@ -177,11 +179,8 @@ function pillarCard(title, subtitle, body, view) {
 }
 
 function aLevelPillarHtml() {
-  const weakTopics = state.data.subjects.flatMap((subject) => (subject.academic_topics || [])
-    .filter((topic) => ['weak', 'developing'].includes(topic.mastery_status))
-    .map((topic) => `${subject.name}: ${topic.topic_name}`));
-  const aLevelTasks = state.data.tasks.filter((task) => task.category === 'a_level');
-  return `<p class="metric">${percent(aLevelTasks.filter((task) => task.status === 'completed').length, aLevelTasks.length)}%</p><p>${aLevelTasks.length} weekly goal${aLevelTasks.length === 1 ? '' : 's'} · ${weakTopics.length} topic${weakTopics.length === 1 ? '' : 's'} need attention</p><small>${weakTopics.slice(0, 2).map(escapeHtml).join('<br>') || 'Add topics to track mastery.'}</small>`;
+  const tasks = schoolTasks();
+  return `<p class="metric">${tasks.filter(t => (t.status || 'completed') !== 'completed').length}</p><p>outstanding tasks · ${tasks.filter(t => t.is_marked || t.score != null).length} marked</p>`;
 }
 
 function taraPillarHtml() {
@@ -201,15 +200,7 @@ function thinkingPillarHtml() {
 }
 
 function programmeHtml() {
-  const stats = studyPlanStats();
-  return `
-    <header class="top"><div><p class="eyebrow">Plan Tracker</p><h2>${formatDate(currentWeek().week_start)} - ${formatDate(currentWeek().week_end)}</h2><p class="muted">The standing timetable is now the plan. The student records what was learnt, practised, assessed and reflected after each study block.</p></div></header>
-    ${noticeHtml()}
-    <section class="grid six">${card('Blocks logged', `${stats.logged}/${stats.total}`, `${stats.loggedPercent}% of this week captured`)}${card('Green / Amber / Red', `${stats.green}/${stats.amber}/${stats.red}`, 'RAG is the weekly health signal.')}${card('Today', nextStudyBlocks().length, 'study blocks still to log today')}</section>
-    ${studyPlanProgressHtml()}
-    ${studyRhythmHtml()}
-    ${aLevelTopicPlanHtml()}
-    ${legacyProgrammeHtml()}`;
+  return `<header class="top"><div><p class="eyebrow">Plan Tracker</p><h2>Progress by subject or date</h2></div></header>${noticeHtml()}${studyPlanProgressHtml()}`;
 }
 
 function studyRhythmSummaryHtml() {
@@ -222,8 +213,34 @@ function studyRhythmHtml() {
 }
 
 function studyPlanProgressHtml() {
-  const blocks = plannedStudyBlocksForWeek();
-  return `<section class="panel plan-progress"><div class="top mini"><div><p class="eyebrow">Daily Progress Capture</p><h3>Learn · Practise · Assess · Reflect</h3><p class="muted">Save short notes after each planned block. RAG means Green = secure, Amber = needs another pass, Red = stuck or missed.</p></div></div><div class="plan-log-list">${blocks.map(studyPlanLogHtml).join('')}</div></section>`;
+  const activities = [...new Set([...WEEKDAY_TIMETABLE,...WEEKEND_TIMETABLE].flatMap(r => Object.entries(r).filter(([k]) => !['from','to'].includes(k)).map(([,v]) => v)).filter(v => v && !isRestActivity(v)))];
+  const blocks = selectedPlanBlocks();
+  return `<section class="panel"><form data-action="plan-filter" class="form-grid">
+    <label>View<select name="mode"><option value="date" ${sel(state.planMode,'date')}>By date</option><option value="subject" ${sel(state.planMode,'subject')}>By subject</option></select></label>
+    <label data-plan-date ${state.planMode === 'subject' ? 'hidden' : ''}>Date<input name="date" type="date" value="${state.planDate}" required></label>
+    <label data-plan-subject ${state.planMode === 'date' ? 'hidden' : ''}>Subject / activity<select name="subject">${activities.map(a => `<option ${sel(a,state.planSubject)}>${escapeHtml(a)}</option>`).join('')}</select></label>
+    <label data-plan-subject ${state.planMode === 'date' ? 'hidden' : ''}>From<input name="from" type="date" value="${state.planFrom}" required></label>
+    <label data-plan-subject ${state.planMode === 'date' ? 'hidden' : ''}>To<input name="to" type="date" value="${state.planTo}" required></label><button>Show progress</button>
+    </form></section><section class="panel plan-progress"><h3>${state.planMode === 'date' ? formatLongDate(state.planDate) : escapeHtml(state.planSubject)}</h3><p>${blocks.filter(findStudyPlanLog).length} of ${blocks.length} blocks logged</p>
+    <div class="plan-log-list">${blocks.map(studyPlanLogHtml).join('') || '<p>No planned blocks for this selection.</p>'}</div></section>`;
+}
+
+function selectedPlanBlocks() {
+  const from = state.planMode === 'date' ? state.planDate : state.planFrom;
+  const to = state.planMode === 'date' ? state.planDate : state.planTo;
+  const blocks = [];
+  for (let d = new Date(from+'T12:00:00'); dateInput(d) <= to; d.setDate(d.getDate()+1)) {
+    const day = d.toLocaleDateString('en-GB',{weekday:'long'});
+    for (const row of (['Saturday','Sunday'].includes(day) ? WEEKEND_TIMETABLE : WEEKDAY_TIMETABLE)) {
+      if (!row[day] || isRestActivity(row[day]) || (state.planMode === 'subject' && row[day] !== state.planSubject)) continue;
+      blocks.push({date:dateInput(d),day,from:row.from,to:row.to,activity:row[day]});
+    }
+  }
+  for (const log of state.data.studyPlanLogs || []) {
+    if (log.log_date < from || log.log_date > to || (state.planMode === 'subject' && log.planned_activity !== state.planSubject)) continue;
+    if (!blocks.some(b => b.date === log.log_date && b.from === log.start_time.slice(0,5) && b.to === log.end_time.slice(0,5) && b.activity === log.planned_activity)) blocks.push({date:log.log_date,day:log.day_name,from:log.start_time.slice(0,5),to:log.end_time.slice(0,5),activity:log.planned_activity});
+  }
+  return blocks.sort((a,b) => (a.date+a.from).localeCompare(b.date+b.from));
 }
 
 function studyPlanLogHtml(block) {
@@ -265,8 +282,8 @@ function plannedStudyBlocksForWeek() {
 function findStudyPlanLog(block) {
   return (state.data.studyPlanLogs || []).find((log) =>
     log.log_date === block.date &&
-    log.start_time === block.from &&
-    log.end_time === block.to &&
+    log.start_time.slice(0,5) === block.from &&
+    log.end_time.slice(0,5) === block.to &&
     log.planned_activity === block.activity
   );
 }
@@ -609,7 +626,35 @@ function repeatMistakesHtml(t) {
 }
 
 function academicsHtml() {
-  return `<header class="top"><div><p class="eyebrow">A-Level Progress</p><h2>Protect academic strength</h2><p class="muted">Track grades, assessments and weekly mastery topics. Weak or developing topics are fed into the Weekly Programme generator.</p></div></header>${needsAttentionHtml()}${masteredThisWeekHtml()}${topicFilterHtml()}<section class="grid">${state.data.subjects.map(subjectCardHtml).join('')}</section><section class="panel"><h3>Add topic to track</h3><form data-action="add-topic" class="form-grid">${subjectSelect()}<input name="topic_name" placeholder="Topic, e.g. Integration by substitution" required><label>Mastery<select name="mastery_status">${masteryOptions('developing')}</select></label><label>Confidence 1-5<input name="confidence" type="number" min="1" max="5" value="3"></label><input name="notes" placeholder="Notes or next action"><button>Save topic</button></form></section><section class="panel"><h3>Add assessment</h3><form data-action="add-result" class="form-grid">${subjectSelect()}<input name="assessment_name" placeholder="Assessment name" required><input name="topic" placeholder="Topic"><input name="assessment_date" type="date" value="${todayInput()}"><input name="score" type="number" placeholder="Score"><input name="max_score" type="number" value="100"><input name="grade" placeholder="Grade"><input name="teacher_feedback" placeholder="Teacher feedback"><button>Save result</button></form></section>`;
+  const tasks = schoolTasks().filter(t => (state.schoolSubject === 'all' || t.subject_id === state.schoolSubject) && (state.schoolStatus === 'all' || (t.status || 'completed') === state.schoolStatus));
+  return `<header class="top"><div><p class="eyebrow">A-Level Rigour</p><h2>Homework & assessments</h2></div></header>
+    <section class="panel"><form data-action="school-filter" class="form-grid"><label>Subject<select name="subject"><option value="all">All subjects</option>${state.data.subjects.map(s => `<option value="${s.id}" ${sel(s.id,state.schoolSubject)}>${escapeHtml(s.name)}</option>`).join('')}</select></label>
+    <label>Status<select name="status">${['all','not_started','in_progress','completed'].map(s => `<option value="${s}" ${sel(s,state.schoolStatus)}>${label(s)}</option>`).join('')}</select></label><button>Filter tasks</button></form></section>
+    <details class="panel"><summary>Add homework or assessment</summary>${schoolTaskForm()}</details>
+    ${state.data.subjects.filter(s => state.schoolSubject === 'all' || s.id === state.schoolSubject).map(s => `<section class="school-subject"><h3>${escapeHtml(s.name)}</h3>${tasks.filter(t => t.subject_id === s.id).map(t => `<details class="panel"><summary>${escapeHtml(t.assessment_name)} · ${label(t.assessment_type || 'assessment')} · ${label(t.status || 'completed')}${t.score != null ? ` · ${t.score}/${t.max_score}` : t.is_marked ? ' · Marked' : ''}</summary>${schoolTaskForm(t)}</details>`).join('') || '<p class="muted">No tasks match this selection.</p>'}</section>`).join('')}`;
+}
+
+function schoolTasks() {
+  return state.data.subjects.flatMap(s => (s.academic_results || []).map(t => ({...t,subject_name:s.name})));
+}
+
+function schoolTaskForm(task = {}) {
+  const input = (name,caption,type='text') => `<label>${caption}<input name="${name}" type="${type}" value="${escapeAttr(task[name] ?? '')}" ${['score','max_score'].includes(name) ? 'min="0" step="any"' : ''}></label>`;
+  return `<form data-action="save-school-task" class="school-task-form">
+    <input type="hidden" name="task_id" value="${task.id || ''}"><div class="form-grid">
+    <label>Subject<select name="subject_id" required>${state.data.subjects.map(s => `<option value="${s.id}" ${sel(s.id,task.subject_id || state.schoolSubject)}>${escapeHtml(s.name)}</option>`).join('')}</select></label>
+    <label>Task type<select name="assessment_type"><option value="homework" ${sel(task.assessment_type,'homework')}>Homework</option><option value="assessment" ${task.assessment_type !== 'homework' ? 'selected' : ''}>Assessment</option></select></label>
+    <label>Title<input name="assessment_name" value="${escapeAttr(task.assessment_name || '')}" required maxlength="250"></label>
+    <label>Status<select name="status">${['not_started','in_progress','completed'].map(s => `<option value="${s}" ${sel(s,task.status || (task.id ? 'completed' : 'not_started'))}>${label(s)}</option>`).join('')}</select></label>
+    ${input('due_date','Due date','date')}${input('assessment_date','Date completed / assessed','date')}</div>
+    <label>Task details<textarea name="description">${escapeHtml(task.description || '')}</textarea></label>
+    <label>Document (PDF, photo or Word; up to 10 MB)<input type="file" name="attachment" accept=".pdf,.jpg,.jpeg,.png,.docx"></label>
+    ${task.attachment_path ? `<button type="button" class="ghost" data-school-file="${task.id}">Open ${escapeHtml(task.attachment_name || 'document')}</button>` : ''}
+    <h4>Marks and feedback</h4><label><input name="is_marked" type="checkbox" ${task.is_marked || task.score != null ? 'checked' : ''}> Marked by teacher</label>
+    <div class="form-grid">${input('score','Score','number')}${input('max_score','Total marks','number')}${input('grade','Grade (optional)')}</div>
+    <label>Teacher feedback<textarea name="teacher_feedback">${escapeHtml(task.teacher_feedback || '')}</textarea></label>
+    <label>Areas for improvement / next steps<textarea name="self_reflection">${escapeHtml(task.self_reflection || '')}</textarea></label>
+    <button>Save task</button><p class="form-status" aria-live="polite"></p></form>`;
 }
 
 function topicFilterHtml() {
@@ -739,7 +784,16 @@ function reasoningHistoryHtml() {
 }
 
 function readinessHtml() {
-  return `<header class="top"><div><p class="eyebrow">Overall Analytics</p><h2>Readiness indicators, missed targets and growth focus</h2><p class="muted">This is not a probability of admission. It is a preparation map across the four pillars: A-Level Rigour, TARA Assessment, Super-Curricular, and Reading/Thinking Readiness.</p></div></header>${overallAnalyticsSummaryHtml()}${pillarAnalyticsHtml()}<section class="readiness-stack">${Object.entries(state.data.readiness).map(([name, value]) => readinessCardHtml(name, value)).join('')}</section><section class="panel"><h3>How to read this</h3><p class="muted">Not Started and Early mean the habit or evidence base is still thin. Developing means useful work exists but is not yet consistent. Strong and Very Strong require repeated evidence across weekly goals, practice, school results, reflections and milestones.</p></section>`;
+  const tasks = schoolTasks();
+  const scored = tasks.filter(t => t.score != null && t.max_score > 0);
+  return `<header class="top"><div><p class="eyebrow">Analytics</p><h2>School work and TARA progress</h2></div></header>
+  <section class="grid">${card('School tasks',tasks.length,'Homework and assessments')}${card('Completed',tasks.filter(t => (t.status || 'completed') === 'completed').length,'Recorded as completed')}${card('Marked',tasks.filter(t => t.is_marked || t.score != null).length,'Teacher marks recorded')}</section>
+  <section class="panel"><h3>Results by subject</h3>${state.data.subjects.map(s => {
+    const rows = scored.filter(t => t.subject_id === s.id);
+    return `<p><b>${escapeHtml(s.name)}</b> · ${rows.length ? Math.round(rows.reduce((sum,t) => sum+t.score/t.max_score*100,0)/rows.length)+'% average across '+rows.length+' scored tasks' : 'No scores yet'}</p>`;
+  }).join('')}</section>
+  <section class="panel"><h3>Areas for improvement</h3>${tasks.filter(t => t.self_reflection).map(t => `<p><b>${escapeHtml(t.subject_name)}: ${escapeHtml(t.assessment_name)}</b><br>${escapeHtml(t.self_reflection)}</p>`).join('') || '<p>No improvement notes recorded.</p>'}</section>
+  <section class="panel"><h3>TARA</h3>${taraPillarHtml()}<button data-view="analytics">Review TARA analytics</button></section>`;
 }
 
 function overallAnalyticsSummaryHtml() {
@@ -979,9 +1033,10 @@ function recentRows(rows, dateField) {
 
 function parentHtml() {
   if (state.data.parentStudents?.length) return parentLinkedStudentsHtml();
-  const plan = studyPlanStats();
-  const t = state.data.tara;
-  return `<header class="top"><div><p class="eyebrow">Parent / Coach View</p><h2>Progress summary without private reflections</h2></div></header><section class="grid six">${card('Plan tracking', `${plan.loggedPercent}%`, `${plan.logged}/${plan.total} blocks logged<br>${plan.green}/${plan.amber}/${plan.red} green/amber/red`)}${card('TARA Assessment', `${t.overallAccuracy}%`, `Weakest sub-type: ${t.weakestSubtype?.name || 'Not enough data'}<br>Questions: ${t.totalQuestions}`)}${card('A-Level', '', state.data.subjects.map((s)=>`${s.name}: ${s.predicted_grade || 'Not set'}`).join('<br>'))}${card('E&M consistency', `${state.data.journal.length} entries`, state.data.journal[0]?.title || 'No journal entries yet')}${card('Milestones', `${state.data.milestones.filter((m)=>m.status==='completed').length}/${state.data.milestones.length}`, 'Completed admissions milestones')}${card('Recommendations', '', state.data.recommendations.slice(0,2).join('<br>') || 'No recommendation yet')}</section>${digestPreviewHtml()}<section class="panel"><h3>Privacy note</h3><p class="muted">This view deliberately summarises progress. Student reflections are not shown here by default.</p></section>`;
+  const tasks = schoolTasks();
+  return `<header class="top"><div><p class="eyebrow">Parent / Coach View</p><h2>Progress summary</h2></div></header>
+    <section class="grid">${card('School tasks', tasks.filter(t => (t.status || 'completed') !== 'completed').length,'Still to complete')}${card('Completed',tasks.filter(t => (t.status || 'completed') === 'completed').length,'Homework and assessments')}${card('TARA',state.data.tara.overallAccuracy+'%',state.data.tara.totalQuestions+' questions answered')}</section>
+    ${digestPreviewHtml()}<section class="panel"><h3>Privacy</h3><p>Private student reflections are excluded from this summary.</p></section>`;
 }
 
 function parentLinkedStudentsHtml() {
@@ -1015,9 +1070,9 @@ function digestSummaryHtml(digest) {
     ${digestBlock('TARA Assessment', digest.tara.totalSets ? `${digest.tara.totalSets} set${digest.tara.totalSets === 1 ? '' : 's'} · ${digest.tara.correct}/${digest.tara.totalQuestions} correct · ${digest.tara.accuracy}%` : 'No TARA Assessment set completed.')}
     ${digestBlock('Weakest Sub-type', digest.tara.weakSubtypes[0] ? `${escapeHtml(digest.tara.weakSubtypes[0].name)} · ${digest.tara.weakSubtypes[0].accuracy}%` : 'No weak sub-type identified yesterday.')}
     ${digestBlock('Plan Tracker', `${digest.studyPlan.logs.length} blocks logged · ${digest.studyPlan.green}/${digest.studyPlan.amber}/${digest.studyPlan.red} green/amber/red`)}
-    ${digestBlock('Academics', digest.academics.length ? digest.academics.map((item) => `${escapeHtml(item.subject_name)}: ${escapeHtml(item.assessment_name || item.topic || 'assessment')} ${escapeHtml(item.percentage || '')}%`).join('<br>') : 'No academic result added.')}
-    ${digestBlock('E&M / Reasoning', `${digest.journal.length} journal entr${digest.journal.length === 1 ? 'y' : 'ies'} · ${digest.reasoning.length} reasoning session${digest.reasoning.length === 1 ? '' : 's'}`)}
-    ${digestBlock('Suggested Focus', digest.recommendations.map((item) => escapeHtml(item)).join('<br>') || 'Keep the current weekly programme moving.')}
+    ${digestBlock('Academics', digest.academics.length ? digest.academics.map((item) => `${escapeHtml(item.subject_name)}: ${escapeHtml(item.assessment_name || item.topic || 'assessment')} ${item.score != null ? `${escapeHtml(item.score)}/${escapeHtml(item.max_score)}` : escapeHtml(label(item.status || 'completed'))}`).join('<br>') : 'No academic result added.')}
+
+    ${digestBlock('Suggested Focus', digest.recommendations.map((item) => escapeHtml(item)).join('<br>') || 'Keep logging your study plan and school tasks.')}
   </div>`;
 }
 
@@ -1213,6 +1268,15 @@ async function submitTara() {
 app.addEventListener('click', async (event) => {
   const target = event.target.closest('button');
   if (!target) return;
+  if (target.dataset.schoolFile) {
+    try {
+      const task = schoolTasks().find(t => t.id === target.dataset.schoolFile);
+      const url = await schoolAttachmentUrl(task.attachment_path);
+      const link=document.createElement('a');link.href=url;link.target='_blank';link.rel='noopener';link.textContent='Open document';
+      target.replaceWith(link);link.click();
+    } catch(error) {setFormStatus(target.closest('form'),friendlyError(error),'error');}
+    return;
+  }
   if (target.dataset.view) { state.view = target.dataset.view; render(); return; }
   if (target.dataset.answer) { state.practice.answers[state.practice.set[state.practice.index].id] = target.dataset.answer; render(); return; }
   if (target.dataset.topicFilter) { state.academicTopicFilter = target.dataset.topicFilter; render(); return; }
@@ -1242,6 +1306,11 @@ app.addEventListener('click', async (event) => {
 });
 
 app.addEventListener('change', async (event) => {
+  if (event.target.name === 'mode' && event.target.form?.dataset.action === 'plan-filter') {
+    const form = event.target.form;
+    form.querySelector('[data-plan-date]').hidden = event.target.value === 'subject';
+    form.querySelectorAll('[data-plan-subject]').forEach(label => label.hidden = event.target.value === 'date');
+  }
   if (event.target.dataset.taskStatus) {
     const task = state.data.tasks.find((t) => t.id === event.target.dataset.taskStatus);
     await updateTask(state.user, task, { status: event.target.value });
@@ -1305,7 +1374,22 @@ app.addEventListener('submit', async (event) => {
       render();
       return;
     }
+    if (action === 'plan-filter') {
+      if (values.from > values.to) throw new Error('End date must be after start date.');
+      if ((new Date(values.to)-new Date(values.from))/86400000 > 366) throw new Error('Select up to one year at a time.');
+      state.planMode=values.mode; state.planDate=values.date; state.planSubject=values.subject;
+      state.planFrom=values.from; state.planTo=values.to; render(); return;
+    }
+    if (action === 'school-filter') {state.schoolSubject=values.subject;state.schoolStatus=values.status;render();return;}
     if (button) button.disabled = true;
+    if (action === 'save-school-task') {
+      await saveSchoolTask(state.user,values,values.attachment,schoolTasks().find(t => t.id === values.task_id));
+      state.data = await bootstrap(state.user); render();
+      const saved = app.querySelector(`input[name="task_id"][value="${values.task_id}"]`);
+      if (saved && values.task_id) {saved.closest('details').open=true;setFormStatus(saved.form,'Saved successfully.','success');}
+      else {state.notice={type:'success',message:'Task added successfully.'};app.querySelector('main').insertAdjacentHTML('afterbegin',noticeHtml());}
+      return;
+    }
     if (action === 'update-subject') {
       const subject = findSubject(values.subject_id);
       await updateSubject(state.user, subject, values);

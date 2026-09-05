@@ -6,9 +6,9 @@ export function buildDailyDigest(data, date = previousLocalDate()) {
   const responses = responsesForAttempts(data.tara?.responses || [], attempts);
   const completedTasks = tasksForDate(tasks, date, 'completed');
   const skippedTasks = tasksForDate(tasks, date, 'skipped');
-  const academicResults = rowsForDate(flatResults(data.subjects || []), date, ['assessment_date', 'created_at']);
-  const journalEntries = rowsForDate(data.journal || [], date, ['date_completed', 'created_at']);
-  const reasoningSessions = rowsForDate(data.reasoning || [], date, ['date', 'created_at']);
+  const academicResults = rowsForDate(flatResults(data.subjects || []), date, ['assessment_date', 'completed_at', 'updated_at', 'created_at']);
+  const journalEntries = [];
+  const reasoningSessions = [];
   const studyPlanLogs = (data.studyPlanLogs || []).filter((log) => log.log_date === date);
   const totalQuestions = responses.length;
   const correct = responses.filter((response) => response.is_correct).length;
@@ -101,9 +101,8 @@ function buildDigestRecommendations({ attempts, responses, weakSubtypes, complet
   if (skippedTasks.length) recs.push('Look at skipped weekly tasks and either reschedule or deliberately remove them from this week.');
   if (studyPlanLogs.some((log) => log.rag_status === 'red')) recs.push('Review the red study-plan blocks and decide what needs reteaching, extra practice or spillover time.');
   if (!studyPlanLogs.length) recs.push('No standing-plan blocks were logged yesterday, so capture Learn / Practise / Assess / RAG for the next study block.');
-  if (!journalEntries.length && !reasoningSessions.length) recs.push('Add one short E&M journal or Oxford reasoning reflection today to keep depth building.');
-  if (!completedTasks.length && !attempts.length) recs.push('Start with one small task today: either a 5-question TARA Assessment set or one high-priority weekly task.');
-  return [...recs, ...appRecommendations].slice(0, 4);
+  if (!completedTasks.length && !attempts.length) recs.push('Start with one school task or a 5-question TARA set.');
+  return recs.slice(0, 4);
 }
 
 function sameLocalDate(value, expected) {
