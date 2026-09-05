@@ -1,7 +1,7 @@
-import { bootstrap, getSession, signIn, signOut, saveAttempt, updateTask, addAcademicResult, updateSubject, addAcademicTopic, updateAcademicTopic, addJournalEntry, addReasoningSession, updateMilestone, addMilestone, saveWeeklyReview, addInterviewSession, updateProfile, saveTaraErrorAnalysis, saveStudyPlanLog } from './dataService.js';
+import { bootstrap, getSession, signIn, signOut, saveAttempt, updateTask, addAcademicResult, updateSubject, addAcademicTopic, updateAcademicTopic, addJournalEntry, addReasoningSession, updateMilestone, addMilestone, addInterviewSession, updateProfile, saveTaraErrorAnalysis, saveStudyPlanLog } from './dataService.js';
 import { STUDY_AREAS, areaFor, displayActivity, availabilityHtml, richStudyFields, handleStudyInput, collectStudyDetails, customTopicsFor, topicHistoryHtml } from './planTracking.js';
 import { saveSchoolTask, schoolAttachmentUrl } from './schoolTaskService.js';
-import { dailyStudyReport } from './dailyStudyReport.js';
+import { dailyStudyReport, weeklyStudyReport } from './dailyStudyReport.js';
 import { logArea, deviationFields, handleDeviation, collectDeviation } from './planTracking.js';
 import { questionBankManifest } from './questionBankManifest.generated.js';
 import { methodologyFor } from './methodologies.js';
@@ -112,7 +112,7 @@ function navButton(view, label) {
 
 function navigationHtml() {
   return `
-    ${navSection('Dashboard', [['dashboard','Dashboard'], ['programme','Plan Tracker'], ['review','Weekly Review']])}
+    ${navSection('Dashboard', [['dashboard','Dashboard'], ['programme','Plan Tracker']])}
     ${navSection('Study', [['academics','A-Level Rigour'], ['tara','TARA Assessment']])}
     ${navSection('Analytics', [['readiness','Overall Analytics'], ['analytics','TARA Deep Dive']])}
     ${navSection('Account', [['parent','Parent View'], ['profile','Profile']])}`;
@@ -129,7 +129,6 @@ function viewHtml() {
   if (state.view === 'academics') return academicsHtml();
 
   if (state.view === 'readiness') return readinessHtml();
-  if (state.view === 'review') return weeklyReviewHtml();
   if (state.view === 'parent') return parentHtml();
   if (state.view === 'profile') return profileHtml();
   return dashboardHtml();
@@ -159,6 +158,7 @@ function dashboardHtml() {
       <p>${today.followed} followed plan · ${today.changed} changed · ${today.skipped} skipped</p>
       <p class="muted">${today.loggedMinutes} of ${today.plannedMinutes} planned minutes covered by logs. Logged time is not measured study time.</p>
     </section>
+    ${weeklyReportHtml(weeklyStudyReport(data.studyPlanLogs || [],new Date(),state.reportDate))}
     ${dailyReportHtml(today)}
     <section class="pillar-grid">
       ${pillarCard('A-Level Rigour', 'Homework and assessments', aLevelPillarHtml(), 'academics')}
@@ -166,6 +166,18 @@ function dashboardHtml() {
 
     </section>
     <section class="panel"><h3>School tasks remaining</h3>${schoolTasks().filter(t => (t.status || 'completed') !== 'completed').slice(0,3).map(t => `<p>${escapeHtml(t.subject_name)}: ${escapeHtml(t.assessment_name)}</p>`).join('') || '<p>No outstanding tasks.</p>'}</section>`;
+}
+
+function weeklyReportHtml(report) {
+  return `<details class="panel weekly-report"><summary>Weekly report · ${formatDate(report.start)}–${formatDate(report.end)} · ${report.logged}/${report.total} blocks logged</summary>
+    <p>${report.percent}% of the full week's planned blocks logged · ${report.extra} extra blocks</p>
+    <div class="bar" role="progressbar" aria-label="Weekly planned blocks logged" aria-valuenow="${report.percent}" aria-valuemin="0" aria-valuemax="100"><span style="width:${report.percent}%"></span></div>
+    <p>${report.followed} followed plan · ${report.changed} changed · ${report.skipped} skipped</p>
+    <p>${report.missed} elapsed blocks not logged · ${report.upcoming} upcoming</p>
+    <p>${report.green} green · ${report.amber} amber · ${report.red} red reflections</p>
+    <h3>Daily breakdown</h3><div class="daily-report-list">${report.days.map(day=>`<article class="weekly-block weekly-${day.red?'red':day.amber?'amber':day.logged?'logged':'upcoming'}"><b>${formatLongDate(day.date)}</b><p>${day.logged}/${day.total} logged · ${day.overdue} elapsed not logged · ${day.skipped} skipped</p></article>`).join('')}</div>
+    <h3>Subject coverage</h3><div class="daily-report-list">${report.subjects.map(s=>`<article class="weekly-block"><b>${escapeHtml(s.name)}</b><p>${s.logged}/${s.planned} planned slots logged · ${s.actual} blocks studied · ${s.missed} elapsed not logged</p></article>`).join('')}</div>
+    <p class="muted">Skipped slots count as logged, not studied. Blocks studied follow the actual subject, including extra study. Future blocks are not missed targets.</p></details>`;
 }
 
 function dailyReportHtml(report) {
@@ -198,17 +210,6 @@ function dailyReportHtml(report) {
     <button class="ghost" data-today-plan>Update ${report.date===todayInput()?"today's":"this day's"} progress</button></section>`;
 }
 
-function dashboardSignalsHtml() {
-  const stats = studyPlanStats();
-  const nextMilestone = nextOpenMilestone();
-  const latestReview = recentRows(state.data.weeklyReviews || [], 'week_start')[0];
-  const improving = latestReview?.biggest_improvement || (stats.green ? `${stats.green} study block${stats.green === 1 ? '' : 's'} marked green this week.` : 'Start with one logged study block this week.');
-  return `<section class="signal-grid">
-    <article class="panel signal-card"><p class="eyebrow">Slipping</p><h3>${stats.amber + stats.red}</h3><p>${stats.amber} amber · ${stats.red} red</p><small>${stats.red ? 'Review the red blocks and use spillover deliberately.' : 'No red blocks logged this week.'}</small></article>
-    <article class="panel signal-card"><p class="eyebrow">Improving</p><h3>Latest signal</h3><p>${escapeHtml(improving)}</p><small>Use Weekly Review to make this more precise.</small></article>
-    <article class="panel signal-card"><p class="eyebrow">Next Deadline</p><h3>${nextMilestone ? formatDate(nextMilestone.target_date) : 'Unset'}</h3><p>${nextMilestone ? escapeHtml(nextMilestone.title) : 'Add Oxford and school milestones.'}</p><small>${nextMilestone ? `${daysUntil(nextMilestone.target_date)} days to go` : 'Milestones keep the plan time-aware.'}</small></article>
-  </section>`;
-}
 
 function pillarCard(title, subtitle, body, view) {
   return `<article class="panel pillar-card"><div><p class="eyebrow">${title}</p><h3>${subtitle}</h3></div><div class="pillar-body">${body}</div><button class="ghost" data-view="${view}" title="Open ${title}">Open</button></article>`;
@@ -851,7 +852,7 @@ function readinessHtml() {
 
 function overallAnalyticsSummaryHtml() {
   const stats = studyPlanStats();
-  return `<section class="grid six">${card('Plan logging', `${stats.loggedPercent}%`, `${stats.logged}/${stats.total} standing timetable blocks captured`)}${card('RAG health', `${stats.green}/${stats.amber}/${stats.red}`, 'green / amber / red this week')}${card('Growth focus', '', state.data.recommendations.slice(0, 2).join('<br>') || 'Complete more activity to generate growth focus.')}${card('Historical signal', `${state.data.weeklyReviews.length}`, 'weekly review records saved')}</section>`;
+  return `<section class="grid six">${card('Plan logging', `${stats.loggedPercent}%`, `${stats.logged}/${stats.total} standing timetable blocks captured`)}${card('RAG health', `${stats.green}/${stats.amber}/${stats.red}`, 'green / amber / red this week')}${card('Growth focus', '', state.data.recommendations.slice(0, 2).join('<br>') || 'Complete more activity to generate growth focus.')}</section>`;
 }
 
 function pillarAnalyticsHtml() {
@@ -1027,35 +1028,6 @@ function statusOptions(selected) {
   return ['not_started','in_progress','completed','skipped'].map((status) => `<option value="${status}" ${sel(selected,status)}>${label(status)}</option>`).join('');
 }
 
-function weeklyReviewHtml() {
-  const draft = weeklyReviewDraft();
-  return `<header class="top"><div><p class="eyebrow">Weekly Review</p><h2>What should change next week?</h2><p class="muted">The app pre-fills the measurable parts. The student adds judgement and reflection.</p></div></header><section class="grid six">${card('Tasks completed', draft.completedCount, `${draft.totalCount} total tasks`)}${card('Tasks skipped', draft.skippedCount, 'Skipped is tracked separately from completed.')}${card('TARA Assessment focus', draft.taraFocus, 'Based on latest weak sub-type.')}</section><section class="panel"><form data-action="save-review" class="stack">${weeklyReviewField('completed_summary', draft.completed_summary)}${weeklyReviewField('skipped_summary', draft.skipped_summary)}${weeklyReviewField('hardest_area', draft.hardest_area)}${weeklyReviewField('biggest_improvement', '')}${weeklyReviewField('biggest_weakness', draft.biggest_weakness)}${weeklyReviewField('most_valuable_task', '')}${weeklyReviewField('student_reflection', '')}${weeklyReviewField('next_week_focus', draft.next_week_focus)}<button>Save review</button></form></section>`;
-}
-
-function weeklyReviewDraft() {
-  const tasks = state.data.tasks || [];
-  const completed = tasks.filter((task) => task.status === 'completed');
-  const skipped = tasks.filter((task) => task.status === 'skipped');
-  const weakTopics = state.data.subjects.flatMap((subject) => (subject.academic_topics || [])
-    .filter((topic) => ['weak', 'developing'].includes(topic.mastery_status))
-    .map((topic) => `${subject.name}: ${topic.topic_name}`));
-  const taraWeak = state.data.tara.weakestSubtype?.name || 'Not enough admissions-test data yet';
-  return {
-    completedCount: completed.length,
-    skippedCount: skipped.length,
-    totalCount: tasks.length,
-    taraFocus: taraWeak,
-    completed_summary: completed.map((task) => `${label(task.category)}: ${task.title}`).join('\n') || 'No tasks completed yet.',
-    skipped_summary: skipped.map((task) => `${label(task.category)}: ${task.title}`).join('\n') || 'No tasks skipped.',
-    hardest_area: weakTopics[0] || taraWeak,
-    biggest_weakness: weakTopics.slice(0, 3).join('\n') || taraWeak,
-    next_week_focus: state.data.recommendations[0] || 'Keep workload realistic and complete the highest-value weekly tasks first.'
-  };
-}
-
-function weeklyReviewField(name, value) {
-  return `<label>${label(name)}<textarea name="${name}" placeholder="${name.replaceAll('_',' ')}">${escapeHtml(value || '')}</textarea></label>`;
-}
 
 function interviewHtml() {
   return `<header class="top"><div><p class="eyebrow">Interview Prep</p><h2>Practise clarity, adaptability and quantitative thinking</h2><p class="muted">Record practice as evidence of how the student thinks, responds and improves, not just whether the first answer sounded polished.</p></div></header>${promptBankHtml('Oxford E&M interview prompt bank', interviewPrompts, 'interview-prompt')}<section class="panel"><form data-action="add-interview" class="stack interview-form"><div class="form-grid"><input name="topic" placeholder="Topic"><input name="session_type" placeholder="Session type, e.g. parent mock / school mock"><input name="session_date" type="date" value="${todayInput()}"></div><textarea name="questions" data-prompt-target="interview" placeholder="Questions practised, one per line"></textarea><textarea name="notes" placeholder="What happened in the session?"></textarea><textarea name="reasoning_feedback" placeholder="Reasoning feedback"></textarea><textarea name="clarity_feedback" placeholder="Clarity feedback"></textarea><textarea name="adaptability_feedback" placeholder="Adaptability feedback"></textarea><textarea name="quantitative_feedback" placeholder="Quantitative feedback"></textarea><textarea name="overall_feedback" placeholder="Overall feedback"></textarea><textarea name="next_steps" placeholder="Next steps"></textarea><button>Save interview session</button></form></section><section class="panel"><h3>Interview history</h3>${interviewHistoryHtml()}</section>`;
@@ -1488,7 +1460,6 @@ app.addEventListener('submit', async (event) => {
       await updateMilestone(state.user, milestone, values);
     }
     if (action === 'add-interview') await addInterviewSession(state.user, values);
-    if (action === 'save-review') await saveWeeklyReview(state.user, values);
     if (action === 'save-profile') await updateProfile(state.user, normalizeProfilePayload(values));
     if (action === 'save-error') await saveTaraErrorAnalysis(state.user, values);
     if (action === 'save-study-log') {

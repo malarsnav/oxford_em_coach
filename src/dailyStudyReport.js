@@ -1,4 +1,36 @@
 import { WEEKDAY_TIMETABLE, WEEKEND_TIMETABLE } from './studentStudyPlan.js';
+import { areaFor, logArea } from './planTracking.js';
+
+export function weeklyStudyReport(logs = [], now = new Date(), selectedDate) {
+  const anchor = selectedDate ? new Date(selectedDate+'T12:00:00') : new Date(now);
+  anchor.setDate(anchor.getDate() - (anchor.getDay()+6)%7);
+  const days = Array.from({length:7}, (_,i) => {
+    const date = new Date(anchor); date.setDate(anchor.getDate()+i);
+    const key = `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`;
+    return dailyStudyReport(logs,now,key);
+  });
+  const sum = field => days.reduce((total,day)=>total+day[field],0);
+  const subjects = new Map();
+  const subject = name => {
+    if(!subjects.has(name)) subjects.set(name,{name,planned:0,logged:0,actual:0,missed:0});
+    return subjects.get(name);
+  };
+  days.forEach(day=>{
+    day.blocks.forEach(block=>{
+      const row=subject(areaFor(block.activity)); row.planned++;
+      if(block.log) row.logged++;
+      if(block.status==='Not logged') row.missed++;
+    });
+    [...day.blocks.map(b=>b.log).filter(Boolean),...day.extra].forEach(log=>{
+      const name=logArea(log); if(name) subject(name).actual++;
+    });
+  });
+  const total=sum('total'),logged=sum('logged');
+  return {start:days[0].date,end:days[6].date,days,subjects:[...subjects.values()],total,logged,
+    percent:total?Math.round(100*logged/total):0,missed:sum('overdue'),upcoming:sum('upcoming'),
+    followed:sum('followed'),changed:sum('changed'),skipped:sum('skipped'),
+    green:sum('green'),amber:sum('amber'),red:sum('red'),extra:days.reduce((n,d)=>n+d.extra.length,0)};
+}
 
 export function dailyStudyReport(logs = [], now = new Date(), selectedDate) {
   const today = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;

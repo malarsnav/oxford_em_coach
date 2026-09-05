@@ -50,4 +50,16 @@ assert.equal(run('dailyStudyReport([],new Date(2026,8,5,12),"2026-09-04").overdu
 assert.equal(run('dailyStudyReport([],new Date(2026,8,5,12),"2026-09-06").upcoming'),8);
 assert.equal(run('logArea({planned_activity:"Maths",details:{outcome:"changed",actual_activity:"Physics"}})'),'Physics');
 assert.equal(run('logArea({planned_activity:"Maths",details:{outcome:"skipped"}})'),null);
-console.log('43 syllabus, compatibility and daily-report checks passed.');
+assert.equal(run('weeklyStudyReport([],new Date(2026,8,5,12)).start'),'2026-08-31');
+assert.equal(run('weeklyStudyReport([],new Date(2026,8,5,12)).end'),'2026-09-06');
+assert.equal(run('weeklyStudyReport([],new Date(2026,8,5,12)).total'),41);
+assert.equal(run('weeklyStudyReport([],new Date(2026,8,5,12),"2026-08-24").missed'),41);
+assert.equal(run('weeklyStudyReport([],new Date(2026,8,5,12),"2026-09-07").missed'),0);
+assert.equal(run(`weeklyStudyReport(${sample},new Date(2026,8,5,12)).logged`),1);
+assert.equal(run(`weeklyStudyReport(${sample},new Date(2026,8,5,12)).extra`),1);
+const changed='[{log_date:"2026-09-05",start_time:"09:00",end_time:"10:00",planned_activity:"Maths",details:{outcome:"changed",actual_activity:"Physics"}}]';
+assert.equal(run(`weeklyStudyReport(${changed},new Date(2026,8,5,12)).subjects.find(s=>s.name==="Physics").actual`),1);
+assert.equal(run(`weeklyStudyReport(${changed},new Date(2026,8,5,12)).subjects.find(s=>s.name==="Maths").actual`),0);
+assert.equal(run(`weeklyStudyReport(${changed.replace('changed','skipped')},new Date(2026,8,5,12)).skipped`),1);
+assert.equal(run(`weeklyStudyReport(${changed.replace('changed','skipped')},new Date(2026,8,5,12)).subjects.find(s=>s.name==="Physics").actual`),0);
+console.log('Syllabus, compatibility, daily and weekly report checks passed.');
