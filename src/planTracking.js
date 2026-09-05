@@ -1,5 +1,5 @@
 import { WEEKDAY_TIMETABLE, WEEKEND_TIMETABLE } from './studentStudyPlan.js';
-import { MATHS_SPEC, MATHS_TOPICS, MATHS_ITEMS } from './mathsSyllabus.js';
+import { syllabusFor, SYLLABUS_ITEMS } from './studySyllabuses.js';
 
 export const STUDY_AREAS = ['Maths','Physics','Economics','History','AS Maths','EPQ','Super Curricular','Book','TARA','Magazine'];
 const academic = ['Maths','Physics','Economics','History','AS Maths'];
@@ -35,13 +35,24 @@ export function evidenceRowHtml(entry) {
   </fieldset>`;
 }
 
-export function richStudyFields(activity, log = {}, attempts = [], customTopics = []) {
+function syllabusPickerHtml(area, scope, selected) {
+  const syllabus = syllabusFor(area, scope);
+  if (!syllabus) return '';
+  return `<p>${esc(syllabus.label)}${scope === 'as' ? ' · Year 12 / AS content' : area === 'Physics' ? ' · AS content supplied' : ' · Full supplied content'}</p>
+    <label>Find a topic<input type="search" data-topic-search placeholder="Search topic or reference"></label>
+    ${syllabus.topics.map(g=>`<details data-topic-group><summary>${esc(g.section)} · ${esc(g.topic)}${g.level==='a_level'?' (A-level only)':''}</summary>${[syllabus.items.find(i=>i.id===g.id+':general'),...g.items].map(i=>`<label class="topic-choice" data-search-text="${esc((i.section+' '+i.topic+' '+i.ref+' '+i.label).toLowerCase())}"><input type="checkbox" data-pick-topic="${esc(i.id)}" ${selected.has(i.id)?'checked':''}>${esc(i.ref)} ${esc(i.label)}</label>`).join('')}</details>`).join('')}`;
+}
+
+export function richStudyFields(activity, log = {}, attempts = [], customTopics = [], schoolYear = 'Year 12') {
   const area = areaFor(activity), d=log.details || {};
   if (academic.includes(area)) {
     const selected = new Set((d.entries||[]).map(e=>e.id));
+    const scope = d.syllabus_scope || (d.spec === 'edexcel-9ma0-issue4' || /13/.test(schoolYear) ? 'full' : 'as');
     return `<div class="rich-study" data-rich-area="${esc(area)}">
-      ${area==='Maths' ? `<details class="topic-picker"><summary>Choose Edexcel topics / sub-topics</summary><p>${MATHS_SPEC.label}</p><label>Find a topic<input type="search" data-topic-search placeholder="Search e.g. integration, 2.3"></label>
-      ${MATHS_TOPICS.map(g=>`<details data-topic-group><summary>${esc(g.section)} · ${esc(g.topic)}</summary>${[MATHS_ITEMS.find(i=>i.id===g.id+':general'),...g.items].map(i=>`<label class="topic-choice" data-search-text="${esc((i.section+' '+i.topic+' '+i.ref+' '+i.label).toLowerCase())}"><input type="checkbox" data-pick-topic="${esc(i.id)}" ${selected.has(i.id)?'checked':''}>${esc(i.ref)} ${esc(i.label)}</label>`).join('')}</details>`).join('')}</details>` : ''}
+      <details class="topic-picker"><summary>Choose syllabus topics / sub-topics</summary>
+        <label>Content scope<select data-syllabus-scope><option value="as" ${scope==='as'?'selected':''}>Year 12 / AS</option><option value="full" ${scope==='full'?'selected':''}>All supplied content (including later A-level)</option></select></label>
+        <div data-syllabus-picker>${syllabusPickerHtml(area,scope,selected)}</div>
+      </details>
       <details><summary>Other / custom topic</summary>${input('custom_topic','Topic')}${input('custom_subtopic','Sub-topic (optional)')}<button type="button" class="ghost" data-add-custom>Add topic</button>
       ${customTopics.length ? `<label>Previously used<select data-reuse-topic><option value="">Choose a saved custom topic</option>${customTopics.map(e=>`<option value="${esc(e.id)}">${esc(e.topic)}${e.label?' / '+esc(e.label):''}</option>`).join('')}</select></label>`:''}</details>
       <div data-topic-evidence>${(d.entries||[]).map(evidenceRowHtml).join('')}</div>
@@ -74,8 +85,12 @@ export function handleStudyInput(event, logs) {
     if (![...form.querySelectorAll('[data-topic-id]')].some(r=>r.dataset.topicId===entry.id)) form.querySelector('[data-topic-evidence]').insertAdjacentHTML('beforeend',evidenceRowHtml(entry));
   };
   if (t.matches('[data-pick-topic]')) {
-    if (t.checked) append(MATHS_ITEMS.find(i=>i.id===t.dataset.pickTopic));
+    if (t.checked) append(SYLLABUS_ITEMS.find(i=>i.id===t.dataset.pickTopic));
     else [...form.querySelectorAll('[data-topic-id]')].find(r=>r.dataset.topicId===t.dataset.pickTopic)?.remove();
+  }
+  if (t.matches('[data-syllabus-scope]')) {
+    const selected = new Set([...form.querySelectorAll('[data-topic-id]')].map(r=>r.dataset.topicId));
+    form.querySelector('[data-syllabus-picker]').innerHTML=syllabusPickerHtml(area,t.value,selected);
   }
   if (t.matches('[data-topic-search]')) {
     const query=t.value.toLowerCase().trim();
@@ -115,13 +130,13 @@ export function collectStudyDetails(form) {
     const n=Number(value);if(!Number.isFinite(n)||n<0||!Number.isInteger(n))throw new Error('Counts and marks must be whole numbers of zero or more.');return n;
   };
   const validateScore=(score,total)=>{if(score!==null&&(total===null||total<=0||score>total))throw new Error('Provide total marks greater than zero, with score no higher than the total.');};
-  if(academic.includes(area))return {version:1,area,spec:area==='Maths'?MATHS_SPEC.id:null,entries:[...container.querySelectorAll('[data-topic-id]')].map(row=>{
-    const item=MATHS_ITEMS.find(i=>i.id===row.dataset.topicId);
+  if(academic.includes(area))return {version:1,area,syllabus_scope:container.querySelector('[data-syllabus-scope]')?.value || 'as',spec:syllabusFor(area,container.querySelector('[data-syllabus-scope]')?.value)?.id || null,entries:[...container.querySelectorAll('[data-topic-id]')].map(row=>{
+    const item=SYLLABUS_ITEMS.find(i=>i.id===row.dataset.topicId);
     const attempted=number(row,'attempted'),correct=number(row,'correct'),score=number(row,'score'),total=number(row,'total');
     if(correct!==null&&(attempted===null||correct>attempted))throw new Error('Correct answers cannot exceed questions attempted.');validateScore(score,total);
     const selected=[...row.querySelectorAll('[name="mode"]:checked')].map(c=>c.value);
     if(!selected.length)throw new Error('Choose Learn, Practise, Assess or Reflect for each selected topic.');
-    return {id:row.dataset.topicId,topic:row.dataset.topicName,label:row.dataset.subtopicName,ref:item?.ref||'',section:item?.section||'',focus:get(row,'focus'),modes:selected,attempted,correct,score,total,notes:get(row,'notes'),rag:get(row,'rag')};
+    return {id:row.dataset.topicId,topic:row.dataset.topicName,label:row.dataset.subtopicName,ref:item?.ref||'',section:item?.section||'',spec:item?.spec || (item ? 'edexcel-9ma0-issue4' : null),focus:get(row,'focus'),modes:selected,attempted,correct,score,total,notes:get(row,'notes'),rag:get(row,'rag')};
   })};
   const d={version:1,area};
   const fields = area==='Super Curricular'?['activity_kind','activity_name','paper_year','question_numbers','questions_completed','activity_score','activity_total','work_done','next_action']:area==='EPQ'?['project_title','project_stage','work_done','next_action']:area==='TARA'?['tara_attempt_id','work_done']:['title','section','key_idea'];

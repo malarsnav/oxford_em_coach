@@ -202,7 +202,7 @@ function thinkingPillarHtml() {
 }
 
 function programmeHtml() {
-  return `<header class="top"><div><p class="eyebrow">Plan Tracker</p><h2>Progress by subject or date</h2></div></header>${noticeHtml()}<details class="panel"><summary>View standing timetable</summary>${studyRhythmHtml()}</details>${studyPlanProgressHtml()}`;
+  return `<header class="top"><div><p class="eyebrow">Plan Tracker · ${escapeHtml(state.data.profile?.current_school_year || 'Year 12')}</p><h2>Progress by subject or date</h2></div></header>${noticeHtml()}<details class="panel"><summary>View standing timetable</summary>${studyRhythmHtml()}</details>${studyPlanProgressHtml()}`;
 }
 
 function studyRhythmSummaryHtml() {
@@ -268,7 +268,7 @@ function studyPlanLogHtml(block) {
     <input type="hidden" name="end_time" value="${block.to}">
     <input type="hidden" name="planned_activity" value="${escapeAttr(block.activity)}">
     <div class="log-head"><div><b>${escapeHtml(displayActivity(block.activity))}</b><p>${formatLongDate(block.date)} · ${block.from}-${block.to}</p></div><label>RAG<select name="rag_status"><option value="">Unset</option><option value="green" ${sel(rag,'green')}>Green</option><option value="amber" ${sel(rag,'amber')}>Amber</option><option value="red" ${sel(rag,'red')}>Red</option></select></label></div>
-    ${richStudyFields(block.activity,log || {},state.data.tara.attempts,customTopicsFor(state.data.studyPlanLogs || [],areaFor(block.activity)))}
+    ${richStudyFields(block.activity,log || {},state.data.tara.attempts,customTopicsFor(state.data.studyPlanLogs || [],areaFor(block.activity)),state.data.profile?.current_school_year || 'Year 12')}
     <details class="block-notes"><summary>Block notes / previous entries</summary><label>Learn<textarea name="topics_covered" placeholder="Topics covered">${escapeHtml(log?.topics_covered || '')}</textarea></label>
     <label>Practise<textarea name="topics_practised" placeholder="Questions, exercises or practice done">${escapeHtml(log?.topics_practised || '')}</textarea></label>
     <label>Assess<textarea name="topics_assessed" placeholder="Score, test result, timed attempt or self-check">${escapeHtml(log?.topics_assessed || '')}</textarea></label>
