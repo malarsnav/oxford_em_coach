@@ -8,8 +8,10 @@ if (hasSupabaseConfig) {
   try {
     module = await import('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm');
   } catch (error) {
-    console.warn('Supabase client could not be loaded. Falling back to local demo mode.', error);
+    console.warn('Supabase client could not be loaded.', error);
   }
 }
 
-export const supabase = module ? module.createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : null;
+export const supabase = module ? module.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+  auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true }
+}) : null;

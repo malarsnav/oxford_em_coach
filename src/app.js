@@ -1,4 +1,6 @@
 import { bootstrap, getSession, signIn, signOut, saveAttempt, updateTask, addAcademicResult, updateSubject, addAcademicTopic, updateAcademicTopic, addJournalEntry, addReasoningSession, updateMilestone, addMilestone, addInterviewSession, updateProfile, saveTaraErrorAnalysis, saveStudyPlanLog } from './dataService.js';
+import { signInWithPassword, setAccountPassword, requestPasswordReset } from './dataService.js';
+import { isMobileLaunch, installForegroundRefresh } from './mobileSession.js';
 import { STUDY_AREAS, areaFor, displayActivity, availabilityHtml, richStudyFields, handleStudyInput, collectStudyDetails, customTopicsFor, topicHistoryHtml } from './planTracking.js';
 import { saveSchoolTask, schoolAttachmentUrl } from './schoolTaskService.js';
 import { dailyStudyReport, weeklyStudyReport } from './dailyStudyReport.js';
@@ -32,6 +34,8 @@ const interviewPrompts = [
 ];
 const state = {
   user: null,
+  mobileLogin: isMobileLaunch(), loginMode: isMobileLaunch() ? 'password' : 'magic',
+  recovery: new URLSearchParams(location.search).get('account') === 'recovery',
   data: null,
   error: null,
   view: 'dashboard',
@@ -50,6 +54,25 @@ const state = {
 };
 
 init();
+installForegroundRefresh(refreshOnReturn);
+
+async function refreshOnReturn() {
+  if(!state.user || !state.data || state.refreshing || document.querySelector('[data-unsaved]') ||
+      (state.practice && !state.practice.report) || (state.lastRefresh && Date.now()-state.lastRefresh.getTime()<30000)) return;
+  state.refreshing=true;
+  try {
+    const session=await getSession();
+    if(!session.user || session.user.id!==state.user.id){location.reload();return;}
+    const updated=await bootstrap(session.user);
+    // A user may have begun editing while the request was in flight.
+    if(document.querySelector('[data-unsaved]') || (state.practice && !state.practice.report)) return;
+    state.data=updated;state.lastRefresh=new Date();state.refreshError='';
+  } catch(error) {state.refreshError='Refresh failed. Your saved progress has not been changed. '+friendlyError(error);}
+  finally {
+    state.refreshing=false;
+    if(['dashboard','weekly-report','analytics','readiness','parent'].includes(state.view) && !document.querySelector('[data-unsaved]') && !(state.practice&&!state.practice.report))render();
+  }
+}
 
 async function init() {
   try {
@@ -74,6 +97,7 @@ function renderError(error) {
 
 function render() {
   if (!state.user) return renderLogin();
+  if(state.recovery){app.className='auth-screen';app.innerHTML=`<main class="login">${passwordSettingsHtml()}</main>`;return;}
   app.className = 'app-shell';
   app.innerHTML = `
     <aside class="sidebar">
@@ -90,20 +114,32 @@ function render() {
 
 function renderLogin() {
   app.className = 'auth-screen';
-  app.innerHTML = `
-    <main class="login">
-      <section class="panel hero">
-        <p class="eyebrow">Oxford E&M Coach</p>
-        <h1>Track the indicators that matter for Oxford E&M.</h1>
-        <p>Track homework, assessments, study progress and TARA practice.</p>
-        <form data-action="login" class="stack">
-          <input name="email" type="email" placeholder="Student email" autocomplete="email" inputmode="email" required />
-          <button type="submit">Send magic link</button>
-          <p class="form-status" data-login-status aria-live="polite"></p>
-        </form>
-        <p class="muted">A secure sign-in link will be emailed to this address. To protect the Supabase email limit, this app sends only one magic link per email every ${MAGIC_LINK_THROTTLE_MINUTES} minutes on this device. If you already requested one, open the latest email from your inbox or spam/junk folder.</p>
-      </section>
-    </main>`;
+  const password=state.loginMode==='password';
+  const reset=state.loginMode==='reset';
+  app.innerHTML = `<main class="login"><section class="panel hero">
+    <p class="eyebrow">Oxford E&M Coach</p><h1>Welcome back</h1>
+    <form data-action="${reset?'password-reset':password?'password-login':'login'}" class="stack">
+      <label>Email<input name="email" type="email" autocomplete="username" inputmode="email" required></label>
+      ${password?'<label>Password<input name="password" type="password" autocomplete="current-password" required></label>':''}
+      <button type="submit">${reset?'Send recovery email':password?'Sign in':'Send magic link'}</button>
+      <p class="form-status" data-login-status role="status"></p>
+    </form>
+    ${password?`<button class="ghost" data-login-mode="reset">Forgot password?</button>
+      <details><summary>First password sign-in?</summary><p>In your existing signed-in account, open Profile and set a password. Use the same email here to keep all your progress.</p></details>`:''}
+    ${reset?'<p>A recovery email is sent only when you request it. It is not required for routine sign-in.</p><button class="ghost" data-login-mode="password">Back to sign in</button>':''}
+    ${!state.mobileLogin&&!reset?`<button class="ghost" data-login-mode="${password?'magic':'password'}">${password?'Use email link instead':'Use password instead'}</button>`:''}
+    ${!password&&!reset?'<p class="muted">Check your inbox and spam folder. Requests are limited to one per email every 30 minutes on this device.</p>':''}
+  </section></main>`;
+}
+
+function passwordSettingsHtml() {
+  return `<section class="panel"><h2>${state.recovery?'Reset password':'Password sign-in'}</h2>
+    <p>${escapeHtml(state.user?.email || '')}</p>
+    <form class="stack" data-action="set-password">
+      <label>New password<input name="password" type="password" minlength="12" autocomplete="new-password" required></label>
+      <label>Confirm password<input name="confirmation" type="password" minlength="12" autocomplete="new-password" required></label>
+      <button>Save password</button><p class="form-status" role="status"></p>
+    </form></section>`;
 }
 
 function navButton(view, label) {
@@ -1106,7 +1142,7 @@ function parentStudentCardHtml(student) {
 
 function profileHtml() {
   const p = state.data.profile || {};
-  return `<header class="top"><div><p class="eyebrow">Profile</p><h2>Student setup</h2></div></header><section class="panel"><form data-action="save-profile" class="form-grid"><label>Display name<input name="display_name" value="${escapeAttr(p.display_name || '')}"></label><label>School<input name="school" value="${escapeAttr(p.school || '')}"></label><label>Student email<input value="${escapeAttr(state.user.email || '')}" disabled></label><label>Parent email<input name="parent_email" type="email" value="${escapeAttr(p.parent_email || '')}" placeholder="parent@example.com"></label><label>School year<input name="current_school_year" value="${escapeAttr(p.current_school_year || 'Year 12')}"></label><label>Application year<input name="application_year" type="number" value="${escapeAttr(p.application_year || '')}"></label><label>Target course<input name="target_course" value="${escapeAttr(p.target_course || 'Oxford Economics & Management')}"></label><label>Target university<input name="target_university" value="${escapeAttr(p.target_university || 'University of Oxford')}"></label><label>Daily parent digest time<input name="parent_digest_time" type="time" value="${escapeAttr(formatTime(p.parent_digest_time || '06:00'))}"></label><label class="checkline"><input name="parent_digest_enabled" type="checkbox" value="true" ${p.parent_digest_enabled ? 'checked' : ''}> Send daily parent digest</label><p class="muted span-all">The digest summarises the previous calendar day. Scheduled email delivery needs the later Supabase Edge Function/email-provider step; the preview below is available now.</p><button>Save profile</button></form></section>${digestPreviewHtml()}`;
+  return `<header class="top"><div><p class="eyebrow">Profile</p><h2>Student setup</h2></div></header><section class="panel"><form data-action="save-profile" class="form-grid"><label>Display name<input name="display_name" value="${escapeAttr(p.display_name || '')}"></label><label>School<input name="school" value="${escapeAttr(p.school || '')}"></label><label>Student email<input value="${escapeAttr(state.user.email || '')}" disabled></label><label>Parent email<input name="parent_email" type="email" value="${escapeAttr(p.parent_email || '')}" placeholder="parent@example.com"></label><label>School year<input name="current_school_year" value="${escapeAttr(p.current_school_year || 'Year 12')}"></label><label>Application year<input name="application_year" type="number" value="${escapeAttr(p.application_year || '')}"></label><label>Target course<input name="target_course" value="${escapeAttr(p.target_course || 'Oxford Economics & Management')}"></label><label>Target university<input name="target_university" value="${escapeAttr(p.target_university || 'University of Oxford')}"></label><label>Daily parent digest time<input name="parent_digest_time" type="time" value="${escapeAttr(formatTime(p.parent_digest_time || '06:00'))}"></label><label class="checkline"><input name="parent_digest_enabled" type="checkbox" value="true" ${p.parent_digest_enabled ? 'checked' : ''}> Send daily parent digest</label><p class="muted span-all">The digest summarises the previous calendar day. Scheduled email delivery needs the later Supabase Edge Function/email-provider step; the preview below is available now.</p><button>Save profile</button></form></section>${passwordSettingsHtml()}${digestPreviewHtml()}`;
 }
 
 function digestPreviewHtml() {
@@ -1316,17 +1352,28 @@ async function submitTara() {
 }
 
 app.addEventListener('input', event => handleStudyInput(event,state.data?.studyPlanLogs || []));
+app.addEventListener('input', event => {
+  const form=event.target.closest('form');
+  if(form && /^(save-|add-|update-|set-password)/.test(form.dataset.action || ''))form.dataset.unsaved='true';
+});
+app.addEventListener('change', event => {
+  const form=event.target.closest('form');
+  if(form && /^(save-|add-|update-|set-password)/.test(form.dataset.action || ''))form.dataset.unsaved='true';
+});
 app.addEventListener('toggle', event => {
   const block=event.target;
   if(block.matches('.tracker-block') && block.open) app.querySelectorAll('.tracker-block[open]').forEach(other=>{if(other!==block)other.open=false;});
 },true);
 
 app.addEventListener('click', async (event) => {
+  const editForm=event.target.closest('form');
+  if(editForm && event.target.closest('button') && /^(save-|add-|update-)/.test(editForm.dataset.action || ''))editForm.dataset.unsaved='true';
   const summary=event.target.closest('.tracker-block > summary');
   if(summary)app.querySelectorAll('.tracker-block[open]').forEach(block=>{if(block!==summary.parentElement)block.open=false;});
   if(event.target.closest('[data-add-custom], [data-remove-topic]')) {handleStudyInput(event,state.data?.studyPlanLogs || []);return;}
   const target = event.target.closest('button');
   if (!target) return;
+  if(target.dataset.loginMode){state.loginMode=target.dataset.loginMode;renderLogin();return;}
   if(target.dataset.planMode){state.planMode=target.dataset.planMode;state.extraBlock=null;render();return;}
   if(target.dataset.planShift){
     const shift=target.dataset.planShift;
@@ -1379,7 +1426,7 @@ app.addEventListener('click', async (event) => {
     return;
   }
   const action = target.dataset.action;
-  if (action === 'signout') { await signOut(); location.reload(); }
+  if (action === 'signout') { try {await signOut();location.reload();} catch(error){state.notice={type:'error',message:friendlyError(error)};alert('Sign out failed. '+friendlyError(error));} }
   if (action === 'start-tara') { try { await startTara(); } catch {} render(); }
   if (action === 'start-smart') { try { await startSmartTara(); } catch {} render(); }
   if (action === 'start-recommended-tara') { try { await startRecommendedTara(); } catch {} render(); }
@@ -1440,7 +1487,29 @@ app.addEventListener('submit', async (event) => {
   const action = form.dataset.action;
   const button = form.querySelector('button[type="submit"], button:not([type])');
   try {
+    if (['password-login','set-password','password-reset'].includes(action)) {
+      if(button)button.disabled=true;
+      if(action==='password-login'){
+        setFormStatus(form,'Signing in...','info');
+        const user=await signInWithPassword(normalizeEmail(values.email),values.password);
+        form.elements.password.value='';
+        state.user=user;
+        try {state.data=await bootstrap(user);state.lastRefresh=new Date();state.view='dashboard';render();}
+        catch(error){renderError(error);}
+      } else if(action==='set-password'){
+        if(values.password!==values.confirmation)throw new Error('Passwords do not match.');
+        await setAccountPassword(values.password);
+        form.reset();delete form.dataset.unsaved;
+        if(state.recovery){state.recovery=false;const url=new URL(location.href);url.searchParams.delete('account');history.replaceState(null,'',url.pathname+url.search);render();}
+        else setFormStatus(form,'Password saved. Use your existing email and this password on mobile.','success');
+      } else {
+        await requestPasswordReset(normalizeEmail(values.email));
+        setFormStatus(form,'If this account can receive recovery email, check its inbox and spam folder.','success');
+      }
+      return;
+    }
     if (action === 'login') {
+      if(state.mobileLogin)throw new Error('Use password sign-in on mobile.');
       const email = normalizeEmail(values.email);
       const throttle = magicLinkThrottleStatus(email);
       if (throttle.blocked) {
@@ -1514,6 +1583,7 @@ app.addEventListener('submit', async (event) => {
       const block=form.closest('.tracker-block');
       if(saved&&block)block.querySelector('summary').innerHTML=blockSummaryHtml(JSON.parse(block.dataset.block),saved);
       setFormStatus(form,'Progress saved.','success');
+      delete form.dataset.unsaved;
       // Refresh summaries without discarding other blocks that are being edited.
       const status=app.querySelector('.plan-progress > p');
       if(status){const blocks=selectedPlanBlocks();status.textContent=blocks.filter(findStudyPlanLog).length+' of '+blocks.length+' blocks logged';}

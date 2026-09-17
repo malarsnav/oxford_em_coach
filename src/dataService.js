@@ -1,11 +1,13 @@
-import { supabase } from './supabaseClient.js';
+import { supabase, hasSupabaseConfig } from './supabaseClient.js';
 import { normalizeResponseTags } from './tagTaxonomy.js';
 
 const localKey = 'oxford-em-coach-demo';
 
 export async function getSession() {
+  if (!supabase && hasSupabaseConfig) throw new Error('Sign-in service could not be loaded. Check your connection and refresh. No offline demo was opened.');
   if (!supabase) return { user: demoUser(), demo: true };
-  const { data } = await supabase.auth.getSession();
+  const { data, error } = await supabase.auth.getSession();
+  if (error) throw error;
   return { user: data.session?.user || null, demo: false };
 }
 
@@ -18,7 +20,31 @@ export async function signIn(email) {
 }
 
 export async function signOut() {
-  if (supabase) await supabase.auth.signOut();
+  if (supabase) {
+    const { error } = await supabase.auth.signOut({ scope: 'local' });
+    if (error) throw error;
+  }
+}
+
+export async function signInWithPassword(email, password) {
+  if (!supabase) throw new Error('Password sign-in requires a connection to Supabase.');
+  const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+  if (error) throw error;
+  return data.user;
+}
+
+export async function setAccountPassword(password) {
+  if (!supabase) throw new Error('Connect to Supabase to set an account password.');
+  if (password.length < 12) throw new Error('Use a password with at least 12 characters.');
+  const { error } = await supabase.auth.updateUser({ password });
+  if (error) throw error;
+}
+
+export async function requestPasswordReset(email) {
+  if (!supabase) throw new Error('Connect to Supabase to recover your account.');
+  const redirectTo = `${location.origin}${location.pathname}?account=recovery`;
+  const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo });
+  if (error) throw error;
 }
 
 export async function bootstrap(user) {
