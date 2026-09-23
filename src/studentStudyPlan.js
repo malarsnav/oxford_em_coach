@@ -77,10 +77,6 @@ export const STUDY_PLAN_VERSIONS = [{
 }, {
   effectiveFrom: '2026-09-23',
   weekdays: WEEKDAY_TIMETABLE.map(row => ({...row})),
-  weekends: ORIGINAL_WEEKEND_TIMETABLE.map(row => ({...row}))
-}, {
-  effectiveFrom: '2026-09-26',
-  weekdays: WEEKDAY_TIMETABLE.map(row => ({...row})),
   weekends: WEEKEND_TIMETABLE.map(row => ({...row}))
 }];
 export const TRACKING_START_DATE = STUDY_PLAN_VERSIONS[0].effectiveFrom;

@@ -5,8 +5,8 @@ parent. This is a fixed local calendar date in STUDY_PLAN_VERSIONS, not the
 browser's first visit or a moving "today" default. All devices use the same
 configuration; no SQL migration is required.
 
-The revised weekday timetable takes effect on 2026-09-23. Earlier dates keep
-the original weekday snapshot; weekends are unchanged. The full timetable
+The complete revised timetable takes effect on 2026-09-23, as requested by the
+parent. Earlier dates keep the original weekday and weekend snapshot. The full timetable
 includes gym, school, rest and meals, but these are excluded from study targets.
 Each new weekday has seven study/activity blocks (255 minutes), including two
 separate Homework slots. TMUA groups under Maths, Article under Magazine, and
@@ -15,11 +15,11 @@ Reading(EPQ) under EPQ. Tuition is confirmed as Maths: its stored slot key stays
 subject classification and topic picker are Maths. Earlier free-text tuition
 notes remain visible and editable. Homework and Club support a subject/activity
 name, progress notes and next action.
-That weekday-only revision contained 51 blocks and 40.25 hours including Buffer.
 Coverage and the timetable preview use the selected date (range start in subject
 view); reports crossing the change date select the correct snapshot per day.
 
-The revised weekend timetable starts on 2026-09-26. Each day has 13 separate
+The revised weekend timetable is part of the same 2026-09-23 version, rather
+than waiting for 26 September to activate. Each weekend day has 13 separate
 45-minute study blocks, including three Homework blocks and two blocks each
 of Economics, History, Physics and Maths. Gym, shower, cardio, breaks and meals
 remain visible in the timetable but are excluded from study completion targets.

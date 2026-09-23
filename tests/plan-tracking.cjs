@@ -42,7 +42,11 @@ assert.equal(run(`dailyStudyReport(${weekendHomework},new Date(2026,8,26,22)).bl
 assert.equal(run('dailyStudyReport([],new Date(2026,8,26,22)).blocks.some(b=>isNonStudyActivity(b.activity))'),false);
 assert.equal(run('dailyStudyReport([],new Date(2026,8,23,22)).blocks.filter(b=>b.activity==="Homework").length'),2);
 assert.equal(run('dailyStudyReport([],new Date(2026,8,23,22)).blocks.some(b=>isNonStudyActivity(b.activity))'),false);
-assert.equal(run('JSON.stringify(STUDY_PLAN_VERSIONS[0].weekends)===JSON.stringify(STUDY_PLAN_VERSIONS[1].weekends)'),true);
+assert.equal(run('studyPlanForDate("2026-09-23").effectiveFrom'),'2026-09-23');
+assert.equal(run('studyPlanForDate("2026-09-23").weekends.length'),21);
+assert.equal(run('studyPlanForDate("2026-09-22").weekends.length'),14);
+assert.equal(run('studyPlanForDate("2026-09-26").effectiveFrom'),'2026-09-23');
+assert.equal(run('new Set(STUDY_PLAN_VERSIONS.map(p=>p.effectiveFrom)).size'),run('STUDY_PLAN_VERSIONS.length'));
 for (const day of ['Monday','Tuesday','Wednesday','Thursday','Friday']) {
   assert.equal(run(`WEEKDAY_TIMETABLE.filter(r=>!isNonStudyActivity(r["${day}"])).length`),7);
   assert.equal(run('WEEKDAY_TIMETABLE.every((r,i,rows)=>r.from<r.to && (!i || rows[i-1].to<=r.from))'),true);
