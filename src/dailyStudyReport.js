@@ -1,4 +1,4 @@
-import { TRACKING_START_DATE, studyPlanForDate } from './studentStudyPlan.js';
+import { TRACKING_START_DATE, studyPlanForDate, isNonStudyActivity } from './studentStudyPlan.js';
 import { areaFor, logArea } from './planTracking.js';
 
 export function weeklyStudyReport(logs = [], now = new Date(), selectedDate) {
@@ -43,7 +43,7 @@ export function dailyStudyReport(logs = [], now = new Date(), selectedDate) {
   const todayLogs = [...new Map(logs.filter(l=>l.log_date===date).map(l=>[key(l.start_time,l.end_time,l.planned_activity),l])).values()];
   const plan = studyPlanForDate(date);
   const rows = plan ? (['Saturday','Sunday'].includes(day)?plan.weekends:plan.weekdays) : [];
-  const blocks = rows.filter(r=>r[day]&&!['break','breakfast','lunch','dinner'].includes(r[day].toLowerCase())).map(r=>{
+  const blocks = rows.filter(r=>r[day]&&!isNonStudyActivity(r[day])).map(r=>{
     const log=todayLogs.find(l=>key(l.start_time,l.end_time,l.planned_activity)===key(r.from,r.to,r[day]));
     return {date,activity:r[day],from:r.from,to:r.to,log,minutes:minutes(r.to)-minutes(r.from),
       status:log?'Logged':clock>=minutes(r.to)?'Not logged':clock>=minutes(r.from)?'Current block':'Upcoming'};

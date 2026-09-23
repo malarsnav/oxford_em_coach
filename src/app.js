@@ -10,7 +10,7 @@ import { methodologyFor } from './methodologies.js';
 import { buildDailyDigest, previousLocalDate } from './dailyDigestService.js';
 import { getAlevelTopicPlan } from './aLevelTopicPlan.js';
 import { ALL_SUBTYPES, PROBLEM_SOLVING_TOPIC_TAGS, TOP_LEVEL_TYPES } from './tagTaxonomy.js';
-import { READING_PLAN, WEEKDAY_TIMETABLE, WEEKEND_TIMETABLE, WEEKLY_TARGETS, taraHasNoScheduledTime, totalWeeklyTargetHours, studyPlanForDate } from './studentStudyPlan.js';
+import { READING_PLAN, WEEKLY_TARGETS, taraHasNoScheduledTime, totalWeeklyTargetHours, studyPlanForDate, isNonStudyActivity } from './studentStudyPlan.js';
 
 const app = document.querySelector('#app');
 let questions = [];
@@ -293,9 +293,11 @@ function studyRhythmSummaryHtml() {
 }
 
 function studyRhythmHtml() {
-  return `<div class="study-rhythm"><h3>Weekday and weekend plan</h3><p class="callout">The supplied weekday plan overlaps study (18:15-19:15) and dinner (19:00-20:00) by 15 minutes. Times are retained as provided.</p>
-    <details><summary>Weekdays</summary>${timetableHtml(WEEKDAY_TIMETABLE,['Monday','Tuesday','Wednesday','Thursday','Friday'])}</details>
-    <details><summary>Weekends</summary>${timetableHtml(WEEKEND_TIMETABLE,['Saturday','Sunday'])}</details>
+  const plan = studyPlanForDate(state.planMode==='subject'?state.planFrom:state.planDate);
+  if (!plan) return '<p>No timetable for this date.</p>';
+  return `<div class="study-rhythm"><h3>Weekday and weekend plan</h3><p>Effective from ${formatDate(plan.effectiveFrom)}</p>
+    <details><summary>Weekdays</summary>${timetableHtml(plan.weekdays,['Monday','Tuesday','Wednesday','Thursday','Friday'])}</details>
+    <details><summary>Weekends</summary>${timetableHtml(plan.weekends,['Saturday','Sunday'])}</details>
     <p>Super Curricular slots currently support Senior Maths Challenge preparation. Choose the activity in each block when the focus changes.</p></div>`;
 }
 
@@ -428,7 +430,7 @@ function studyPlanTodayTitle() {
 }
 
 function isRestActivity(value) {
-  return ['break', 'breakfast', 'lunch', 'dinner'].includes(String(value || '').toLowerCase());
+  return isNonStudyActivity(value);
 }
 
 function legacyProgrammeHtml() {
@@ -447,7 +449,7 @@ function timetableHtml(rows, days) {
 
 function activityClass(value) {
   const text = String(value || '').toLowerCase();
-  if (['break', 'breakfast', 'lunch', 'dinner'].includes(text)) return 'rest';
+  if (isNonStudyActivity(value)) return 'rest';
   if (text.includes('math')) return 'maths';
   if (text.includes('economics')) return 'economics';
   if (text.includes('physics')) return 'physics';

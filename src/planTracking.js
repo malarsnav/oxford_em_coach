@@ -1,11 +1,11 @@
-import { WEEKDAY_TIMETABLE, WEEKEND_TIMETABLE } from './studentStudyPlan.js';
+import { WEEKDAY_TIMETABLE, WEEKEND_TIMETABLE, studyPlanForDate } from './studentStudyPlan.js';
 import { syllabusFor, SYLLABUS_ITEMS } from './studySyllabuses.js';
 
-export const STUDY_AREAS = ['Maths','Physics','Economics','History','AS-Further Maths','EPQ','Super Curricular','Book','TARA','Magazine'];
+export const STUDY_AREAS = ['Maths','Physics','Economics','History','AS-Further Maths','Homework','Tuition','EPQ','Super Curricular','Club','Book','TARA','Magazine'];
 const academic = ['Maths','Physics','Economics','History','AS-Further Maths'];
 const modes = ['learn','practise','assess','reflect'];
 const esc = v => String(v ?? '').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-export const areaFor = activity => activity === 'Spillover' ? 'Buffer' : activity === 'AS Maths' ? 'AS-Further Maths' : activity === 'Maths tuition' ? 'Maths' : ['SMC','Super-Curricular'].includes(activity) ? 'Super Curricular' : activity;
+export const areaFor = activity => activity === 'Spillover' ? 'Buffer' : activity === 'AS Maths' ? 'AS-Further Maths' : ['Maths tuition','Maths(TMUA)'].includes(activity) ? 'Maths' : activity === 'Article' ? 'Magazine' : activity === 'Reading(EPQ)' ? 'EPQ' : ['SMC','Super-Curricular'].includes(activity) ? 'Super Curricular' : activity;
 export const displayActivity = activity => activity === 'Spillover' ? 'Buffer' : activity === 'AS Maths' ? 'AS-Further Maths' : activity === 'SMC' ? 'Super Curricular' : activity;
 export const logArea = log => log.details?.outcome==='skipped' ? null : areaFor(log.details?.actual_activity || log.planned_activity);
 
@@ -46,14 +46,15 @@ export function collectDeviation(form) {
   if(outcome!=='skipped'&&(!/^\d{2}:\d{2}$/.test(from)||!/^\d{2}:\d{2}$/.test(to)||to<=from))throw new Error('Actual end time must be after the start time.');
   return {...details,outcome,actual_activity:outcome==='skipped'?null:actual,actual_from:outcome==='skipped'?null:from,actual_to:outcome==='skipped'?null:to,change_reason:outcome==='followed'?'':form.elements.change_reason.value};
 }
-export function scheduledAreas(day) {
-  const rows = day ? (['Saturday','Sunday'].includes(day) ? WEEKEND_TIMETABLE : WEEKDAY_TIMETABLE) : [...WEEKDAY_TIMETABLE,...WEEKEND_TIMETABLE];
+export function scheduledAreas(day, date) {
+  const plan = date ? studyPlanForDate(date) : {weekdays:WEEKDAY_TIMETABLE,weekends:WEEKEND_TIMETABLE};
+  const rows = !plan ? [] : day ? (['Saturday','Sunday'].includes(day) ? plan.weekends : plan.weekdays) : [...plan.weekdays,...plan.weekends];
   return new Set(rows.flatMap(row=> day ? [areaFor(row[day])] : Object.entries(row).filter(([k])=>!['from','to'].includes(k)).map(([,v])=>areaFor(v))));
 }
 export function availabilityHtml(mode,date,subject) {
-  const all = scheduledAreas();
+  const all = scheduledAreas(undefined,date);
   const day = new Date(date+'T12:00:00').toLocaleDateString('en-GB',{weekday:'long'});
-  const today = scheduledAreas(day);
+  const today = scheduledAreas(day,date);
   const areas = mode === 'subject' ? [subject] : STUDY_AREAS;
   const missing=areas.filter(a=>!all.has(a));
   return `${missing.length?`<p class="callout"><b>${missing.map(esc).join(', ')}</b>: <strong>No standing timetable slot</strong></p>`:''}<details class="plan-availability"><summary>Timetable coverage by area</summary><ul>${areas.map(a=>`<li><b>${esc(a)}</b>: ${!all.has(a) ? 'No standing timetable slot' : mode === 'date' && !today.has(a) ? 'Not scheduled today' : 'Scheduled'}</li>`).join('')}</ul></details>`;
@@ -85,6 +86,7 @@ function syllabusPickerHtml(area, scope, selected, paper = 'Core Pure') {
 
 export function richStudyFields(activity, log = {}, attempts = [], customTopics = [], schoolYear = 'Year 12') {
   const area = areaFor(activity), d=log.details || {};
+  if (['Homework','Tuition','Club'].includes(area)) return `<div class="rich-study" data-rich-area="${area}">${input('subject',area==='Club'?'Club / activity name':'Subject',d.subject)}${textarea('work_done','Work completed / progress',d.work_done)}${textarea('next_action','Next action (optional)',d.next_action)}</div>`;
   if(area==='Buffer')return `<div class="rich-study" data-rich-area="Buffer">${textarea('work_done','What did you work on?',d.work_done)}</div>`;
   if (academic.includes(area)) {
     const selected = new Set((d.entries||[]).map(e=>e.id));
@@ -181,7 +183,7 @@ export function collectStudyDetails(form) {
     return {id:row.dataset.topicId,topic:row.dataset.topicName,label:row.dataset.subtopicName,ref:item?.ref||'',section:item?.section||'',spec:item?.spec || (item ? 'edexcel-9ma0-issue4' : null),focus:get(row,'focus'),modes:selected,attempted,correct,score,total,notes:get(row,'notes'),rag:get(row,'rag')};
   })};
   const d={version:1,area};
-  const fields = area==='Buffer'?['work_done']:area==='Super Curricular'?['activity_kind','activity_name','paper_year','question_numbers','questions_completed','activity_score','activity_total','work_done','next_action']:area==='EPQ'?['project_title','project_stage','work_done','next_action']:area==='TARA'?['tara_attempt_id','work_done']:['title','section','key_idea'];
+  const fields = ['Homework','Tuition','Club'].includes(area)?['subject','work_done','next_action']:area==='Buffer'?['work_done']:area==='Super Curricular'?['activity_kind','activity_name','paper_year','question_numbers','questions_completed','activity_score','activity_total','work_done','next_action']:area==='EPQ'?['project_title','project_stage','work_done','next_action']:area==='TARA'?['tara_attempt_id','work_done']:['title','section','key_idea'];
   for(const key of fields)d[key]=get(container,key);
   if(area==='Super Curricular'){
     d.modes=[...container.querySelectorAll('[name="activity_mode"]:checked')].map(c=>c.value);

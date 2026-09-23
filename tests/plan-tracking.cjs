@@ -13,7 +13,27 @@ assert.equal(run('new Set(MATHS_ITEMS.map(i=>i.id)).size'),run('MATHS_ITEMS.leng
 assert.equal(run('areaFor("Maths tuition")'),'Maths');
 assert.equal(run('areaFor("SMC")'),'Super Curricular');
 assert.equal(run('scheduledAreas().has("Super Curricular")'),true);
-assert.equal(run('scheduledAreas().has("Magazine")'),false);
+assert.equal(run('scheduledAreas().has("Magazine")'),true);
+assert.equal(run('scheduledAreas(undefined,"2026-09-22").has("Magazine")'),false);
+assert.equal(run('areaFor("Maths(TMUA)")'),'Maths');
+assert.equal(run('areaFor("Reading(EPQ)")'),'EPQ');
+assert.equal(run('areaFor("Article")'),'Magazine');
+assert.equal(run('dailyStudyReport([],new Date(2026,8,23,22)).total'),7);
+assert.equal(run('dailyStudyReport([],new Date(2026,8,23,22)).plannedMinutes'),255);
+assert.equal(run('dailyStudyReport([],new Date(2026,8,22,22)).total'),5);
+assert.equal(run('dailyStudyReport([],new Date(2026,8,26,22)).total'),8);
+assert.equal(run('weeklyStudyReport([],new Date(2026,8,28,22)).total'),51);
+assert.equal(run('totalWeeklyTargetHours()'),40.25);
+assert.equal(run('dailyStudyReport([],new Date(2026,8,23,22)).blocks.filter(b=>b.activity==="Homework").length'),2);
+assert.equal(run('dailyStudyReport([],new Date(2026,8,23,22)).blocks.some(b=>isNonStudyActivity(b.activity))'),false);
+assert.equal(run('JSON.stringify(STUDY_PLAN_VERSIONS[0].weekends)===JSON.stringify(STUDY_PLAN_VERSIONS[1].weekends)'),true);
+for (const day of ['Monday','Tuesday','Wednesday','Thursday','Friday']) {
+  assert.equal(run(`WEEKDAY_TIMETABLE.filter(r=>!isNonStudyActivity(r["${day}"])).length`),7);
+  assert.equal(run('WEEKDAY_TIMETABLE.every((r,i,rows)=>r.from<r.to && (!i || rows[i-1].to<=r.from))'),true);
+}
+const homework='[{log_date:"2026-09-23",start_time:"07:00",end_time:"07:30",planned_activity:"Homework"}]';
+assert.equal(run(`dailyStudyReport(${homework},new Date(2026,8,23,22)).logged`),1);
+assert.equal(run(`dailyStudyReport(${homework},new Date(2026,8,23,22)).blocks[1].log`),undefined);
 assert.equal(run('scheduledAreas().has("TARA")'),false);
 assert.equal(run('scheduledAreas("Saturday").has("Book")'),false);
 assert.equal(run('richStudyFields("AS Maths").includes("topic-picker")'),true);
