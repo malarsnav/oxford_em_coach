@@ -1,6 +1,9 @@
 import { bootstrap, getSession, signIn, signOut, saveAttempt, updateTask, addAcademicResult, updateSubject, addAcademicTopic, updateAcademicTopic, addJournalEntry, addReasoningSession, updateMilestone, addMilestone, addInterviewSession, updateProfile, saveTaraErrorAnalysis, saveStudyPlanLog } from './dataService.js';
 import { signInWithPassword, setAccountPassword, requestPasswordReset } from './dataService.js';
 import { isMobileLaunch, installForegroundRefresh } from './mobileSession.js';
+import { saveStudentReminderPreferences } from './dataService.js';
+import { UNIVERSITY_TARGETS, A_LEVEL_SUBJECTS, currentTarget } from './preparationContext.js';
+import { loggingEvidence, studentReminderText } from './preparationSignals.js';
 import { STUDY_AREAS, areaFor, displayActivity, availabilityHtml, richStudyFields, handleStudyInput, collectStudyDetails, customTopicsFor, topicHistoryHtml } from './planTracking.js';
 import { saveSchoolTask, schoolAttachmentUrl } from './schoolTaskService.js';
 import { dailyStudyReport, weeklyStudyReport } from './dailyStudyReport.js';
@@ -102,8 +105,8 @@ function render() {
   app.innerHTML = `
     <aside class="sidebar">
       <div>
-        <p class="eyebrow">Oxford E&M Coach</p>
-        <h1>${state.data?.profile?.target_course || 'Oxford Economics & Management'}</h1>
+        <p class="eyebrow">Oxford PPE Coach</p>
+        <h1>${escapeHtml(currentTarget(state.data?.profile?.target_course))}</h1>
         <p class="muted">${state.user.email}</p>
       </div>
       <nav>${navigationHtml()}</nav>
@@ -117,7 +120,7 @@ function renderLogin() {
   const password=state.loginMode==='password';
   const reset=state.loginMode==='reset';
   app.innerHTML = `<main class="login"><section class="panel hero">
-    <p class="eyebrow">Oxford E&M Coach</p><h1>Welcome back</h1>
+    <p class="eyebrow">Oxford PPE Coach</p><h1>Welcome back</h1>
     <form data-action="${reset?'password-reset':password?'password-login':'login'}" class="stack">
       <label>Email<input name="email" type="email" autocomplete="username" inputmode="email" required></label>
       ${password?'<label>Password<input name="password" type="password" autocomplete="current-password" required></label>':''}
@@ -194,6 +197,7 @@ function dashboardHtml() {
     </section>`:`<section class="panel focus-card"><h3>Tracking had not started</h3><p>This plan starts on ${formatDate(today.trackingStart)}. No missed blocks are counted for this date.</p></section>`}
     ${dailyReportHtml(today)}
     ${attentionReportHtml(today)}
+    ${preparationCheckInHtml()}
     <section class="pillar-grid">
       ${pillarCard('A-Level Rigour', 'Homework and assessments', aLevelPillarHtml(), 'academics')}
       ${pillarCard('TARA Assessment', 'Accuracy, coverage and methodology', taraPillarHtml(), 'tara')}
@@ -210,6 +214,21 @@ function attentionReportHtml(report) {
     ${report.amber+report.red?`<p>${report.amber} amber and ${report.red} red reflections on ${formatDate(report.date)}.</p>`:''}
     ${overdue.length?`<p>${overdue.length} overdue homework or assessment tasks.</p><button class="ghost" data-view="academics">Review school tasks</button>`:''}
     ${!report.overdue&&!report.amber&&!report.red&&!overdue.length?'<p>Nothing flagged for attention.</p>':''}</section>`;
+}
+
+function preparationCheckInHtml() {
+  const e=loggingEvidence(state.data.studyPlanLogs || []);
+  return `<details class="panel preparation-checkin"><summary>Preparation check-in: ${escapeHtml(e.status)}</summary><p>${e.from} to ${e.date} (UK time)</p><p>${e.recorded}/${e.due} elapsed blocks recorded${e.coverage===null?'':` (${e.coverage}%)`} · ${e.unlogged} unknown · ${e.skipped} explicitly skipped · ${e.studied} reported studied</p><p>Missing logs are unknown, not failed study. This is a record-coverage indicator, not an admissions probability or a prediction of TARA performance.</p><p>${e.unlogged?'Log what you actually did, then choose one recorded difficulty to revisit.':e.skipped?'Review skipped work and decide whether to reschedule it or reduce the plan.':'Use assessment results and mistake reviews to decide your next step.'}</p><details><summary>How this is calculated</summary><p>Recorded elapsed blocks / elapsed planned blocks over the last seven days, starting no earlier than the new plan. Future blocks and rest periods are excluded. Skipped blocks count as recorded, not studied. Extra study does not fill a different planned slot.</p></details></details>`;
+}
+
+function ambitionsHtml() {
+  return `<section class="panel"><h3>University goals</h3><ol>${UNIVERSITY_TARGETS.map(t=>`<li>${escapeHtml(t)}</li>`).join('')}</ol><p>A-levels: ${A_LEVEL_SUBJECTS.join(', ')}.</p><p>EPQ: develop independent research, critical reading, reflection and connections with competitions and wider interests. Reading or entering a competition is evidence to reflect on, not automatic EPQ credit.</p></section>`;
+}
+
+function studentReminderSettingsHtml() {
+  const preference=state.data.reminderPreferences || {available:false,enabled:false};
+  const evidence=loggingEvidence(state.data.studyPlanLogs || [],new Date(),1);
+  return `<section class="panel student-reminders"><h3>Student logging reminder</h3><p>To ${escapeHtml(state.user.email)} · 21:30 weekdays / 21:45 weekends · Europe/London</p><p>Only when elapsed planned blocks remain unlogged. At most one delivery attempt per day. No parent copy.</p><form data-action="save-student-reminders"><label class="checkline"><input type="checkbox" name="enabled" ${preference.enabled?'checked':''} ${!preference.available?'disabled':''}> Request student email reminders</label><button ${!preference.available?'disabled':''}>Save reminder preference</button><p class="form-status" aria-live="polite"></p></form><p>${!preference.available?'Reminder settings unavailable. Apply migration 008 and check the connection.':'Preference saved in your account; sending also requires the email service and scheduled backend to be configured.'}</p><details><summary>Reminder preview (not sent)</summary>${studentReminderText(evidence).split('\n\n').map(p=>`<p>${escapeHtml(p)}</p>`).join('')}</details></section>`;
 }
 
 function weeklyReportHtml(report) {
@@ -726,7 +745,7 @@ function carryForwardFor(q) {
 
 function analyticsHtml() {
   const t = state.data.tara;
-  return `<header class="top"><div><p class="eyebrow">TARA Assessment Analytics</p><h2>${t.overallAccuracy}% overall accuracy</h2><p class="muted">This page is the detailed admissions-test view. Use Overall Analytics for the full Oxford E&M preparation picture.</p></div><button data-action="start-recommended-tara">Practise recommended area</button></header>${taraRecommendationHtml(t)}<section class="grid">${card('Total attempts', t.totalAttempts, `${t.totalQuestions} questions answered`)}${card('Average set score', t.averageSetScore, 'Mini-sets are not official scaled scores.')}${card('Critical Thinking', `${t.criticalAccuracy}%`, '')}${card('Numerical Reasoning', `${t.problemAccuracy}%`, '')}</section><section class="panel"><h3>Accuracy trend</h3>${trend(t.recentTrend)}</section><section class="grid"><section class="panel"><h3>By type</h3>${bars(t.byType)}</section><section class="panel"><h3>By sub-type</h3>${bars(t.byPattern)}</section></section><section class="panel"><h3>Repeat mistake signals</h3>${repeatMistakesHtml(t)}</section><section class="panel"><h3>Historical test sessions</h3>${sessionHistoryHtml()}</section>${state.reviewAttemptId ? reviewAttemptHtml(state.reviewAttemptId) : ''}`;
+  return `<header class="top"><div><p class="eyebrow">TARA Assessment Analytics</p><h2>${t.overallAccuracy}% overall accuracy</h2><p class="muted">This page is the detailed admissions-test view. Use Overall Analytics for the full Oxford PPE preparation picture.</p></div><button data-action="start-recommended-tara">Practise recommended area</button></header>${taraRecommendationHtml(t)}<section class="grid">${card('Total attempts', t.totalAttempts, `${t.totalQuestions} questions answered`)}${card('Average set score', t.averageSetScore, 'Mini-sets are not official scaled scores.')}${card('Critical Thinking', `${t.criticalAccuracy}%`, '')}${card('Numerical Reasoning', `${t.problemAccuracy}%`, '')}</section><section class="panel"><h3>Accuracy trend</h3>${trend(t.recentTrend)}</section><section class="grid"><section class="panel"><h3>By type</h3>${bars(t.byType)}</section><section class="panel"><h3>By sub-type</h3>${bars(t.byPattern)}</section></section><section class="panel"><h3>Repeat mistake signals</h3>${repeatMistakesHtml(t)}</section><section class="panel"><h3>Historical test sessions</h3>${sessionHistoryHtml()}</section>${state.reviewAttemptId ? reviewAttemptHtml(state.reviewAttemptId) : ''}`;
 }
 
 function taraRecommendationHtml(t) {
@@ -830,13 +849,13 @@ function masteryOptions(selected) {
 }
 
 function journalHtml() {
-  return `<header class="top"><div><p class="eyebrow">Super-Curricular & Competitions</p><h2>Build genuine E&M depth</h2><p class="muted">Track readings, lectures, essays and competitions, then convert them into claim, mechanism, evidence, objection and response.</p></div></header><section class="panel compact-panel"><div class="segmented">${['reading','thinking'].map((mode) => `<button class="${state.journalMode === mode ? 'active' : ''}" data-journal-mode="${mode}" title="Open ${mode === 'reading' ? 'reading list tracker' : 'thinking journal'}">${mode === 'reading' ? 'Reading Pipeline' : 'Thinking Notes'}</button>`).join('')}</div></section>${state.journalMode === 'reading' ? readingListHtml() : thinkingJournalHtml()}`;
+  return `<header class="top"><div><p class="eyebrow">Super-Curricular & Competitions</p><h2>Build genuine PPE depth</h2><p class="muted">Track readings, lectures, essays and competitions, then convert them into claim, mechanism, evidence, objection and response.</p></div></header><section class="panel compact-panel"><div class="segmented">${['reading','thinking'].map((mode) => `<button class="${state.journalMode === mode ? 'active' : ''}" data-journal-mode="${mode}" title="Open ${mode === 'reading' ? 'reading list tracker' : 'thinking journal'}">${mode === 'reading' ? 'Reading Pipeline' : 'Thinking Notes'}</button>`).join('')}</div></section>${state.journalMode === 'reading' ? readingListHtml() : thinkingJournalHtml()}`;
 }
 
 function readingListHtml() {
   const items = state.data.journal;
   const statuses = ['planned','reading','completed'];
-  return `<section class="grid six">${statuses.map((status) => card(label(status), readingItems(status).length, statusHint(status))).join('')}</section><section class="panel"><h3>Add reading item</h3><form data-action="add-journal" class="form-grid"><input name="title" placeholder="Title" required><input name="author" placeholder="Author / speaker"><input name="source" placeholder="Book, article, lecture, podcast"><input name="url" type="url" placeholder="Link"><label>Type<select name="entry_type">${journalTypeOptions('article')}</select></label><label>Status<select name="reading_status"><option value="planned">Planned</option><option value="reading">Currently reading</option><option value="completed">Completed</option></select></label><input name="topic_tags" placeholder="Economics, Strategy, Public Policy"><textarea class="span-all" name="reflection" placeholder="Why this belongs on the E&M list"></textarea><button>Add to reading list</button></form></section><section class="grid">${items.length ? statuses.map(readingColumnHtml).join('') : '<section class="panel"><p class="muted">Add readings, lectures, podcasts or reports to start building a proper E&M reading pipeline.</p></section>'}</section>`;
+  return `<section class="grid six">${statuses.map((status) => card(label(status), readingItems(status).length, statusHint(status))).join('')}</section><section class="panel"><h3>Add reading item</h3><form data-action="add-journal" class="form-grid"><input name="title" placeholder="Title" required><input name="author" placeholder="Author / speaker"><input name="source" placeholder="Book, article, lecture, podcast"><input name="url" type="url" placeholder="Link"><label>Type<select name="entry_type">${journalTypeOptions('article')}</select></label><label>Status<select name="reading_status"><option value="planned">Planned</option><option value="reading">Currently reading</option><option value="completed">Completed</option></select></label><input name="topic_tags" placeholder="Economics, Strategy, Public Policy"><textarea class="span-all" name="reflection" placeholder="Why this belongs on the PPE list"></textarea><button>Add to reading list</button></form></section><section class="grid">${items.length ? statuses.map(readingColumnHtml).join('') : '<section class="panel"><p class="muted">Add readings, lectures, podcasts or reports to start building a proper PPE reading pipeline.</p></section>'}</section>`;
 }
 
 function thinkingJournalHtml() {
@@ -971,7 +990,7 @@ function readinessAdvice(name, value) {
       formula: 'Currently based on overall recorded TARA Assessment question accuracy.'
     },
     'Supercurricular Depth': {
-      summary: 'Quantity and depth of E&M journal entries.',
+      summary: 'Quantity and depth of PPE journal entries.',
       next: 'Convert reading-list items into CLAIM-MECHANISM-EVIDENCE-OBJECTION-RESPONSE entries with economics and management links.',
       formula: 'Currently rises with substantive journal entries and is capped until deeper quality measures are added.'
     },
@@ -1093,7 +1112,7 @@ function statusOptions(selected) {
 
 
 function interviewHtml() {
-  return `<header class="top"><div><p class="eyebrow">Interview Prep</p><h2>Practise clarity, adaptability and quantitative thinking</h2><p class="muted">Record practice as evidence of how the student thinks, responds and improves, not just whether the first answer sounded polished.</p></div></header>${promptBankHtml('Oxford E&M interview prompt bank', interviewPrompts, 'interview-prompt')}<section class="panel"><form data-action="add-interview" class="stack interview-form"><div class="form-grid"><input name="topic" placeholder="Topic"><input name="session_type" placeholder="Session type, e.g. parent mock / school mock"><input name="session_date" type="date" value="${todayInput()}"></div><textarea name="questions" data-prompt-target="interview" placeholder="Questions practised, one per line"></textarea><textarea name="notes" placeholder="What happened in the session?"></textarea><textarea name="reasoning_feedback" placeholder="Reasoning feedback"></textarea><textarea name="clarity_feedback" placeholder="Clarity feedback"></textarea><textarea name="adaptability_feedback" placeholder="Adaptability feedback"></textarea><textarea name="quantitative_feedback" placeholder="Quantitative feedback"></textarea><textarea name="overall_feedback" placeholder="Overall feedback"></textarea><textarea name="next_steps" placeholder="Next steps"></textarea><button>Save interview session</button></form></section><section class="panel"><h3>Interview history</h3>${interviewHistoryHtml()}</section>`;
+  return `<header class="top"><div><p class="eyebrow">Interview Prep</p><h2>Practise clarity, adaptability and quantitative thinking</h2><p class="muted">Record practice as evidence of how the student thinks, responds and improves, not just whether the first answer sounded polished.</p></div></header>${promptBankHtml('Oxford PPE interview prompt bank', interviewPrompts, 'interview-prompt')}<section class="panel"><form data-action="add-interview" class="stack interview-form"><div class="form-grid"><input name="topic" placeholder="Topic"><input name="session_type" placeholder="Session type, e.g. parent mock / school mock"><input name="session_date" type="date" value="${todayInput()}"></div><textarea name="questions" data-prompt-target="interview" placeholder="Questions practised, one per line"></textarea><textarea name="notes" placeholder="What happened in the session?"></textarea><textarea name="reasoning_feedback" placeholder="Reasoning feedback"></textarea><textarea name="clarity_feedback" placeholder="Clarity feedback"></textarea><textarea name="adaptability_feedback" placeholder="Adaptability feedback"></textarea><textarea name="quantitative_feedback" placeholder="Quantitative feedback"></textarea><textarea name="overall_feedback" placeholder="Overall feedback"></textarea><textarea name="next_steps" placeholder="Next steps"></textarea><button>Save interview session</button></form></section><section class="panel"><h3>Interview history</h3>${interviewHistoryHtml()}</section>`;
 }
 
 function interviewHistoryHtml() {
@@ -1139,12 +1158,12 @@ function parentStudentCardHtml(student) {
     .filter((topic) => ['weak', 'developing'].includes(topic.mastery_status))
     .map((topic) => `${subject.name}: ${topic.topic_name}`));
   const nextMilestones = (student.milestones || []).filter((m) => m.status !== 'completed').slice(0, 3);
-  return `<section class="panel parent-student"><div class="top mini"><div><p class="eyebrow">${escapeHtml(student.profile?.display_name || 'Student')}</p><h3>${escapeHtml(student.profile?.target_course || 'Oxford Economics & Management')}</h3></div><span class="pill success">Read-only</span></div><section class="grid six">${card('This week', `${percent(completed.length, tasks.length)}%`, `${completed.length}/${tasks.length} tasks completed<br>${open.length} still open`)}${card('TARA Assessment', `${student.tara.overallAccuracy}%`, `${student.tara.totalQuestions} questions answered<br>Weakest: ${student.tara.weakestSubtype?.name || 'Not enough data'}`)}${card('A-Level', '', student.subjects.map((s)=>`${s.name}: ${s.predicted_grade || 'Not set'}`).join('<br>'))}${card('Weak topics', weakTopics.length, weakTopics.slice(0, 4).map(escapeHtml).join('<br>') || 'None recorded')}${card('Upcoming milestones', nextMilestones.length, nextMilestones.map((m)=>`${escapeHtml(m.title)} · ${formatDate(m.target_date)}`).join('<br>') || 'No open milestones')}${card('Current focus', '', student.programme?.weekly_focus || 'No active weekly programme')}</section></section>`;
+  return `<section class="panel parent-student"><div class="top mini"><div><p class="eyebrow">${escapeHtml(student.profile?.display_name || 'Student')}</p><h3>${escapeHtml(currentTarget(student.profile?.target_course))}</h3></div><span class="pill success">Read-only</span></div><section class="grid six">${card('This week', `${percent(completed.length, tasks.length)}%`, `${completed.length}/${tasks.length} tasks completed<br>${open.length} still open`)}${card('TARA Assessment', `${student.tara.overallAccuracy}%`, `${student.tara.totalQuestions} questions answered<br>Weakest: ${student.tara.weakestSubtype?.name || 'Not enough data'}`)}${card('A-Level', '', student.subjects.map((s)=>`${s.name}: ${s.predicted_grade || 'Not set'}`).join('<br>'))}${card('Weak topics', weakTopics.length, weakTopics.slice(0, 4).map(escapeHtml).join('<br>') || 'None recorded')}${card('Upcoming milestones', nextMilestones.length, nextMilestones.map((m)=>`${escapeHtml(m.title)} · ${formatDate(m.target_date)}`).join('<br>') || 'No open milestones')}${card('Current focus', '', student.programme?.weekly_focus || 'No active weekly programme')}</section></section>`;
 }
 
 function profileHtml() {
-  const p = state.data.profile || {};
-  return `<header class="top"><div><p class="eyebrow">Profile</p><h2>Student setup</h2></div></header><section class="panel"><form data-action="save-profile" class="form-grid"><label>Display name<input name="display_name" value="${escapeAttr(p.display_name || '')}"></label><label>School<input name="school" value="${escapeAttr(p.school || '')}"></label><label>Student email<input value="${escapeAttr(state.user.email || '')}" disabled></label><label>Parent email<input name="parent_email" type="email" value="${escapeAttr(p.parent_email || '')}" placeholder="parent@example.com"></label><label>School year<input name="current_school_year" value="${escapeAttr(p.current_school_year || 'Year 12')}"></label><label>Application year<input name="application_year" type="number" value="${escapeAttr(p.application_year || '')}"></label><label>Target course<input name="target_course" value="${escapeAttr(p.target_course || 'Oxford Economics & Management')}"></label><label>Target university<input name="target_university" value="${escapeAttr(p.target_university || 'University of Oxford')}"></label><label>Daily parent digest time<input name="parent_digest_time" type="time" value="${escapeAttr(formatTime(p.parent_digest_time || '06:00'))}"></label><label class="checkline"><input name="parent_digest_enabled" type="checkbox" value="true" ${p.parent_digest_enabled ? 'checked' : ''}> Send daily parent digest</label><p class="muted span-all">The digest summarises the previous calendar day. Scheduled email delivery needs the later Supabase Edge Function/email-provider step; the preview below is available now.</p><button>Save profile</button></form></section>${passwordSettingsHtml()}${digestPreviewHtml()}`;
+  const p = {...state.data.profile,target_course:currentTarget(state.data.profile?.target_course)};
+  return `<header class="top"><div><p class="eyebrow">Profile</p><h2>Student setup</h2></div></header><section class="panel"><form data-action="save-profile" class="form-grid"><label>Display name<input name="display_name" value="${escapeAttr(p.display_name || '')}"></label><label>School<input name="school" value="${escapeAttr(p.school || '')}"></label><label>Student email<input value="${escapeAttr(state.user.email || '')}" disabled></label><label>Parent email<input name="parent_email" type="email" value="${escapeAttr(p.parent_email || '')}" placeholder="parent@example.com"></label><label>School year<input name="current_school_year" value="${escapeAttr(p.current_school_year || 'Year 12')}"></label><label>Application year<input name="application_year" type="number" value="${escapeAttr(p.application_year || '')}"></label><label>Target course<input name="target_course" value="${escapeAttr(p.target_course || 'Oxford Philosophy, Politics and Economics')}"></label><label>Target university<input name="target_university" value="${escapeAttr(p.target_university || 'University of Oxford')}"></label><label>Daily parent digest time<input name="parent_digest_time" type="time" value="${escapeAttr(formatTime(p.parent_digest_time || '06:00'))}"></label><label class="checkline"><input name="parent_digest_enabled" type="checkbox" value="true" ${p.parent_digest_enabled ? 'checked' : ''}> Send daily parent digest</label><p class="muted span-all">The digest summarises the previous calendar day. Scheduled email delivery needs the later Supabase Edge Function/email-provider step; the preview below is available now.</p><button>Save profile</button></form></section>${ambitionsHtml()}${studentReminderSettingsHtml()}${passwordSettingsHtml()}${digestPreviewHtml()}`;
 }
 
 function digestPreviewHtml() {
@@ -1573,6 +1592,13 @@ app.addEventListener('submit', async (event) => {
       await updateMilestone(state.user, milestone, values);
     }
     if (action === 'add-interview') await addInterviewSession(state.user, values);
+    if (action === 'save-student-reminders') {
+      await saveStudentReminderPreferences(state.user,form.elements.enabled.checked);
+      state.data.reminderPreferences={available:true,enabled:form.elements.enabled.checked};
+      form.dataset.unsaved='';
+      setFormStatus(form,'Preference saved. Delivery requires the configured email service and scheduler.','success');
+      return;
+    }
     if (action === 'save-profile') await updateProfile(state.user, normalizeProfilePayload(values));
     if (action === 'save-error') await saveTaraErrorAnalysis(state.user, values);
     if (action === 'save-study-log') {

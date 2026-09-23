@@ -328,6 +328,18 @@ const mockData = `const fixture=${JSON.stringify(fixture)};
       assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth),true);
       await page.getByRole('button',{name:'Dashboard',exact:true}).click();
       await page.getByText('1/13 planned study blocks logged today',{exact:true}).waitFor();
+      assert.ok((await page.locator('h1').first().textContent()).includes('Philosophy, Politics and Economics'));
+      await page.locator('.preparation-checkin summary').first().click();
+      await page.getByText(/not an admissions probability/).waitFor();
+      await page.screenshot({path:path.join(root,`../work/ppe-dashboard-${width}.png`),fullPage:true});
+      await page.getByRole('button',{name:'Profile',exact:true}).click();
+      await page.getByText('Imperial - Economics, Finance and Data Science (EFDS)',{exact:true}).waitFor();
+      assert.equal(await page.locator('[name=target_course]').inputValue(),'Oxford Philosophy, Politics and Economics');
+      assert.equal(await page.locator('[data-action="save-student-reminders"] button').isDisabled(),true);
+      await page.locator('.student-reminders summary').click();
+      await page.getByText(/do not prove you missed the work/).waitFor();
+      assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth),true);
+      await page.screenshot({path:path.join(root,`../work/ppe-profile-${width}.png`),fullPage:true});
       assert.deepEqual(errors,[]);
       await page.close();console.log(`School task save, upload, marking, refresh, date/subject tracker and revised weekday plan passed at ${width}px (mock backend).`);
     }

@@ -1,0 +1,3 @@
+[functions.student-log-reminder]
+verify_jwt = false
+# Mandatory x-cron-secret authentication is enforced inside the function.

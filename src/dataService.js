@@ -1,5 +1,6 @@
 import { supabase, hasSupabaseConfig } from './supabaseClient.js';
 import { normalizeResponseTags } from './tagTaxonomy.js';
+import { currentTarget } from './preparationContext.js';
 
 const localKey = 'oxford-em-coach-demo';
 
@@ -66,7 +67,21 @@ export async function bootstrap(user) {
     optionalList('study_plan_logs', user.id, 'log_date', true),
     getParentStudentSummaries(user.id)
   ]);
-  return buildState({ profile, tara, programme, subjects, journal, reasoning, milestones, weeklyReviews, interviews, studyPlanLogs, parentStudents });
+  const data = buildState({ profile, tara, programme, subjects, journal, reasoning, milestones, weeklyReviews, interviews, studyPlanLogs, parentStudents });
+  data.reminderPreferences = await getStudentReminderPreferences(user);
+  return data;
+}
+
+async function getStudentReminderPreferences(user) {
+  const {data,error}=await supabase.from('student_reminder_preferences').select('enabled').eq('user_id',user.id).maybeSingle();
+  if(error)return {available:false,enabled:false};
+  return {available:true,enabled:!!data?.enabled};
+}
+
+export async function saveStudentReminderPreferences(user,enabled) {
+  if(!supabase)throw new Error('Student reminders require a configured online account.');
+  const {error}=await supabase.from('student_reminder_preferences').upsert({user_id:user.id,enabled:!!enabled,updated_at:new Date().toISOString()},{onConflict:'user_id'});
+  if(error)throw new Error('Could not save reminder preference. Check the connection and run 008_student_reminders.sql if not already applied.');
 }
 
 export async function saveAttempt(user, set, responses, startedAt) {
@@ -481,7 +496,7 @@ async function ensureProfile(user) {
   const row = {
     user_id: user.id,
     display_name: user.email?.split('@')[0],
-    target_course: 'Oxford Economics & Management',
+    target_course: 'Oxford Philosophy, Politics and Economics',
     target_university: 'University of Oxford',
     current_school_year: 'Year 12',
     parent_digest_enabled: false,
@@ -557,7 +572,7 @@ function localBootstrap() {
     academic_topics: (db.academic_topics || []).filter((topic) => topic.subject_id === subject.id)
   }));
   return buildState({
-    profile: db.user_profiles?.[0] || { display_name: 'Student preview', target_course: 'Oxford Economics & Management', current_school_year: 'Year 12' },
+    profile: db.user_profiles?.[0] || { display_name: 'Student preview', target_course: 'Oxford Philosophy, Politics and Economics', current_school_year: 'Year 12' },
     tara: summarizeTara(db.attempts, db.responses, db.tara_error_analysis || []),
     programme: db.weekly_programmes.find((p) => p.is_active) || null,
     subjects,
@@ -571,6 +586,7 @@ function localBootstrap() {
 }
 
 function buildState({ profile, tara, programme, subjects, journal, reasoning, milestones, weeklyReviews, interviews = [], studyPlanLogs = [], parentStudents = [] }) {
+  profile = {...profile,target_course:currentTarget(profile?.target_course)};
   const tasks = programme?.weekly_tasks || programme?.tasks || readLocal().weekly_tasks.filter((t) => t.programme_id === programme?.id);
   return {
     profile,
@@ -637,7 +653,7 @@ function typeAccuracy(rows, type) {
 function recommendations({ tara, subjects, journal, tasks, studyPlanLogs = [] }) {
   const recs = [];
   if (tara.weakestSubtype && tara.weakestSubtype.total >= 3 && tara.weakestSubtype.accuracy < 65) recs.push(`TARA Assessment ${tara.weakestSubtype.name} is below 65%, so schedule two targeted 5-question sets and one methodology review.`);
-  if (!journal.length || daysSince(journal[0].date_completed) >= 14) recs.push('No recent E&M journal entry in 14 days, so complete one CLAIM-MECHANISM-EVIDENCE-OBJECTION-RESPONSE entry.');
+  if (!journal.length || daysSince(journal[0].date_completed) >= 14) recs.push('No recent PPE journal entry in 14 days, so complete one CLAIM-MECHANISM-EVIDENCE-OBJECTION-RESPONSE entry.');
   const maths = subjects.find((s) => s.name === 'Mathematics');
   if (maths && maths.predicted_grade !== 'A*') recs.push('Maths is not yet predicted A*, so protect one high-priority quantitative revision block this week.');
   const completion = tasks.length ? tasks.filter((t) => t.status === 'completed').length / tasks.length : 1;

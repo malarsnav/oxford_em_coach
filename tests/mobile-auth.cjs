@@ -3,7 +3,7 @@ const http=require('node:http'),fs=require('node:fs'),path=require('node:path'),
 const root=path.resolve(__dirname,'..');
 const fixture={profile:{target_course:'Oxford Economics & Management'},subjects:[],tasks:[],journal:[],reasoning:[],milestones:[],weeklyReviews:[],interviews:[],studyPlanLogs:[],parentStudents:[],readiness:{},recommendations:[],tara:{overallAccuracy:0,totalQuestions:0,totalAttempts:0,attempts:[],responses:[],byType:[],byPattern:[]}};
 const source=fs.readFileSync(path.join(root,'src/dataService.js'),'utf8');
-const start=source.indexOf('export async function bootstrap('),end=source.indexOf('export async function saveAttempt(',start);
+const start=source.indexOf('export async function bootstrap('),end=source.indexOf('async function getStudentReminderPreferences(',start);
 const service=source.slice(0,start)+`export async function bootstrap(user){
   window.bootstraps=(window.bootstraps||0)+1;
   if(window.failBootstrap)throw new Error('Offline');

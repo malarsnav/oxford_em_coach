@@ -1,6 +1,6 @@
-# Oxford E&M Coach
+# Oxford PPE Coach
 
-Static GitHub Pages app for Oxford Economics & Management preparation.
+Static GitHub Pages app for Oxford Philosophy, Politics and Economics preparation.
 
 ## Stack
 

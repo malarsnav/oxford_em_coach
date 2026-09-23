@@ -56,7 +56,7 @@ function baseTasks(state, preferences) {
     ...aLevelTasks,
     task('tara', 'Complete a 5-question TARA Assessment set', 'Use TARA Assessment Practice to complete one bite-sized set and review the methodology report.', 25, 'medium', taraHasNoScheduledTime() ? 'The fixed weekly timetable currently has 0 hours for TARA, so the generator protects one small admissions-test block.' : 'Admissions-test readiness needs steady low-friction practice so mistakes become visible early.'),
     task('tara', 'Review every TARA mistake methodically', 'For each missed question, record the question type, why the chosen answer was tempting, the clue missed and the method to carry forward.', 20, 'high', 'TARA progress comes from repairing reasoning habits, not simply doing more questions.'),
-    task('economics', 'Analyse one economics article', 'Record the main claim, mechanism, evidence, assumptions and one counterargument.', 35, 'medium', 'Oxford E&M preparation needs depth of thought, not just reading volume.'),
+    task('economics', 'Analyse one economics article', 'Record the main claim, mechanism, evidence, assumptions and one counterargument.', 35, 'medium', 'Oxford PPE preparation needs depth of thought, not just reading volume.'),
     task('management', 'Explain a strategic business choice', 'Answer: why might a company sell a product at a loss? Give at least three strategic reasons.', 20, 'low', 'Management thinking improves when strategy is linked to incentives and trade-offs.'),
     task('economics', 'Connect one A-Level idea to E&M', crossSubjectPrompt(state), 20, 'medium', 'Cross-subject synthesis helps the student turn school knowledge into Oxford-style E&M thinking.'),
     task('oxford_reasoning', 'Solve one unfamiliar reasoning prompt', 'Write assumptions first, answer, revise after a hint, then reflect on what changed.', 20, 'medium', 'Interview-style reasoning rewards assumptions, clarity and adaptability.')
@@ -173,7 +173,7 @@ function summaryFor(state, tasks, phase) {
   const reason = state?.tara?.weakestSubtype?.accuracy < 65 ? ` TARA Assessment ${state.tara.weakestSubtype.name} is currently weak, so targeted practice is included.` : '';
   const taraGap = taraHasNoScheduledTime() ? ' The standing timetable currently gives TARA 0 hours, so this draft keeps TARA light but visible.' : '';
   const carried = tasks.filter((task) => task.title.startsWith('Carry forward:')).length;
-  return `${phase.name}: ${minutes} minutes using the Oxford E&M preparation split of roughly 50% A-Levels, 25% TARA Assessment, 15% Super-Curricular, and 10% Reading/Thinking.${carried ? ` ${carried} high-priority task${carried === 1 ? '' : 's'} carried forward.` : ''}${reason}${taraGap}`;
+  return `${phase.name}: ${minutes} minutes using the Oxford PPE preparation split of roughly 50% A-Levels, 25% TARA Assessment, 15% Super-Curricular, and 10% Reading/Thinking.${carried ? ` ${carried} high-priority task${carried === 1 ? '' : 's'} carried forward.` : ''}${reason}${taraGap}`;
 }
 
 function priorityWeight(priority) {

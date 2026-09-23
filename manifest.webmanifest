@@ -1,7 +1,7 @@
 {
   "id": "./",
-  "name": "Oxford E&M Coach",
-  "short_name": "E&M Coach",
+  "name": "Oxford PPE Coach",
+  "short_name": "PPE Coach",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",

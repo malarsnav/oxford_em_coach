@@ -30,7 +30,7 @@ Deno.serve(async (request) => {
       results.push({ user_id: profile.user_id, status: 'skipped_no_activity' });
       continue;
     }
-    await sendEmail(profile.parent_email, `Oxford E&M Coach daily summary - ${date}`, emailHtml(profile, digest, date));
+    await sendEmail(profile.parent_email, `Oxford PPE Coach daily summary - ${date}`, emailHtml(profile, digest, date));
     results.push({ user_id: profile.user_id, parent_email: profile.parent_email, status: 'sent' });
   }
 
@@ -105,7 +105,7 @@ function buildEmailPayload(values: Record<string, string>) {
 }
 
 function emailHtml(profile: Record<string, string>, digest: Record<string, any>, date: string) {
-  return `<h2>Oxford E&M Coach daily summary</h2>
+  return `<h2>Oxford PPE Coach daily summary</h2>
     <p><b>Student:</b> ${escapeHtml(profile.display_name || 'Student')}</p>
     <p><b>Date:</b> ${escapeHtml(date)}</p>
     <ul>
@@ -116,7 +116,7 @@ function emailHtml(profile: Record<string, string>, digest: Record<string, any>,
       <li>Weekly tasks completed: ${digest.completedTasks.length}</li>
       <li>Weekly tasks skipped: ${digest.skippedTasks.length}</li>
       <li>A-Level results added: ${digest.academicResults.length}</li>
-      <li>E&M journal entries: ${digest.journal.length}</li>
+      <li>PPE journal entries: ${digest.journal.length}</li>
       <li>Oxford reasoning sessions: ${digest.reasoning.length}</li>
     </ul>
     <p><b>Suggested focus:</b> ${escapeHtml(suggestFocus(digest))}</p>`;
@@ -125,7 +125,7 @@ function emailHtml(profile: Record<string, string>, digest: Record<string, any>,
 function suggestFocus(digest: Record<string, any>) {
   if (digest.weakSubtype && digest.weakSubtype.accuracy < 70) return `Review ${digest.weakSubtype.name} before starting another TARA set.`;
   if (digest.skippedTasks.length) return 'Review skipped weekly tasks and decide whether to reschedule or remove them.';
-  if (!digest.journal.length && !digest.reasoning.length) return 'Add one short E&M journal or Oxford reasoning reflection today.';
+  if (!digest.journal.length && !digest.reasoning.length) return 'Add one short PPE journal or Oxford reasoning reflection today.';
   return 'Keep the current weekly programme moving.';
 }
 

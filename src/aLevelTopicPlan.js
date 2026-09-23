@@ -64,7 +64,7 @@ export function getAlevelTopicPlan(state, date = new Date()) {
       subject,
       topic,
       reason: subject === 'Mathematics' || subject === 'Economics'
-        ? 'Core Oxford E&M foundation topic for this week.'
+        ? 'Core Oxford PPE foundation topic for this week.'
         : 'Supporting A-Level topic to keep academic breadth secure.',
       source: 'weekly_rotation'
     });
