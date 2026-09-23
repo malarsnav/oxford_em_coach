@@ -24,10 +24,10 @@ export const WEEKDAY_TIMETABLE = [
 ];
 
 export function isNonStudyActivity(value) {
-  return ['break', 'breakfast', 'lunch', 'dinner', 'rest', 'school', 'chest and triceps', 'legs and shoulders', 'back and biceps'].includes(String(value || '').toLowerCase());
+  return ['break', 'breakfast', 'lunch', 'dinner', 'rest', 'school', 'shower', 'cardio', 'chest and triceps', 'legs and shoulders', 'back and biceps'].includes(String(value || '').toLowerCase());
 }
 
-export const WEEKEND_TIMETABLE = [
+const ORIGINAL_WEEKEND_TIMETABLE = [
   { from: '08:00', to: '09:00', Saturday: 'Breakfast', Sunday: 'Breakfast' },
   { from: '09:00', to: '10:00', Saturday: 'Maths', Sunday: 'Maths' },
   { from: '10:00', to: '10:15', Saturday: 'Break', Sunday: 'Breakfast' },
@@ -44,14 +44,42 @@ export const WEEKEND_TIMETABLE = [
   { from: '20:45', to: '21:45', Saturday: 'Spillover', Sunday: 'Spillover' }
 ];
 
+export const WEEKEND_TIMETABLE = [
+  { from: '06:30', to: '07:15', Saturday: 'legs and shoulders', Sunday: 'back and biceps' },
+  { from: '07:15', to: '07:45', Saturday: 'Shower', Sunday: 'Shower' },
+  { from: '07:45', to: '08:30', Saturday: 'Homework', Sunday: 'Homework' },
+  { from: '08:30', to: '09:15', Saturday: 'Breakfast', Sunday: 'Breakfast' },
+  { from: '09:15', to: '10:00', Saturday: 'Homework', Sunday: 'Homework' },
+  { from: '10:00', to: '10:45', Saturday: 'Homework', Sunday: 'Homework' },
+  { from: '10:45', to: '11:15', Saturday: 'break', Sunday: 'break' },
+  { from: '11:15', to: '12:00', Saturday: 'Economics', Sunday: 'Economics' },
+  { from: '12:00', to: '12:45', Saturday: 'Economics', Sunday: 'Economics' },
+  { from: '12:45', to: '13:45', Saturday: 'Lunch', Sunday: 'Lunch' },
+  { from: '13:45', to: '14:30', Saturday: 'History', Sunday: 'History' },
+  { from: '14:30', to: '15:15', Saturday: 'History', Sunday: 'History' },
+  { from: '15:15', to: '15:45', Saturday: 'break', Sunday: 'break' },
+  { from: '15:45', to: '16:30', Saturday: 'Physics', Sunday: 'Physics' },
+  { from: '16:30', to: '17:15', Saturday: 'Physics', Sunday: 'Physics' },
+  { from: '17:15', to: '17:45', Saturday: 'Cardio', Sunday: 'Cardio' },
+  { from: '17:45', to: '18:30', Saturday: 'Maths', Sunday: 'Maths' },
+  { from: '18:30', to: '19:15', Saturday: 'Maths', Sunday: 'Maths' },
+  { from: '19:15', to: '20:15', Saturday: 'Dinner', Sunday: 'Dinner' },
+  { from: '20:15', to: '21:00', Saturday: 'SMC', Sunday: 'SMC' },
+  { from: '21:00', to: '21:45', Saturday: 'Reading(EPQ)', Sunday: 'Reading(EPQ)' }
+];
+
 // Effective dates are local calendar dates, not device first-visit timestamps.
 // Append a new snapshot for future timetable changes; never edit a historical version.
 export const STUDY_PLAN_VERSIONS = [{
   effectiveFrom: '2026-09-05',
   weekdays: ORIGINAL_WEEKDAY_TIMETABLE.map(row => ({...row})),
-  weekends: WEEKEND_TIMETABLE.map(row => ({...row}))
+  weekends: ORIGINAL_WEEKEND_TIMETABLE.map(row => ({...row}))
 }, {
   effectiveFrom: '2026-09-23',
+  weekdays: WEEKDAY_TIMETABLE.map(row => ({...row})),
+  weekends: ORIGINAL_WEEKEND_TIMETABLE.map(row => ({...row}))
+}, {
+  effectiveFrom: '2026-09-26',
   weekdays: WEEKDAY_TIMETABLE.map(row => ({...row})),
   weekends: WEEKEND_TIMETABLE.map(row => ({...row}))
 }];
@@ -61,18 +89,17 @@ export function studyPlanForDate(date) {
 }
 
 export const WEEKLY_TARGETS = [
-  { name: 'Maths', hours: 4.25, pillar: 'A-Level Rigour' },
-  { name: 'Physics', hours: 3.5, pillar: 'A-Level Rigour' },
-  { name: 'Economics', hours: 3.5, pillar: 'A-Level Rigour' },
-  { name: 'History', hours: 3.5, pillar: 'A-Level Rigour' },
-  { name: 'AS-Further Maths', hours: 3, pillar: 'A-Level Rigour' },
-  { name: 'EPQ', hours: 4.5, pillar: 'Super-Curricular' },
-  { name: 'Super-Curricular', hours: 6.75, pillar: 'Super-Curricular' },
-  { name: 'Homework', hours: 5, pillar: 'A-Level Rigour' },
-  { name: 'Tuition', hours: 0.75, pillar: 'A-Level Rigour' },
+  { name: 'Maths', hours: 6, pillar: 'A-Level Rigour' },
+  { name: 'Physics', hours: 4.5, pillar: 'A-Level Rigour' },
+  { name: 'Economics', hours: 4.5, pillar: 'A-Level Rigour' },
+  { name: 'History', hours: 4.5, pillar: 'A-Level Rigour' },
+  { name: 'AS-Further Maths', hours: 0, pillar: 'A-Level Rigour' },
+  { name: 'EPQ', hours: 3, pillar: 'Super-Curricular' },
+  { name: 'Super-Curricular', hours: 5.25, pillar: 'Super-Curricular' },
+  { name: 'Homework', hours: 9.5, pillar: 'A-Level Rigour' },
   { name: 'Magazine', hours: 2.5, pillar: 'Reading / Thinking' },
   { name: 'Club', hours: 1, pillar: 'Super-Curricular' },
-  { name: 'Buffer', hours: 2, pillar: 'Flexible' },
+  { name: 'Buffer', hours: 0, pillar: 'Flexible' },
   { name: 'Book', hours: 0, pillar: 'Reading / Thinking' },
   { name: 'TARA', hours: 0, pillar: 'TARA Assessment' }
 ];

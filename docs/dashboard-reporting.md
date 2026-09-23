@@ -10,11 +10,22 @@ the original weekday snapshot; weekends are unchanged. The full timetable
 includes gym, school, rest and meals, but these are excluded from study targets.
 Each new weekday has seven study/activity blocks (255 minutes), including two
 separate Homework slots. TMUA groups under Maths, Article under Magazine, and
-Reading(EPQ) under EPQ. Tuition has no assumed subject. Homework, Tuition and
-Club support a subject/activity name, progress notes and next action.
-The complete revised week contains 51 blocks and 40.25 hours including Buffer.
+Reading(EPQ) under EPQ. Tuition is confirmed as Maths: its stored slot key stays
+`Tuition` to preserve existing logs, while its label is Maths tuition and its
+subject classification and topic picker are Maths. Earlier free-text tuition
+notes remain visible and editable. Homework and Club support a subject/activity
+name, progress notes and next action.
+That weekday-only revision contained 51 blocks and 40.25 hours including Buffer.
 Coverage and the timetable preview use the selected date (range start in subject
 view); reports crossing the change date select the correct snapshot per day.
+
+The revised weekend timetable starts on 2026-09-26. Each day has 13 separate
+45-minute study blocks, including three Homework blocks and two blocks each
+of Economics, History, Physics and Maths. Gym, shower, cardio, breaks and meals
+remain visible in the timetable but are excluded from study completion targets.
+Weekdays are unchanged. The complete new week has 61 blocks / 40.75 study hours.
+AS Further Maths and Buffer no longer have standing slots; historical records
+and extra-study logging remain available.
 
 Daily/weekly reporting and tracker slot generation use studyPlanForDate.
 Dates before the first plan have no expected slots and no missed targets.

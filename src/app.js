@@ -319,7 +319,7 @@ function extraStudyHtml() {
   const alreadyListed=x && selectedPlanBlocks().some(b => b.date===x.date && b.from===x.from && b.to===x.to && b.activity===x.activity);
   return `<details class="panel" ${x?'open':''}><summary>Log extra study</summary><form data-action="extra-block" class="form-grid">
     <label>Date<input name="date" type="date" value="${state.planDate}" required></label>
-    <label>Area<select name="area">${STUDY_AREAS.map(a=>`<option ${sel(a,state.planSubject)}>${escapeHtml(a)}</option>`).join('')}</select></label>
+    <label>Area<select name="area">${[...STUDY_AREAS,'Buffer'].map(a=>`<option ${sel(a,state.planSubject)}>${escapeHtml(a)}</option>`).join('')}</select></label>
     <label>From<input name="from" type="time" required></label><label>To<input name="to" type="time" required></label><button>Open study block</button>
     </form>${x ? alreadyListed ? '<p>This block is already listed below. Edit its existing entry.</p>' : studyPlanLogHtml(x) : ''}</details>`;
 }

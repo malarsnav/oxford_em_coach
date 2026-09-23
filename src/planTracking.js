@@ -1,12 +1,12 @@
 import { WEEKDAY_TIMETABLE, WEEKEND_TIMETABLE, studyPlanForDate } from './studentStudyPlan.js';
 import { syllabusFor, SYLLABUS_ITEMS } from './studySyllabuses.js';
 
-export const STUDY_AREAS = ['Maths','Physics','Economics','History','AS-Further Maths','Homework','Tuition','EPQ','Super Curricular','Club','Book','TARA','Magazine'];
+export const STUDY_AREAS = ['Maths','Physics','Economics','History','AS-Further Maths','Homework','EPQ','Super Curricular','Club','Book','TARA','Magazine'];
 const academic = ['Maths','Physics','Economics','History','AS-Further Maths'];
 const modes = ['learn','practise','assess','reflect'];
 const esc = v => String(v ?? '').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-export const areaFor = activity => activity === 'Spillover' ? 'Buffer' : activity === 'AS Maths' ? 'AS-Further Maths' : ['Maths tuition','Maths(TMUA)'].includes(activity) ? 'Maths' : activity === 'Article' ? 'Magazine' : activity === 'Reading(EPQ)' ? 'EPQ' : ['SMC','Super-Curricular'].includes(activity) ? 'Super Curricular' : activity;
-export const displayActivity = activity => activity === 'Spillover' ? 'Buffer' : activity === 'AS Maths' ? 'AS-Further Maths' : activity === 'SMC' ? 'Super Curricular' : activity;
+export const areaFor = activity => activity === 'Spillover' ? 'Buffer' : activity === 'AS Maths' ? 'AS-Further Maths' : ['Tuition','Maths tuition','Maths(TMUA)'].includes(activity) ? 'Maths' : activity === 'Article' ? 'Magazine' : activity === 'Reading(EPQ)' ? 'EPQ' : ['SMC','Super-Curricular'].includes(activity) ? 'Super Curricular' : activity;
+export const displayActivity = activity => activity === 'Tuition' ? 'Maths tuition' : activity === 'Spillover' ? 'Buffer' : activity === 'AS Maths' ? 'AS-Further Maths' : activity === 'SMC' ? 'Super Curricular' : activity;
 export const logArea = log => log.details?.outcome==='skipped' ? null : areaFor(log.details?.actual_activity || log.planned_activity);
 
 export function deviationFields(block, log) {
@@ -100,6 +100,7 @@ export function richStudyFields(activity, log = {}, attempts = [], customTopics 
       ${customTopics.length ? `<label>Previously used<select data-reuse-topic><option value="">Choose a saved custom topic</option>${customTopics.map(e=>`<option value="${esc(e.id)}">${esc(e.topic)}${e.label?' / '+esc(e.label):''}</option>`).join('')}</select></label>`:''}</details>
       <details class="selected-topic-details" open><summary>Selected topics / optional detail</summary><div data-topic-evidence>${(d.entries||[]).map(evidenceRowHtml).join('')}</div></details>
       ${textarea('study_notes','Notes (optional)',d.study_notes)}
+      ${d.work_done || d.next_action || d.subject ? `<div data-legacy-tuition>${input('subject','Previously recorded subject',d.subject)}${textarea('work_done','Previous tuition progress',d.work_done)}${textarea('next_action','Next action',d.next_action)}</div>` : ''}
     </div>`;
   }
   if (area==='Super Curricular') return `<div class="rich-study" data-rich-area="${area}">
@@ -181,7 +182,7 @@ export function collectStudyDetails(form) {
     if(correct!==null&&(attempted===null||correct>attempted))throw new Error('Correct answers cannot exceed questions attempted.');validateScore(score,total);
     const selected=[...row.querySelectorAll('[name="mode"]:checked')].map(c=>c.value);
     return {id:row.dataset.topicId,topic:row.dataset.topicName,label:row.dataset.subtopicName,ref:item?.ref||'',section:item?.section||'',spec:item?.spec || (item ? 'edexcel-9ma0-issue4' : null),focus:get(row,'focus'),modes:selected,attempted,correct,score,total,notes:get(row,'notes'),rag:get(row,'rag')};
-  })};
+  }),...(container.querySelector('[data-legacy-tuition]')?{subject:get(container,'subject'),work_done:get(container,'work_done'),next_action:get(container,'next_action')}:{})};
   const d={version:1,area};
   const fields = ['Homework','Tuition','Club'].includes(area)?['subject','work_done','next_action']:area==='Buffer'?['work_done']:area==='Super Curricular'?['activity_kind','activity_name','paper_year','question_numbers','questions_completed','activity_score','activity_total','work_done','next_action']:area==='EPQ'?['project_title','project_stage','work_done','next_action']:area==='TARA'?['tara_attempt_id','work_done']:['title','section','key_idea'];
   for(const key of fields)d[key]=get(container,key);
