@@ -745,7 +745,7 @@ function carryForwardFor(q) {
 
 function analyticsHtml() {
   const t = state.data.tara;
-  return `<header class="top"><div><p class="eyebrow">TARA Assessment Analytics</p><h2>${t.overallAccuracy}% overall accuracy</h2><p class="muted">This page is the detailed admissions-test view. Use Overall Analytics for the full Oxford PPE preparation picture.</p></div><button data-action="start-recommended-tara">Practise recommended area</button></header>${taraRecommendationHtml(t)}<section class="grid">${card('Total attempts', t.totalAttempts, `${t.totalQuestions} questions answered`)}${card('Average set score', t.averageSetScore, 'Mini-sets are not official scaled scores.')}${card('Critical Thinking', `${t.criticalAccuracy}%`, '')}${card('Numerical Reasoning', `${t.problemAccuracy}%`, '')}</section><section class="panel"><h3>Accuracy trend</h3>${trend(t.recentTrend)}</section><section class="grid"><section class="panel"><h3>By type</h3>${bars(t.byType)}</section><section class="panel"><h3>By sub-type</h3>${bars(t.byPattern)}</section></section><section class="panel"><h3>Repeat mistake signals</h3>${repeatMistakesHtml(t)}</section><section class="panel"><h3>Historical test sessions</h3>${sessionHistoryHtml()}</section>${state.reviewAttemptId ? reviewAttemptHtml(state.reviewAttemptId) : ''}`;
+  return `<header class="top"><div><p class="eyebrow">TARA Assessment Analytics</p><h2>${t.overallAccuracy}% overall accuracy</h2><p class="muted">This page is the detailed admissions-test view. Use Overall Analytics for the full Oxford PPE preparation picture.</p></div><button data-action="start-recommended-tara">Practise recommended area</button></header>${taraRecommendationHtml(t)}<section class="grid">${card('Total attempts', t.totalAttempts, `${t.totalQuestions} questions answered`)}${card('Average set score', t.averageSetScore, 'Mini-sets are not official scaled scores.')}${card('Critical Thinking', `${t.criticalAccuracy}%`, '')}${card('Numerical Reasoning', `${t.problemAccuracy}%`, '')}</section><section class="panel"><h3>Accuracy trend</h3>${trend(t.recentTrend)}</section><section class="grid"><section class="panel"><h3>By type</h3>${bars(t.byType)}</section><section class="panel"><h3>By sub-type</h3>${bars(t.byPattern)}</section></section><section class="panel"><h3>Repeat mistake signals</h3>${repeatMistakesHtml(t)}</section><section class="panel"><h3>Historical test sessions</h3>${sessionHistoryHtml()}</section>`;
 }
 
 function taraRecommendationHtml(t) {
@@ -1198,14 +1198,18 @@ function topicTagOptions() {
 function sessionHistoryHtml() {
   const attempts = state.data.tara.attempts;
   if (!attempts.length) return '<p class="muted">Complete a TARA Assessment set to see historical session details.</p>';
-  return `<div class="session-list">${attempts.map((attempt)=>`<article class="session-row"><div><b>${formatDateTime(attempt.completed_at)}</b><p>${attempt.total} questions · score ${attempt.score}/${attempt.total}</p></div><button class="ghost" data-review-attempt="${attempt.id}" title="Review chosen answers and coaching">Review</button></article>`).join('')}</div>`;
+  return `<div class="session-list">${attempts.map((attempt)=>{
+    const expanded = state.reviewAttemptId === attempt.id;
+    const reviewId = `session-review-${attempt.id}`;
+    return `<article class="session-history-item"><div class="session-row"><div><b>${formatDateTime(attempt.completed_at)}</b><p>${attempt.total} questions · score ${attempt.score}/${attempt.total}</p></div><button class="ghost" data-review-attempt="${escapeAttr(attempt.id)}" aria-expanded="${expanded}" aria-controls="${escapeAttr(reviewId)}" title="Review chosen answers and coaching">${expanded ? 'Hide review' : 'Review'}</button></div><div id="${escapeAttr(reviewId)}" ${expanded ? '' : 'hidden'}>${expanded ? reviewAttemptHtml(attempt.id) : ''}</div></article>`;
+  }).join('')}</div>`;
 }
 
 function reviewAttemptHtml(attemptId) {
   const attempt = state.data.tara.attempts.find((item) => item.id === attemptId);
   const rows = state.data.tara.responses.filter((response) => response.attempt_id === attemptId);
-  if (!attempt || !rows.length) return '';
-  return `<section class="panel"><div class="top mini"><div><p class="eyebrow">Session review</p><h3>${formatDateTime(attempt.completed_at)} · ${attempt.score}/${attempt.total}</h3></div><button class="ghost" data-action="close-review">Close review</button></div>${rows.map(responseReviewHtml).join('')}</section>`;
+  if (!attempt) return '';
+  return `<section class="session-review" aria-label="Session review"><div class="top mini"><div><p class="eyebrow">Session review</p><h3>${formatDateTime(attempt.completed_at)} · ${attempt.score}/${attempt.total}</h3></div><button class="ghost" data-action="close-review">Close review</button></div>${rows.length ? rows.map(responseReviewHtml).join('') : '<p class="muted">No saved question responses are available for this session.</p>'}</section>`;
 }
 
 function responseReviewHtml(response) {
@@ -1436,14 +1440,26 @@ app.addEventListener('click', async (event) => {
   if (target.dataset.journalMode) { state.journalMode = target.dataset.journalMode; render(); return; }
   if (target.dataset.fillPrompt) { fillPrompt(target.dataset.fillPrompt, target.dataset.prompt); return; }
   if (target.dataset.reviewAttempt) {
+    const attemptId = target.dataset.reviewAttempt;
+    if (state.reviewAttemptId === attemptId) {
+      state.reviewAttemptId = null;
+      render();
+      app.querySelector(`[data-review-attempt="${CSS.escape(attemptId)}"]`)?.focus({preventScroll:true});
+      return;
+    }
+    target.disabled = true;
+    target.textContent = 'Loading review...';
     try {
       await ensureQuestionBankLoaded();
-      state.reviewAttemptId = target.dataset.reviewAttempt;
-      state.view = 'analytics';
     } catch {
-      state.view = 'analytics';
+      // Saved responses remain readable when the question bank is unavailable.
     }
+    state.reviewAttemptId = attemptId;
+    state.view = 'analytics';
     render();
+    const reviewButton = app.querySelector(`[data-review-attempt="${CSS.escape(attemptId)}"]`);
+    reviewButton?.focus({preventScroll:true});
+    reviewButton?.closest('.session-row')?.scrollIntoView({block:'nearest'});
     return;
   }
   const action = target.dataset.action;
@@ -1455,7 +1471,7 @@ app.addEventListener('click', async (event) => {
   if (action === 'prev-question') { state.practice.index = Math.max(0, state.practice.index - 1); render(); }
   if (action === 'next-question') { state.practice.index = Math.min(state.practice.set.length - 1, state.practice.index + 1); render(); }
   if (action === 'submit-tara') await submitTara();
-  if (action === 'close-review') { state.reviewAttemptId = null; render(); }
+  if (action === 'close-review') { const id = state.reviewAttemptId; state.reviewAttemptId = null; render(); app.querySelector(`[data-review-attempt="${CSS.escape(id)}"]`)?.focus(); }
 });
 
 app.addEventListener('change', async (event) => {
