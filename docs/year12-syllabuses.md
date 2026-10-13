@@ -26,12 +26,16 @@ Changing scope preserves all selected evidence, including later content already 
   default for AS; Themes 3-4 are labelled A-level only. AS alignment confirmed by
   Pearson's Getting Started guide:
   https://qualifications.pearson.com/content/dam/pdf/A%20Level/Economics/2015/teaching-and-learning-materials/getting-started-guide-new.pdf
-- History: user-supplied 1C Tudors and 2N Russia content. AS includes Tudors
-  1485-1547 (Henry VII and VIII) and Russia 1917-1929 (three periods).
-  All supplied later content retained behind the full-content scope. History item
-  suffixes are local tracker IDs, not official specification paragraph numbers.
-  Russia boundary verified at:
-  https://www.aqa.org.uk/subjects/history/a-level/history-7042/specification/subject-content/2n-revolution-and-dictatorship-russia-1917-1953
+- History: corrected by the user on 13 October 2026 to AQA 1D Stuart Britain
+  and the Crisis of Monarchy, 1603-1702. This replaces both previous options in
+  the active catalogue. AS includes Part one, 1603-1649 (two topic groups);
+  the full scope adds Part two, 1649-1702 (two A-level-only groups).
+  Each group has six concise sub-topic summaries. History item suffixes are
+  local tracker IDs, not official specification paragraph numbers.
+  Sources:
+  https://www.aqa.org.uk/subjects/history/as-level/history-7041/specification/subject-content/1d-stuart-britain-and-the-crisis-of-monarchy-1603-1649
+  https://www.aqa.org.uk/subjects/history/a-level/history-7042/specification/subject-content/1d-stuart-britain-and-the-crisis-of-monarchy-1603-1702
+  Existing saved study evidence is preserved; no database history is deleted.
 
 Labels are concise summaries, not a reproduction of every guidance/example or
 assessment criterion. Students can record finer detail in the specific-skill field

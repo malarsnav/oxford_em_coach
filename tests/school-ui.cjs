@@ -154,7 +154,7 @@ const mockData = `const fixture=${JSON.stringify(fixture)};
       assert.equal(await page.locator('[data-rich-area="Magazine"] [name=title]').inputValue(),'Economics article');
       assert.equal(await page.locator('[data-topic-id]').count(),2);
       assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
-      for (const [subject,query,fragment] of [['Physics','4.5.2','4.5.2'],['Economics','1.2.3','1.2.3'],['History','Henry VII','1C-H7.1'],['AS-Further Maths','Complex arithmetic','2.2']]) {
+      for (const [subject,query,fragment] of [['Physics','4.5.2','4.5.2'],['Economics','1.2.3','1.2.3'],['History','Crown finances','1D-MP.3'],['AS-Further Maths','Complex arithmetic','2.2']]) {
         filter=page.locator('[data-action="plan-filter"]');
         await page.getByRole('button',{name:'By subject',exact:true}).click();
         await filter.locator('[name=from]').fill('2026-09-05');await filter.locator('[name=to]').fill('2026-09-05');
@@ -170,13 +170,13 @@ const mockData = `const fixture=${JSON.stringify(fixture)};
         }
         await block.locator('[name=study_notes]').fill('Covered today without per-topic forms.');
         if(subject==='History') {
-          await block.locator('[data-topic-search]').fill('Great Turn');
-          await block.locator('[data-pick-topic$=":2N-RISE.3"]').check();
-          assert.equal(await block.locator('[data-pick-topic$=":2N-CONTROL.2"]').count(),0);
+          await block.locator('[data-topic-search]').fill('Personal Rule');
+          await block.locator('[data-pick-topic$=":1D-REV.2"]').check();
+          assert.equal(await block.locator('[data-pick-topic$=":1D-CON.1"]').count(),0);
           await block.getByText('Change syllabus scope',{exact:true}).click();
           await block.locator('[data-syllabus-scope]').selectOption('full');
-          await block.locator('[data-topic-search]').fill('Yezhovshchina');
-          await block.locator('[data-pick-topic$=":2N-CONTROL.2"]').check();
+          await block.locator('[data-topic-search]').fill('Exclusion crisis');
+          await block.locator('[data-pick-topic$=":1D-CON.1"]').check();
           await block.locator('[data-syllabus-scope]').selectOption('as');
           assert.equal(await block.locator('[data-topic-id]').count(),3);
           await block.locator('[data-topic-search]').fill('');

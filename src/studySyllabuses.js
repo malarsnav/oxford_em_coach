@@ -91,51 +91,35 @@ export const ECONOMICS = catalogue('edexcel-economics-a-issue2', 'Edexcel Econom
 ]);
 
 // History item suffixes are local tracking references, not official numbered clauses.
-export const HISTORY = catalogue('aqa-history-1c-2n', 'AQA History: 1C Tudors and 2N Russia', [
-  ['1C Tudors: AS / Part one','1C-H7','Henry VII, 1485-1509',[
-    'Consolidating power: character, aims and establishing the dynasty','Government: councils, Parliament, justice, finance and domestic policy',
-    'Foreign relations, Scotland, succession and marriage alliances','Society: churchmen, nobility, commoners, regions and rebellions',
-    'Economy: trade, exploration, prosperity and depression','Religion, humanism, arts and learning']],
-  ['1C Tudors: AS / Part one','1C-H8','Henry VIII, 1509-1547',[
-    "Character, aims and Henry VII's legacy",'Crown, Parliament, ministers, domestic policy and Royal Supremacy',
-    'Foreign relations, Scotland and succession','Society, regions, religious upheaval and rebellion','Economy: trade, exploration, prosperity and depression',
-    'Renaissance ideas, Church reform and continuity/change by 1547']],
-  ['1C Tudors: A-level only / Part two','1C-MT','Mid-Tudor crisis, 1547-1563',[
-    'Edward VI, Somerset and Northumberland: authority, succession and foreign affairs','Edward VI: religion, economy, rebellion and intellectual change',
-    'Mary I and ministers: authority, succession and foreign affairs','Mary I: religious, economic, social and intellectual change',
-    'Elizabeth I: aims, consolidation, Settlement and foreign affairs','Early Elizabethan economic, social and religious developments'],'a_level'],
-  ['1C Tudors: A-level only / Part two','1C-EL','Triumph of Elizabeth, 1563-1603',[
-    'Court, ministers, Parliament and faction','Succession, Mary Queen of Scots and Spain','Society, regions, discontent and rebellions',
-    'Trade, exploration, colonisation, prosperity and depression','Religion, Renaissance and the Golden Age','England and Elizabeth in the final years to 1603'],'a_level'],
-  ['2N Russia: AS / Part one','2N-REV','Dissent and revolution, 1917',[
-    'Russia before February/March: Tsarist authority, war, economy, society and discontent',
-    'February/March revolution: causes, leadership, abdication, Provisional Government, Petrograd Soviet and Dual authority',
-    'Between revolutions: Lenin, April Theses, July Days, Kornilov, Trotsky and Bolshevik leadership',
-    'October/November revolution: causes, course, leadership, Bolshevik authority, Sovnarkom and decrees']],
-  ['2N Russia: AS / Part one','2N-BOL','Bolshevik consolidation, 1918-1924',[
-    'One-party dictatorship, Constituent Assembly and leaving the First World War',
-    'Civil War: causes, course, Trotsky, murder of the Tsar, Red victory and wartime control',
-    'State capitalism, social change, war communism, Red Terror, Tambov, Kronstadt and NEP',
-    "Foreign intervention, Comintern, Russo-Polish War, Rapallo, recognition, Zinoviev letter and Lenin's legacy"]],
-  ['2N Russia: AS / Part one','2N-RISE',"Stalin's rise to power, 1924-1929",[
-    "Power vacuum, Lenin's testament and leadership contenders: Stalin, Trotsky, Bukharin, Kamenev, Rykov, Tomsky and Zinoviev",
-    'NEP, industrialisation, permanent revolution, Socialism in One Country and Stalin becoming leader',
-    'Great Turn: economic shift, first Five Year Plan and decision to collectivise',
-    'Government, propaganda, early Stalin cult, China, Germany, Treaty of Berlin and Comintern']],
-  ['2N Russia: A-level only / Part two','2N-ECON','Economy and society, 1929-1941',[
-    'Collectivisation, state farms, mechanisation, kulaks, peasants and famine of 1932-1934',
-    'Gosplan, first three Five Year Plans, industrial centres, foreign companies, working conditions, women and Stakhanovites',
-    'Stalin cult: literature, arts, propaganda and Socialist Realism','Soviet social and economic strengths and weaknesses by 1941'],'a_level'],
-  ['2N Russia: A-level only / Part two','2N-CONTROL','Stalinism, politics and control, 1929-1941',[
-    'State terror, NKVD, early purges, Kirov, show trials and Stalin constitution',
-    'Yezhovshchina, minorities, gulags, death of Trotsky and responsibility for the Terror',
-    'Church, women, youth, workers, urban/rural society and cultural change under Lenin and Stalin',
-    'Germany, League of Nations, France, Czechoslovakia, Spanish Civil War, appeasement, Japan and Nazi-Soviet Pact'],'a_level'],
-  ['2N Russia: A-level only / Part two','2N-WAR','War and dictatorship, 1941-1953',[
-    'Barbarossa, occupation, Soviet resistance, economy, industrial evacuation and foreign aid',
-    'Defeat of Germany and post-war industrial and agricultural reconstruction',
-    "High Stalinism: Beria, Zhdanovism, personality cult, Leningrad affair and Doctors' Plot",
-    "Superpower status, Soviet bloc, conflict with the West, Stalin's death and legacy"],'a_level']
+export const HISTORY = catalogue('aqa-history-1d', 'AQA History: 1D Stuart Britain and the Crisis of Monarchy, 1603-1702', [
+  ['Part one: absolutism challenged: Britain, 1603-1649','1D-MP','Monarchs and Parliaments, 1603-1629',[
+    'Political power: landowners, merchants and wealth',
+    'James I and Charles I: royal beliefs, personalities and favourites',
+    'Crown finances: weaknesses and reform',
+    'Religious tensions: Catholics, Puritans and Arminianism',
+    'Parliamentary disputes over privileges, money, religion and foreign policy',
+    'Crown-Parliament breakdown and political reactions by 1629']],
+  ['Part one: absolutism challenged: Britain, 1603-1649','1D-REV','Revolution, 1629-1649',[
+    'Religious conflict: Laud, Puritans and millenarian beliefs',
+    'Personal Rule, opposition, Pym and the road to Civil War',
+    'Civil Wars across the three kingdoms and royalist defeat',
+    'Radical movements, Levellers and social divisions',
+    'Army-Parliament conflict and failed peace settlements',
+    "Execution of Charles I: justification and royal response"]],
+  ['Part two: Monarchy restored and restrained: Britain, 1649-1702 (A-level only)','1D-REST','From Republic to restored and limited monarchy, 1649-1678',[
+    'Republican consolidation: Irish campaigns, Dunbar and Worcester',
+    'Republican experiments: the Rump and nominated assembly',
+    'Cromwell, Protectorates, military government and political support',
+    'Restoration government: Charles II, Clarendon, Cabal and Danby',
+    'Court-Country alignments and their consequences',
+    'Restored Anglicanism, dissent and Catholic influence'],'a_level'],
+  ['Part two: Monarchy restored and restrained: Britain, 1649-1702 (A-level only)','1D-CON','The establishment of constitutional monarchy, 1678-1702',[
+    'Exclusion crisis and James II: royal power and Catholic policies',
+    'Revolution of 1688 and consolidation across Britain and Ireland',
+    'Whig-Tory divisions and political influence',
+    'Toleration and the position of religious communities',
+    'William and Mary: ministers, parties and limits on royal power',
+    'Settlement of 1701 and political-religious conditions by 1702'],'a_level']
 ]);
 
 const fullMaths = { ...MATHS_SPEC, topics: MATHS_TOPICS, items: MATHS_ITEMS };
