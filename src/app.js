@@ -194,7 +194,7 @@ function taraWorkspaceHtml() {
   const heading=`<header class="top"><h2>TARA</h2></header><div class="segmented">${tabs.map(([key,title])=>`<button data-tara-tab="${key}" aria-pressed="${state.taraTab===key}">${title}</button>`).join('')}</div>`;
   if(state.taraTab==='history')return heading+noticeHtml()+`<section class="panel"><h3>Practice history</h3>${sessionHistoryHtml()}</section>`;
   if(state.taraTab==='mistakes')return heading+noticeHtml()+`<section class="panel"><h3>Revisit mistakes</h3><p>${state.data.tara.responses.filter(r=>!r.is_correct).length} incorrect responses recorded.</p><button data-action="start-retry-tara">Practise previous mistakes</button></section>`;
-  if(state.taraTab==='analytics')return heading+analyticsHtml();
+  if(state.taraTab==='analytics')return heading+`<p class="muted">Question bank: ${answeredQuestionKeys().size}/${questionBankManifest.totalQuestions} questions seen · ${coveragePercent()}% coverage</p>`+analyticsHtml();
   return heading+taraHtml();
 }
 
@@ -544,7 +544,7 @@ function taskHtml(t) {
 }
 
 function taraHtml() {
-  if (!state.practice) return `<header class="top"><div><p class="eyebrow">TARA Assessment Practice</p><h2>5-question methodology set</h2><p class="muted"></p></div><div class="actions"><button data-action="start-smart" title="Prioritise unseen questions, then weak questions">${state.questionBankLoading ? 'Loading question bank...' : 'Smart coverage set'}</button><button class="ghost" data-action="start-tara" title="Start a filtered practice set using the filters below">${state.questionBankLoading ? 'Loading...' : 'Start filtered set'}</button></div></header>${noticeHtml()}<div class="segmented"><button data-practice-mode="learn" aria-pressed="${state.practiceMode=== 'learn'}">Learn</button><button data-practice-mode="test" aria-pressed="${state.practiceMode=== 'test'}">Test</button></div>${taraFilterHtml()}<section class="grid">${card('Question bank coverage', `${coveragePercent()}%`, `${answeredQuestionKeys().size}/${questionBankManifest.totalQuestions} questions seen at least once`)}${card('Question bank', questionBankStatusText(), state.questionBankLoaded ? `${filteredQuestions().length} questions match current filters` : 'The full question bank loads only when TARA practice starts, making login and dashboard faster.')}</section><section class="panel"><h3>How smart coverage works</h3><p class="muted">Smart coverage chooses unseen questions first, then questions from weak types and patterns, then mastered questions only when needed.</p></section>`;
+  if (!state.practice) return `${noticeHtml()}<section class="tara-setup"><h3>5-question practice</h3><div class="segmented" aria-label="Practice mode"><button data-practice-mode="learn" aria-pressed="${state.practiceMode==='learn'}" title="Feedback after each answer">Learn</button><button data-practice-mode="test" aria-pressed="${state.practiceMode==='test'}" title="Feedback after submission">Test</button></div>${taraFilterHtml()}</section>`;
   if (state.practice.report) return `<button class="ghost" data-action="practice-setup">Choose another practice mode</button>${reportHtml()}`;
   const q = state.practice.set[state.practice.index];
   const selected = state.practice.answers[q.id];
@@ -1190,7 +1190,7 @@ function profileHtml() {
 }
 
 function taraFilterHtml() {
-  return `<section class="panel"><h3>Build a focused set</h3><form class="form-grid" data-action="tara-filters"><label>Paper year<select name="year"><option value="all">All years</option>${questionBankManifest.years.map((year)=>`<option value="${escapeAttr(year)}" ${sel(state.taraFilters.year,year)}>${year}</option>`).join('')}</select></label><label>Broad type<select name="family"><option value="all">All types</option>${TOP_LEVEL_TYPES.map((type)=>`<option value="${escapeAttr(type)}" ${sel(state.taraFilters.family,type)}>${type}</option>`).join('')}</select></label><label>Sub-type / cognitive mode<select name="type"><option value="all">All sub-types</option>${ALL_SUBTYPES.map((type)=>`<option value="${escapeAttr(type)}" ${sel(state.taraFilters.type,type)}>${type}</option>`).join('')}</select></label><label>Topic tag<select name="topic"><option value="all">All topic tags</option>${topicTagOptions().map((topic)=>`<option value="${escapeAttr(topic)}" ${sel(state.taraFilters.topic,topic)}>${topic}</option>`).join('')}</select></label><input type="hidden" name="pattern" value="all"><button>Apply filters</button></form></section>`;
+  return `<form data-action="tara-filters" class="tara-setup-form"><details class="tara-filters" ${Object.values(state.taraFilters).some(v=>v!=='all')?'open':''}><summary>Choose topics <span class="muted">(optional)</span></summary><div class="form-grid"><label>Paper year<select name="year"><option value="all">All years</option>${questionBankManifest.years.map((year)=>`<option value="${escapeAttr(year)}" ${sel(state.taraFilters.year,year)}>${year}</option>`).join('')}</select></label><label>Broad type<select name="family"><option value="all">All types</option>${TOP_LEVEL_TYPES.map((type)=>`<option value="${escapeAttr(type)}" ${sel(state.taraFilters.family,type)}>${type}</option>`).join('')}</select></label><label>Sub-type / cognitive mode<select name="type"><option value="all">All sub-types</option>${ALL_SUBTYPES.map((type)=>`<option value="${escapeAttr(type)}" ${sel(state.taraFilters.type,type)}>${type}</option>`).join('')}</select></label><label>Topic tag<select name="topic"><option value="all">All topic tags</option>${topicTagOptions().map((topic)=>`<option value="${escapeAttr(topic)}" ${sel(state.taraFilters.topic,topic)}>${topic}</option>`).join('')}</select></label><input type="hidden" name="pattern" value="all"></div></details><button class="tara-start" ${state.questionBankLoading?'disabled':''}>${state.questionBankLoading?'Loading questions...':'Start practice'}</button></form>`;
 }
 
 function topicTagOptions() {
@@ -1448,7 +1448,7 @@ app.addEventListener('click', async (event) => {
     if(target.dataset.planTab){state.planTab=target.dataset.planTab;state.view='programme';}
     if(target.dataset.taraTab){state.taraTab=target.dataset.taraTab;state.view='tara';}
     if(target.dataset.reportMode)state.reportMode=target.dataset.reportMode;
-    if(target.dataset.practiceMode)state.practiceMode=target.dataset.practiceMode;
+    if(target.dataset.practiceMode){syncTaraFiltersFromDom();state.practiceMode=target.dataset.practiceMode;}
     if(target.dataset.view){
       const view=target.dataset.view;
       if(view==='dashboard')state.reportDate=null;
@@ -1587,9 +1587,10 @@ app.addEventListener('submit', async (event) => {
     }
     if (action === 'tara-filters') {
       state.taraFilters = values;
-      state.notice = state.questionBankLoaded
-        ? { type: 'success', message: `${filteredQuestions().length} questions match the selected filters.` }
-        : { type: 'success', message: 'Filters saved. The full question bank will load when you start the set.' };
+      try {
+        if(Object.values(values).some(v=>v!=='all')) await startTara();
+        else await startSmartTara();
+      } catch(error) { state.notice={type:'error',message:friendlyError(error)}; }
       render();
       return;
     }

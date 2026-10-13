@@ -1573,3 +1573,19 @@ button { font-weight:600; }
 .deviation-day { padding:12px 0; }
 .deviation-day > summary { cursor:pointer; padding:12px 0; }
 @media(max-width:600px) { .deviation-row { grid-template-columns:1fr; gap:4px; } }
+@media(max-width:760px) {
+  .sidebar { padding-top:calc(14px + env(safe-area-inset-top, 0px)); padding-left:max(16px,env(safe-area-inset-left,0px)); padding-right:max(16px,env(safe-area-inset-right,0px)); }
+  .main { padding-left:max(16px,env(safe-area-inset-left,0px)); padding-right:max(16px,env(safe-area-inset-right,0px)); }
+}
+.tara-setup { max-width:640px; padding:8px 0 24px; }
+.tara-setup h3 { font-size:20px; margin:0 0 18px; }
+.tara-setup > .segmented { display:inline-flex; background:#e8e8ed; padding:4px; border-radius:8px; gap:4px; margin-bottom:20px; }
+.tara-setup-form { display:grid; gap:20px; }
+.tara-filters { border-block:1px solid var(--line); padding:16px 0; }
+.tara-filters summary { cursor:pointer; min-height:32px; }
+.tara-filters .form-grid { padding-top:16px; }
+.tara-start { width:100%; min-height:48px; }
+@media(max-width:760px) {
+  .sidebar { padding-top:calc(14px + env(safe-area-inset-top, 0px)); padding-left:max(16px,env(safe-area-inset-left,0px)); padding-right:max(16px,env(safe-area-inset-right,0px)); }
+  .main { padding-left:max(16px,env(safe-area-inset-left,0px)); padding-right:max(16px,env(safe-area-inset-right,0px)); }
+}
