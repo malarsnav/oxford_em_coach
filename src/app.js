@@ -231,12 +231,29 @@ function studentReminderSettingsHtml() {
   return `<section class="panel student-reminders"><h3>Student logging reminder</h3><p>To ${escapeHtml(state.user.email)} · 21:30 weekdays / 21:45 weekends · Europe/London</p><p>Only when elapsed planned blocks remain unlogged. At most one delivery attempt per day. No parent copy.</p><form data-action="save-student-reminders"><label class="checkline"><input type="checkbox" name="enabled" ${preference.enabled?'checked':''} ${!preference.available?'disabled':''}> Request student email reminders</label><button ${!preference.available?'disabled':''}>Save reminder preference</button><p class="form-status" aria-live="polite"></p></form><p>${!preference.available?'Reminder settings unavailable. Apply migration 008 and check the connection.':'Preference saved in your account; sending also requires the email service and scheduled backend to be configured.'}</p><details><summary>Reminder preview (not sent)</summary>${studentReminderText(evidence).split('\n\n').map(p=>`<p>${escapeHtml(p)}</p>`).join('')}</details></section>`;
 }
 
+function weeklyProgressChartHtml(report) {
+  const maximum = Math.max(1, ...report.days.map(day=>day.total));
+  return `<figure class="weekly-chart" aria-label="Daily planned and logged study blocks"><figcaption>Daily progress <span class="muted">Study blocks</span></figcaption>
+    <div class="weekly-chart-legend"><span><i class="weekly-chart-planned"></i>Planned</span><span><i class="weekly-chart-logged"></i>Logged</span></div>
+    <div class="weekly-chart-days">${report.days.map(day=>{
+      const date = new Date(day.date+'T12:00:00');
+      const label = date.toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short'});
+      return `<div class="weekly-chart-day" aria-label="${escapeAttr(label)}: ${day.trackingStarted ? `${day.logged} logged of ${day.total} planned blocks; ${day.skipped} skipped; ${day.overdue} elapsed not logged` : 'tracking not started'}">
+        <div class="weekly-chart-label"><b>${label}</b><span>${day.trackingStarted ? `${day.logged}/${day.total} logged` : 'Not tracked'}</span></div>
+        <div class="weekly-chart-tracks" aria-hidden="true"><div><span class="weekly-chart-planned" style="width:${100*day.total/maximum}%"></span></div><div><span class="weekly-chart-logged" style="width:${100*day.logged/maximum}%"></span></div></div>
+        ${day.trackingStarted ? `<small class="muted">${day.skipped} skipped · ${day.overdue} elapsed not logged · ${day.upcoming} upcoming</small>` : ''}
+      </div>`;
+    }).join('')}</div>
+    <div class="weekly-chart-axis" aria-hidden="true"><span>0</span><span>${maximum} blocks</span></div>
+  </figure>`;
+}
+
 function weeklyReportHtml(report) {
   return `<section class="panel weekly-report"><h3>${formatDate(report.start)}–${formatDate(report.end)} · ${report.logged}/${report.total} blocks logged</h3>
     ${report.partial?`<p class="callout">Partial week · tracking from ${formatDate(report.trackingStart)}</p>`:''}
     ${!report.total?'<p>Tracking had not started. No missed targets for this week.</p>':''}
     <p>${report.percent}% of eligible planned blocks logged · ${report.followed+report.changed} studied · ${report.extra} extra blocks</p>
-    <div class="bar" role="progressbar" aria-label="Weekly planned blocks logged" aria-valuenow="${report.percent}" aria-valuemin="0" aria-valuemax="100"><span style="width:${report.percent}%"></span></div>
+    ${weeklyProgressChartHtml(report)}
     <p>${report.followed} followed plan · ${report.changed} changed · ${report.skipped} skipped</p>
     <p>${report.missed} elapsed blocks not logged · ${report.upcoming} upcoming</p>
     <p>${report.green} green · ${report.amber} amber · ${report.red} red reflections</p>
