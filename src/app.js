@@ -7,6 +7,7 @@ import { loggingEvidence, studentReminderText } from './preparationSignals.js';
 import { STUDY_AREAS, areaFor, displayActivity, availabilityHtml, richStudyFields, handleStudyInput, collectStudyDetails, customTopicsFor, topicHistoryHtml } from './planTracking.js';
 import { saveSchoolTask, schoolAttachmentUrl } from './schoolTaskService.js';
 import { dailyStudyReport, weeklyStudyReport } from './dailyStudyReport.js';
+import { todayWorkHtml, dailyWorkPayload, workSummaryHtml, workPeriod } from './workJournal.js';
 import { timetableEditorHtml, blockTasksHtml, installPlannerUi } from './plannerUi.js';
 import { logArea, deviationFields, handleDeviation, collectDeviation } from './planTracking.js';
 import { questionBankManifest } from './questionBankManifest.generated.js';
@@ -173,10 +174,11 @@ function viewHtml() {
 function progressHtml() {
   const day = state.reportDate || todayInput();
   const week=weeklyStudyReport(state.data.studyPlanLogs || [],new Date(),day);
+  const period=workPeriod(day,state.reportMode);
   return `<header class="top"><h2>Progress</h2></header>
-    <div class="segmented" aria-label="Report period">${['day','week'].map(mode=>`<button data-report-mode="${mode}" aria-pressed="${state.reportMode===mode}">${mode==='day'?'Daily':'Weekly'}</button>`).join('')}</div>
+    <div class="segmented" aria-label="Report period">${['day','week','month'].map(mode=>`<button data-report-mode="${mode}" aria-pressed="${state.reportMode===mode}">${{day:'Daily',week:'Weekly',month:'Monthly'}[mode]}</button>`).join('')}</div>
     <section class="report-controls"><label>${state.reportMode==='week'?'Week containing':'Date'}<input type="date" data-report-date value="${day}"></label><div class="row"><button class="ghost" data-week-shift="${state.reportMode==='week'?-7:-1}">Previous</button><button class="ghost" data-report-today>Current</button><button class="ghost" data-week-shift="${state.reportMode==='week'?7:1}">Next</button></div></section>
-    ${taskProgressHtml(state.reportMode==='week'?week.start:day,state.reportMode==='week'?week.end:day)}${state.reportMode==='week'?weeklyReportHtml(week):dailyReportHtml(dailyStudyReport(state.data.studyPlanLogs || [],new Date(),day))}`;
+    ${workSummaryHtml(state.data.studyPlanLogs||[],day,state.reportMode)}${taskProgressHtml(period.from,period.to)}${state.reportMode==='month'?'':state.reportMode==='week'?weeklyReportHtml(week):dailyReportHtml(dailyStudyReport(state.data.studyPlanLogs || [],new Date(),day))}`;
 }
 
 function taskProgressHtml(from,to=from) {
@@ -196,6 +198,10 @@ function taraWorkspaceHtml() {
 }
 
 function dashboardHtml() {
+  return noticeHtml()+todayWorkHtml(state.data,state.reportDate||todayInput(),state.workSubject||'Maths',todayInput());
+}
+
+function legacyDashboardHtml() {
   const data = state.data;
   const today = dailyStudyReport(data.studyPlanLogs || [],new Date(),state.reportDate);
   const period=today.date===todayInput()?'today':'on '+formatDate(today.date);
@@ -1434,7 +1440,7 @@ app.addEventListener('click', async (event) => {
     } catch(error) {setFormStatus(target.closest('form'),friendlyError(error),'error');}
     return;
   }
-  if (target.dataset.weekShift) { const date=new Date((state.reportDate || todayInput())+'T12:00:00'); date.setDate(date.getDate()+Number(target.dataset.weekShift)); state.reportDate=`${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`; render(); return; }
+  if (target.dataset.weekShift) { const date=new Date((state.reportDate || todayInput())+'T12:00:00'); if(state.reportMode==='month'){date.setDate(1);date.setMonth(date.getMonth()+Math.sign(Number(target.dataset.weekShift)));}else date.setDate(date.getDate()+Number(target.dataset.weekShift)); state.reportDate=`${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`; render(); return; }
   if (target.dataset.planTab || target.dataset.taraTab || target.dataset.reportMode || target.dataset.practiceMode || target.dataset.view) {
     if(document.querySelector('[data-unsaved]') && !confirm('Leave without saving your changes?'))return;
     if(target.dataset.planTab){state.planTab=target.dataset.planTab;state.view='programme';}
@@ -1633,6 +1639,18 @@ app.addEventListener('submit', async (event) => {
       return;
     }
     if (action === 'save-profile') await updateProfile(state.user, normalizeProfilePayload(values));
+    if (action === 'save-daily-work') {
+      if(values.log_date>todayInput())throw new Error('Work logs cannot be in the future.');
+      const payload=dailyWorkPayload(values,state.data.studyPlanLogs||[],dailyStudyReport(state.data.studyPlanLogs||[],new Date(),values.log_date).blocks);
+      const saved=await saveStudyPlanLog(state.user,payload);
+      state.data.studyPlanLogs=[...(state.data.studyPlanLogs||[]),saved];
+      state.reportDate=values.log_date;state.workSubject=values.subject;
+      state.notice={type:'success',message:'Work saved.'};render();return;
+    }
+    if(action==='save-upcoming-exam') {
+      await saveSchoolTask(state.user,{...values,assessment_type:'assessment',status:'not_started',due_date:values.assessment_date,score:'',max_score:''});
+      state.notice={type:'success',message:'Exam saved.'};
+    }
     if (action === 'save-error') await saveTaraErrorAnalysis(state.user, values);
     if (action === 'save-study-log') {
       const details=collectDeviation(form);

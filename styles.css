@@ -1562,3 +1562,10 @@ button { font-weight:600; }
   .main .form-grid { grid-template-columns:1fr; }
   .daily-report-list { grid-template-columns:1fr; }
 }
+/* Work entry and subject reporting share the existing responsive form system. */
+.work-entry, .work-exams, .work-summary { padding: 20px 0; border-bottom: 1px solid #d8dce2; }
+.work-entry { max-width: 760px; }
+.work-entry textarea { min-height: 88px; }
+.work-exams article, .work-summary article { padding: 12px 0; border-bottom: 1px solid #e5e7eb; overflow-wrap: anywhere; }
+.work-summary details { padding: 12px 0; }
+.work-exams summary, .work-summary summary { cursor: pointer; padding: 8px 0; }
