@@ -29,7 +29,7 @@ export function weeklyStudyReport(logs = [], now = new Date(), selectedDate) {
   const total=sum('total'),logged=sum('logged');
   return {start:days[0].date,end:days[6].date,trackingStart:TRACKING_START_DATE,partial:days[0].date<TRACKING_START_DATE && days[6].date>=TRACKING_START_DATE,days,subjects:[...subjects.values()],total,logged,
     percent:total?Math.round(100*logged/total):0,missed:sum('overdue'),upcoming:sum('upcoming'),
-    followed:sum('followed'),changed:sum('changed'),skipped:sum('skipped'),
+    followed:sum('followed'),changed:sum('changed'),partialBlocks:sum('partialBlocks'),skipped:sum('skipped'),
     green:sum('green'),amber:sum('amber'),red:sum('red'),extra:days.filter(d=>d.trackingStarted).reduce((n,d)=>n+d.extra.length,0)};
 }
 
@@ -57,6 +57,7 @@ export function dailyStudyReport(logs = [], now = new Date(), selectedDate) {
     loggedMinutes:blocks.filter(b=>b.log && b.log.details?.outcome!=='skipped').reduce((sum,b)=>sum+b.minutes,0),
     followed:blocks.filter(b=>b.log && (!b.log.details?.outcome || b.log.details.outcome==='followed')).length,
     changed:blocks.filter(b=>b.log?.details?.outcome==='changed').length,
+    partialBlocks:blocks.filter(b=>b.log?.details?.outcome==='partial').length,
     skipped:blocks.filter(b=>b.log?.details?.outcome==='skipped').length,
     green:todayLogs.filter(l=>l.details?.outcome!=='skipped'&&l.rag_status==='green').length,
     amber:todayLogs.filter(l=>l.details?.outcome!=='skipped'&&l.rag_status==='amber').length,

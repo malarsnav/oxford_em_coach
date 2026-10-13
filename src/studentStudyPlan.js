@@ -80,8 +80,17 @@ export const STUDY_PLAN_VERSIONS = [{
   weekends: WEEKEND_TIMETABLE.map(row => ({...row}))
 }];
 export const TRACKING_START_DATE = STUDY_PLAN_VERSIONS[0].effectiveFrom;
+let customStudyPlans=[];
+export function configureStudyPlans(versions=[]) {
+  customStudyPlans=versions;
+}
 export function studyPlanForDate(date) {
-  return [...STUDY_PLAN_VERSIONS].reverse().find(plan => plan.effectiveFrom <= date);
+  const custom=customStudyPlans.filter(p=>p.effective_from<=date && (!p.single_day || p.effective_from===date))
+    .sort((a,b)=>Number(b.single_day)-Number(a.single_day) || b.effective_from.localeCompare(a.effective_from))[0];
+  const original=[...STUDY_PLAN_VERSIONS].reverse().find(plan => plan.effectiveFrom <= date);
+  if(!custom || (!custom.single_day && original && original.effectiveFrom>custom.effective_from))return original;
+  const rows=(custom.blocks || []).map(b=>({from:b.from,to:b.to,[b.day]:b.activity}));
+  return {effectiveFrom:custom.effective_from,weekdays:rows,weekends:rows};
 }
 
 export const WEEKLY_TARGETS = [

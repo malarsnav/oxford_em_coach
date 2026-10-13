@@ -11,7 +11,7 @@ export const logArea = log => log.details?.outcome==='skipped' ? null : areaFor(
 
 export function deviationFields(block, log) {
   const d=log?.details || {}, outcome=d.outcome || 'followed';
-  return `<label>What happened?<select data-plan-outcome name="plan_outcome">${[['followed','Followed plan'],['changed','Did something else'],['skipped','Skipped']].map(([v,l])=>`<option value="${v}" ${outcome===v?'selected':''}>${l}</option>`).join('')}</select></label>
+  return `<label>What happened?<select data-plan-outcome name="plan_outcome">${[['followed','Followed plan'],['partial','Partially completed'],['changed','Did something else'],['skipped','Skipped']].map(([v,l])=>`<option value="${v}" ${outcome===v?'selected':''}>${l}</option>`).join('')}</select></label>
     <div data-actual-fields ${outcome!=='changed'?'hidden':''}><label>Actual subject / activity<select data-actual-area name="actual_activity">${[...STUDY_AREAS,'Buffer'].map(a=>`<option ${a===areaFor(d.actual_activity || block.activity)?'selected':''}>${a}</option>`).join('')}</select></label><div class="form-grid"><label>Actual start<input type="time" name="actual_from" value="${esc(d.actual_from || block.from)}"></label><label>Actual end<input type="time" name="actual_to" value="${esc(d.actual_to || block.to)}"></label></div></div>
     <label data-change-reason ${outcome==='followed'?'hidden':''}>Reason (optional)<input name="change_reason" value="${esc(d.change_reason)}"></label>`;
 }

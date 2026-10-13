@@ -7,10 +7,10 @@ import { loggingEvidence, studentReminderText } from './preparationSignals.js';
 import { STUDY_AREAS, areaFor, displayActivity, availabilityHtml, richStudyFields, handleStudyInput, collectStudyDetails, customTopicsFor, topicHistoryHtml } from './planTracking.js';
 import { saveSchoolTask, schoolAttachmentUrl } from './schoolTaskService.js';
 import { dailyStudyReport, weeklyStudyReport } from './dailyStudyReport.js';
+import { timetableEditorHtml, blockTasksHtml, installPlannerUi } from './plannerUi.js';
 import { logArea, deviationFields, handleDeviation, collectDeviation } from './planTracking.js';
 import { questionBankManifest } from './questionBankManifest.generated.js';
 import { methodologyFor } from './methodologies.js';
-import { buildDailyDigest, previousLocalDate } from './dailyDigestService.js';
 import { getAlevelTopicPlan } from './aLevelTopicPlan.js';
 import { ALL_SUBTYPES, PROBLEM_SOLVING_TOPIC_TAGS, TOP_LEVEL_TYPES } from './tagTaxonomy.js';
 import { READING_PLAN, WEEKLY_TARGETS, taraHasNoScheduledTime, totalWeeklyTargetHours, studyPlanForDate, isNonStudyActivity } from './studentStudyPlan.js';
@@ -45,6 +45,7 @@ const state = {
   practice: null,
   notice: null,
   reviewAttemptId: null,
+  planTab: 'blocks', taraTab: 'practice', reportMode: 'week', practiceMode: 'learn',
   academicTopicFilter: 'all',
   schoolSubject: 'all', schoolStatus: 'all',
   extraBlock: null, reportDate: null, lastRefresh: null, refreshing: false, refreshError: '',
@@ -58,6 +59,7 @@ const state = {
 
 init();
 installForegroundRefresh(refreshOnReturn);
+installPlannerUi(app,()=>state,async()=>{state.data=await bootstrap(state.user);state.notice={type:'success',message:'Saved successfully.'};render();});
 
 async function refreshOnReturn() {
   if(!state.user || !state.data || state.refreshing || document.querySelector('[data-unsaved]') ||
@@ -73,7 +75,7 @@ async function refreshOnReturn() {
   } catch(error) {state.refreshError='Refresh failed. Your saved progress has not been changed. '+friendlyError(error);}
   finally {
     state.refreshing=false;
-    if(['dashboard','weekly-report','analytics','readiness','parent'].includes(state.view) && !document.querySelector('[data-unsaved]') && !(state.practice&&!state.practice.report))render();
+    if(['dashboard','weekly-report','tara'].includes(state.view) && !document.querySelector('[data-unsaved]') && !(state.practice&&!state.practice.report))render();
   }
 }
 
@@ -106,11 +108,11 @@ function render() {
     <aside class="sidebar">
       <div>
         <p class="eyebrow">Oxford PPE Coach</p>
-        <h1>${escapeHtml(currentTarget(state.data?.profile?.target_course))}</h1>
+        <h1>Study Coach</h1>
         <p class="muted">${state.user.email}</p>
       </div>
       <nav>${navigationHtml()}</nav>
-      <button class="ghost" data-action="signout">Sign out</button>
+      <div class="account-actions"><button class="ghost" data-view="profile">Settings</button><button class="ghost" data-action="signout">Sign out</button></div>
     </aside>
     <main class="main">${viewHtml()}</main>`;
 }
@@ -128,7 +130,7 @@ function renderLogin() {
       <p class="form-status" data-login-status role="status"></p>
     </form>
     ${password?`<button class="ghost" data-login-mode="reset">Forgot password?</button>
-      <details><summary>First password sign-in?</summary><p>In your existing signed-in account, open Profile and set a password. Use the same email here to keep all your progress.</p></details>`:''}
+      <details><summary>First password sign-in?</summary><p>In your existing signed-in account, open Settings and set a password. Use the same email here to keep all your progress.</p></details>`:''}
     ${reset?'<p>A recovery email is sent only when you request it. It is not required for routine sign-in.</p><button class="ghost" data-login-mode="password">Back to sign in</button>':''}
     ${!state.mobileLogin&&!reset?`<button class="ghost" data-login-mode="${password?'magic':'password'}">${password?'Use email link instead':'Use password instead'}</button>`:''}
     ${!password&&!reset?'<p class="muted">Check your inbox and spam folder. Requests are limited to one per email every 30 minutes on this device.</p>':''}
@@ -150,11 +152,8 @@ function navButton(view, label) {
 }
 
 function navigationHtml() {
-  return `
-    ${navSection('Dashboard', [['dashboard','Dashboard'], ['programme','Plan Tracker']])}
-    ${navSection('Study', [['academics','A-Level Rigour'], ['tara','TARA Assessment']])}
-    ${navSection('Analytics', [['readiness','Overall Analytics'], ['analytics','TARA Deep Dive']])}
-    ${navSection('Account', [['parent','Parent View'], ['profile','Profile']])}`;
+  return [['dashboard','Today'],['programme','Plan'],['weekly-report','Progress'],['tara','TARA']]
+    .map(([view,title])=>navButton(view,title)).join('');
 }
 
 function navSection(title, items) {
@@ -162,16 +161,38 @@ function navSection(title, items) {
 }
 
 function viewHtml() {
-  if (state.view === 'weekly-report') return `<header class="top"><div><p class="eyebrow">Dashboard / Reports</p><h2>Weekly progress</h2></div><button class="ghost" data-view="dashboard">Back to Dashboard</button></header><section class="report-controls"><label>Week containing<input type="date" data-report-date value="${state.reportDate || todayInput()}"></label><div class="row"><button class="ghost" data-week-shift="-7">Previous week</button><button class="ghost" data-report-today>This week</button><button class="ghost" data-week-shift="7">Next week</button></div></section>${weeklyReportHtml(weeklyStudyReport(state.data.studyPlanLogs || [],new Date(),state.reportDate))}`;
+  if (state.view === 'weekly-report') return progressHtml();
+  if (state.view === 'tara' || state.view === 'analytics') return taraWorkspaceHtml();
+  if (state.view === 'academics') return programmeHtml();
   if (state.view === 'programme') return programmeHtml();
-  if (state.view === 'tara') return taraHtml();
-  if (state.view === 'analytics') return analyticsHtml();
-  if (state.view === 'academics') return academicsHtml();
 
-  if (state.view === 'readiness') return readinessHtml();
-  if (state.view === 'parent') return parentHtml();
   if (state.view === 'profile') return profileHtml();
   return dashboardHtml();
+}
+
+function progressHtml() {
+  const day = state.reportDate || todayInput();
+  const week=weeklyStudyReport(state.data.studyPlanLogs || [],new Date(),day);
+  return `<header class="top"><h2>Progress</h2></header>
+    <div class="segmented" aria-label="Report period">${['day','week'].map(mode=>`<button data-report-mode="${mode}" aria-pressed="${state.reportMode===mode}">${mode==='day'?'Daily':'Weekly'}</button>`).join('')}</div>
+    <section class="report-controls"><label>${state.reportMode==='week'?'Week containing':'Date'}<input type="date" data-report-date value="${day}"></label><div class="row"><button class="ghost" data-week-shift="${state.reportMode==='week'?-7:-1}">Previous</button><button class="ghost" data-report-today>Current</button><button class="ghost" data-week-shift="${state.reportMode==='week'?7:1}">Next</button></div></section>
+    ${taskProgressHtml(state.reportMode==='week'?week.start:day,state.reportMode==='week'?week.end:day)}${state.reportMode==='week'?weeklyReportHtml(week):dailyReportHtml(dailyStudyReport(state.data.studyPlanLogs || [],new Date(),day))}`;
+}
+
+function taskProgressHtml(from,to=from) {
+  const tasks=(state.data.planner?.tasks || []).filter(t=>t.block_date>=from && t.block_date<=to);
+  if(!tasks.length)return '';
+  const count=status=>tasks.filter(t=>t.status===status).length;
+  return `<section class="panel"><h3>Block tasks</h3><p>${count('completed')}/${tasks.length} completed · ${count('in_progress')} in progress · ${count('skipped')} skipped</p>${tasks.map(t=>`<p><button class="ghost" data-log-block="${escapeAttr(JSON.stringify([t.block_date,t.start_time.slice(0,5),t.end_time.slice(0,5),t.activity]))}">${escapeHtml(t.title)}</button> ${label(t.status)} · ${formatDate(t.block_date)}</p>`).join('')}</section>`;
+}
+
+function taraWorkspaceHtml() {
+  const tabs=[['practice','Practice'],['history','History'],['mistakes','Mistakes'],['analytics','Analytics']];
+  const heading=`<header class="top"><h2>TARA</h2></header><div class="segmented">${tabs.map(([key,title])=>`<button data-tara-tab="${key}" aria-pressed="${state.taraTab===key}">${title}</button>`).join('')}</div>`;
+  if(state.taraTab==='history')return heading+noticeHtml()+`<section class="panel"><h3>Practice history</h3>${sessionHistoryHtml()}</section>`;
+  if(state.taraTab==='mistakes')return heading+noticeHtml()+`<section class="panel"><h3>Revisit mistakes</h3><p>${state.data.tara.responses.filter(r=>!r.is_correct).length} incorrect responses recorded.</p><button data-action="start-retry-tara">Practise previous mistakes</button></section>`;
+  if(state.taraTab==='analytics')return heading+analyticsHtml();
+  return heading+taraHtml();
 }
 
 function dashboardHtml() {
@@ -188,22 +209,16 @@ function dashboardHtml() {
       <div>
         <p class="eyebrow">${formatLongDate(today.date)}</p>
         <h3>${today.logged}/${today.total} planned study blocks logged ${period}</h3>
-        <p class="muted">${today.percent}% logged · ${today.followed+today.changed} studied · ${today.total-today.logged} not yet logged · ${today.extra.length} extra study blocks</p>
+        <p class="muted">${today.percent}% logged · ${today.followed+today.changed+today.partialBlocks} studied · ${today.total-today.logged} not yet logged · ${today.extra.length} extra study blocks</p>
       </div>
       <div class="bar" role="progressbar" aria-label="Today's planned blocks logged" aria-valuenow="${today.percent}" aria-valuemin="0" aria-valuemax="100"><span style="width:${today.percent}%"></span></div>
       <p>${today.overdue} earlier blocks not logged · ${today.upcoming} upcoming</p>
-      <p>${today.followed} followed plan · ${today.changed} changed · ${today.skipped} skipped</p>
+      <p>${today.followed} followed plan · ${today.changed} changed · ${today.partialBlocks} partial · ${today.skipped} skipped</p>
       <details><summary>Study time</summary><p class="muted">${today.loggedMinutes} of ${today.plannedMinutes} planned minutes covered by logs. Logged time is not measured study time.</p></details>
     </section>`:`<section class="panel focus-card"><h3>Tracking had not started</h3><p>This plan starts on ${formatDate(today.trackingStart)}. No missed blocks are counted for this date.</p></section>`}
     ${dailyReportHtml(today)}
-    ${attentionReportHtml(today)}
-    ${preparationCheckInHtml()}
-    <section class="pillar-grid">
-      ${pillarCard('A-Level Rigour', 'Homework and assessments', aLevelPillarHtml(), 'academics')}
-      ${pillarCard('TARA Assessment', 'Accuracy, coverage and methodology', taraPillarHtml(), 'tara')}
-
-    </section>
-    <section class="panel"><h3>School tasks remaining</h3>${schoolTasks().filter(t => (t.status || 'completed') !== 'completed').slice(0,3).map(t => `<p>${escapeHtml(t.subject_name)}: ${escapeHtml(t.assessment_name)}</p>`).join('') || '<p>No outstanding tasks.</p>'}</section>
+    ${attentionReportHtml(today)}${taskProgressHtml(today.date)}
+    <section class="panel"><h3>Tasks to do</h3><button class="ghost" data-plan-tab="tasks">View tasks</button>${schoolTasks().filter(t => (t.status || 'completed') !== 'completed').slice(0,3).map(t => `<p>${escapeHtml(t.subject_name)}: ${escapeHtml(t.assessment_name)}</p>`).join('') || '<p>No outstanding tasks.</p>'}</section>
     <section class="panel dashboard-reports"><h3>Reports</h3><p>${formatDate(week.start)}–${formatDate(week.end)} · ${week.logged}/${week.total} planned blocks logged</p>${week.partial?`<p>Partial week · tracking from ${formatDate(week.trackingStart)}</p>`:''}<button class="ghost" data-view="weekly-report">View weekly report</button></section>`;
 }
 
@@ -252,9 +267,9 @@ function weeklyReportHtml(report) {
   return `<section class="panel weekly-report"><h3>${formatDate(report.start)}–${formatDate(report.end)} · ${report.logged}/${report.total} blocks logged</h3>
     ${report.partial?`<p class="callout">Partial week · tracking from ${formatDate(report.trackingStart)}</p>`:''}
     ${!report.total?'<p>Tracking had not started. No missed targets for this week.</p>':''}
-    <p>${report.percent}% of eligible planned blocks logged · ${report.followed+report.changed} studied · ${report.extra} extra blocks</p>
+    <p>${report.percent}% of eligible planned blocks logged · ${report.followed+report.changed+report.partialBlocks} studied · ${report.extra} extra blocks</p>
     ${weeklyProgressChartHtml(report)}
-    <p>${report.followed} followed plan · ${report.changed} changed · ${report.skipped} skipped</p>
+    <p>${report.followed} followed plan · ${report.changed} changed · ${report.partialBlocks} partial · ${report.skipped} skipped</p>
     <p>${report.missed} elapsed blocks not logged · ${report.upcoming} upcoming</p>
     <p>${report.green} green · ${report.amber} amber · ${report.red} red reflections</p>
     <h3>Daily breakdown</h3><div class="daily-report-list">${report.days.map(day=>`<article class="weekly-block weekly-${day.red?'red':day.amber?'amber':day.logged?'logged':'upcoming'}"><b>${formatLongDate(day.date)}</b><p>${day.trackingStarted?`${day.logged}/${day.total} logged · ${day.overdue} elapsed not logged · ${day.skipped} skipped`:'Tracking had not started'}</p></article>`).join('')}</div>
@@ -280,7 +295,7 @@ function dailyReportHtml(report) {
       const rag=['green','amber','red'].includes(b.log?.rag_status)?b.log.rag_status:null;
       const skipped=b.log?.details?.outcome==='skipped', changed=b.log?.details?.outcome==='changed';
       const tone=skipped?'unlogged':b.log?(rag || 'logged'):b.status==='Current block'?'current':b.status==='Not logged'?'unlogged':'upcoming';
-      const label=skipped?'Skipped':b.log?`✓ ${changed?'Changed':'Logged'}${rag?' · '+rag[0].toUpperCase()+rag.slice(1):' · RAG unset'}`:b.status==='Current block'?'Now':b.status;
+      const label=skipped?'Skipped':b.log?`✓ ${changed?'Changed':b.log.details?.outcome==='partial'?'Partial':'Logged'}${rag?' · '+rag[0].toUpperCase()+rag.slice(1):' · RAG unset'}`:b.status==='Current block'?'Now':b.status;
       const topics=skipped?[]:[...new Set((b.log?.details?.entries || []).map(e=>e.topic))];
       return `<article class="daily-block daily-${tone}"><div class="top mini"><div><b>${escapeHtml(displayActivity(b.activity))}</b><small>${b.from}-${b.to}</small></div><strong class="daily-status">${label}</strong></div>
         ${changed?`<p>Actual: <b>${escapeHtml(displayActivity(b.log.details.actual_activity))}</b> · ${escapeHtml(b.log.details.actual_from)}-${escapeHtml(b.log.details.actual_to)}</p>`:''}
@@ -320,7 +335,8 @@ function thinkingPillarHtml() {
 }
 
 function programmeHtml() {
-  return `<header class="top"><div><p class="eyebrow">Plan Tracker · ${escapeHtml(state.data.profile?.current_school_year || 'Year 12')}</p><h2>Progress by subject or date</h2></div></header>${noticeHtml()}${studyPlanProgressHtml()}`;
+  const tabs=[['blocks','Study blocks'],['tasks','Tasks'],['timetable','Timetable']];
+  return `<header class="top"><h2>Plan</h2></header><div class="segmented">${tabs.map(([key,title])=>`<button data-plan-tab="${key}" aria-pressed="${state.planTab===key}">${title}</button>`).join('')}</div>${noticeHtml()}${state.planTab==='tasks'?academicsHtml():state.planTab==='timetable'?studyRhythmHtml():studyPlanProgressHtml()}`;
 }
 
 function studyRhythmSummaryHtml() {
@@ -331,7 +347,7 @@ function studyRhythmSummaryHtml() {
 function studyRhythmHtml() {
   const plan = studyPlanForDate(state.planMode==='subject'?state.planFrom:state.planDate);
   if (!plan) return '<p>No timetable for this date.</p>';
-  return `<div class="study-rhythm"><h3>Weekday and weekend plan</h3><p>Effective from ${formatDate(plan.effectiveFrom)}</p>
+  return `<div class="study-rhythm"><h3>Weekday and weekend plan</h3><p>Effective from ${formatDate(plan.effectiveFrom)}</p>${timetableEditorHtml(state.data.planner,todayInput())}
     <details><summary>Weekdays</summary>${timetableHtml(plan.weekdays,['Monday','Tuesday','Wednesday','Thursday','Friday'])}</details>
     <details><summary>Weekends</summary>${timetableHtml(plan.weekends,['Saturday','Sunday'])}</details>
     <p>Super Curricular slots currently support Senior Maths Challenge preparation. Choose the activity in each block when the focus changes.</p></div>`;
@@ -377,18 +393,22 @@ function selectedPlanBlocks() {
     if (log.log_date < from || log.log_date > to || (state.planMode === 'subject' && areaFor(log.planned_activity) !== state.planSubject && logArea(log)!==state.planSubject)) continue;
     if (!blocks.some(b => b.date === log.log_date && b.from === log.start_time.slice(0,5) && b.to === log.end_time.slice(0,5) && b.activity === log.planned_activity)) blocks.push({date:log.log_date,day:log.day_name,from:log.start_time.slice(0,5),to:log.end_time.slice(0,5),activity:log.planned_activity});
   }
+  for(const task of state.data.planner?.tasks || []) {
+    if(task.block_date<from || task.block_date>to || (state.planMode==='subject' && areaFor(task.activity)!==state.planSubject))continue;
+    if(!blocks.some(b=>b.date===task.block_date && b.from===task.start_time.slice(0,5) && b.to===task.end_time.slice(0,5) && b.activity===task.activity))blocks.push({date:task.block_date,day:new Date(task.block_date+'T12:00:00').toLocaleDateString('en-GB',{weekday:'long'}),from:task.start_time.slice(0,5),to:task.end_time.slice(0,5),activity:task.activity});
+  }
   return blocks.sort((a,b) => (a.date+a.from).localeCompare(b.date+b.from));
 }
 
 function blockSummaryHtml(block,log) {
   const skipped=log?.details?.outcome==='skipped';
   const topics=skipped?[]:[...new Set((log?.details?.entries || []).map(e=>e.topic))];
-  const status=skipped?'Skipped':log?'Logged':'Not logged';
+  const status=skipped?'Skipped':log?.details?.outcome==='partial'?'Partial':log?'Logged':'Not logged';
   return `<span><b>${escapeHtml(displayActivity(block.activity))}</b><small>${formatDate(block.date)} · ${block.from}-${block.to}</small>${topics.length?`<small>${escapeHtml(topics.slice(0,2).join(', '))}${topics.length>2?' +'+(topics.length-2):''}</small>`:''}</span><span><strong>${status}${!skipped&&log?.rag_status?' · '+escapeHtml(log.rag_status):''}</strong><small>${log?'Edit':'Log progress'}</small></span>`;
 }
 function studyPlanBlockHtml(block) {
   const log=findStudyPlanLog(block);
-  return `<details class="tracker-block" data-block="${escapeAttr(JSON.stringify(block))}"><summary>${blockSummaryHtml(block,log)}</summary>${studyPlanLogHtml(block)}</details>`;
+  return `<details class="tracker-block" data-block="${escapeAttr(JSON.stringify(block))}"><summary>${blockSummaryHtml(block,log)}</summary>${blockTasksHtml(block,state.data.planner)}${studyPlanLogHtml(block)}</details>`;
 }
 
 function studyPlanLogHtml(block) {
@@ -517,11 +537,11 @@ function taskHtml(t) {
 }
 
 function taraHtml() {
-  if (!state.practice) return `<header class="top"><div><p class="eyebrow">TARA Assessment Practice</p><h2>5-question methodology set</h2><p class="muted">TARA/TSA-style practice is one of the four weekly indicators, alongside A-levels, super-curricular depth and reading/thinking readiness.</p></div><div class="actions"><button data-action="start-smart" title="Prioritise unseen questions, then weak questions">${state.questionBankLoading ? 'Loading question bank...' : 'Smart coverage set'}</button><button class="ghost" data-action="start-tara" title="Start a filtered practice set using the filters below">${state.questionBankLoading ? 'Loading...' : 'Start filtered set'}</button></div></header>${noticeHtml()}${taraFilterHtml()}<section class="grid">${card('Question bank coverage', `${coveragePercent()}%`, `${answeredQuestionKeys().size}/${questionBankManifest.totalQuestions} questions seen at least once`)}${card('Question bank', questionBankStatusText(), state.questionBankLoaded ? `${filteredQuestions().length} questions match current filters` : 'The full question bank loads only when TARA practice starts, making login and dashboard faster.')}</section><section class="panel"><h3>How smart coverage works</h3><p class="muted">Smart coverage chooses unseen questions first, then questions from weak types and patterns, then mastered questions only when needed.</p></section>`;
-  if (state.practice.report) return reportHtml();
+  if (!state.practice) return `<header class="top"><div><p class="eyebrow">TARA Assessment Practice</p><h2>5-question methodology set</h2><p class="muted"></p></div><div class="actions"><button data-action="start-smart" title="Prioritise unseen questions, then weak questions">${state.questionBankLoading ? 'Loading question bank...' : 'Smart coverage set'}</button><button class="ghost" data-action="start-tara" title="Start a filtered practice set using the filters below">${state.questionBankLoading ? 'Loading...' : 'Start filtered set'}</button></div></header>${noticeHtml()}<div class="segmented"><button data-practice-mode="learn" aria-pressed="${state.practiceMode=== 'learn'}">Learn</button><button data-practice-mode="test" aria-pressed="${state.practiceMode=== 'test'}">Test</button></div>${taraFilterHtml()}<section class="grid">${card('Question bank coverage', `${coveragePercent()}%`, `${answeredQuestionKeys().size}/${questionBankManifest.totalQuestions} questions seen at least once`)}${card('Question bank', questionBankStatusText(), state.questionBankLoaded ? `${filteredQuestions().length} questions match current filters` : 'The full question bank loads only when TARA practice starts, making login and dashboard faster.')}</section><section class="panel"><h3>How smart coverage works</h3><p class="muted">Smart coverage chooses unseen questions first, then questions from weak types and patterns, then mastered questions only when needed.</p></section>`;
+  if (state.practice.report) return `<button class="ghost" data-action="practice-setup">Choose another practice mode</button>${reportHtml()}`;
   const q = state.practice.set[state.practice.index];
   const selected = state.practice.answers[q.id];
-  return `<section class="panel question"><p class="eyebrow">${q.paper_year} Q${q.question_number} · ${q.type} · ${q.sub_type}</p>${questionMetaHtml(q)}<h2>${highlight(q.question_text, q.relevant_question_highlights)}</h2>${visualHtml(q)}${Object.entries(q.answer_options).map(([k,v])=>`<button class="option ${optionClass(q, k, selected)}" data-answer="${k}"><b>${k}</b> ${v}</button>`).join('')}${instantFeedbackHtml(q, selected)}<div class="actions"><button class="ghost" data-action="prev-question">Previous</button><button class="ghost" data-action="next-question">Next</button><button data-action="submit-tara">Submit set</button></div></section>`;
+  return `<section class="panel question"><p class="eyebrow">${q.paper_year} Q${q.question_number} · ${q.type} · ${q.sub_type}</p>${questionMetaHtml(q)}<h2>${state.practice.mode==='test'?escapeHtml(q.question_text):highlight(q.question_text, q.relevant_question_highlights)}</h2>${visualHtml(q)}${Object.entries(q.answer_options).map(([k,v])=>`<button class="option ${optionClass(q, k, selected)}" data-answer="${k}"><b>${k}</b> ${v}</button>`).join('')}${instantFeedbackHtml(q, selected)}<div class="actions"><button class="ghost" data-action="prev-question">Previous</button><button class="ghost" data-action="next-question">Next</button><button data-action="submit-tara">Submit set</button></div></section>`;
 }
 
 function questionMetaHtml(q) {
@@ -529,6 +549,7 @@ function questionMetaHtml(q) {
 }
 
 function optionClass(q, key, selected) {
+  if(state.practice?.mode==='test')return key===selected?'selected':'';
   if (!selected) return '';
   if (key === q.correct_answer) return 'correct';
   if (key === selected) return 'incorrect selected';
@@ -536,6 +557,7 @@ function optionClass(q, key, selected) {
 }
 
 function instantFeedbackHtml(q, selected) {
+  if(state.practice?.mode==='test')return '';
   if (!selected) return '<p class="muted instant-hint">Choose an answer to see instant marking and coaching before moving on.</p>';
   const correct = selected === q.correct_answer;
   if (isNumericalQuestion(q)) {
@@ -563,7 +585,7 @@ function reportHtml() {
 function coachingHtml(q, selected) {
   if (isNumericalQuestion(q)) return numericalCoachingHtml(q, selected);
   const correct = selected === q.correct_answer;
-  return `<article class="panel coaching"><p class="eyebrow">Question ${q.question_number} · ${q.type} · ${q.sub_type}</p><h3>${correct ? 'Correct' : 'Incorrect'} · Your answer ${selected || 'blank'} · Official answer ${q.correct_answer}</h3>${questionMetaHtml(q)}<h4>A. Standard methodology</h4><ol>${methodologyFor(q.sub_type).map((m)=>`<li>${m}</li>`).join('')}</ol><h4>B. Full original question</h4><p>${highlight(q.question_text, q.relevant_question_highlights)}</p>${visualHtml(q)}<h4>C. Highlight decisive wording</h4><p>${q.relevant_question_highlights.map((h)=>`<mark>${h}</mark>`).join(' ') || '<span class="muted">No extracted highlight yet. Use the question stem and numerical constraints as the first clues.</span>'}</p><h4>D. What the wording should trigger</h4><p>${triggerFor(q)}</p><h4>E. Apply the method</h4><p>${coachingExplanation(q)}</p><h4>F. Trap to avoid</h4><p>${trapFor(q)}</p>${distractorAnalysisHtml(q)}<h4>G. Method to carry forward</h4><p>${carryForwardFor(q)}</p></article>`;
+  return `<article class="panel coaching"><p class="eyebrow">Question ${q.question_number} · ${q.type} · ${q.sub_type}</p><h3>${correct ? 'Correct' : 'Incorrect'} · Your answer ${selected || 'blank'} · Official answer ${q.correct_answer}</h3>${questionMetaHtml(q)}<h4>A. Standard methodology</h4><ol>${methodologyFor(q.sub_type).map((m)=>`<li>${m}</li>`).join('')}</ol><h4>B. Full original question</h4><p>${state.practice.mode==='test'?escapeHtml(q.question_text):highlight(q.question_text, q.relevant_question_highlights)}</p>${visualHtml(q)}<h4>C. Highlight decisive wording</h4><p>${q.relevant_question_highlights.map((h)=>`<mark>${h}</mark>`).join(' ') || '<span class="muted">No extracted highlight yet. Use the question stem and numerical constraints as the first clues.</span>'}</p><h4>D. What the wording should trigger</h4><p>${triggerFor(q)}</p><h4>E. Apply the method</h4><p>${coachingExplanation(q)}</p><h4>F. Trap to avoid</h4><p>${trapFor(q)}</p>${distractorAnalysisHtml(q)}<h4>G. Method to carry forward</h4><p>${carryForwardFor(q)}</p></article>`;
 }
 
 function numericalCoachingHtml(q, selected) {
@@ -575,7 +597,7 @@ function numericalCoachingHtml(q, selected) {
     <h4>A. Standard Numerical Method</h4>
     <div class="method-card"><p><b>${escapeHtml(numericalTechniqueName(q))}</b></p><ol>${numericalMethodSteps(q).map((m)=>`<li>${escapeHtml(m)}</li>`).join('')}</ol></div>
     <h4>B. Full Original Question</h4>
-    <p>${highlight(q.question_text, q.relevant_question_highlights)}</p>
+    <p>${state.practice.mode==='test'?escapeHtml(q.question_text):highlight(q.question_text, q.relevant_question_highlights)}</p>
     ${visualHtml(q)}
     <h4>C. Set Up the Problem</h4>
     <div class="solution-grid">
@@ -762,7 +784,7 @@ function carryForwardFor(q) {
 
 function analyticsHtml() {
   const t = state.data.tara;
-  return `<header class="top"><div><p class="eyebrow">TARA Assessment Analytics</p><h2>${t.overallAccuracy}% overall accuracy</h2><p class="muted">This page is the detailed admissions-test view. Use Overall Analytics for the full Oxford PPE preparation picture.</p></div><button data-action="start-recommended-tara">Practise recommended area</button></header>${taraRecommendationHtml(t)}<section class="grid">${card('Total attempts', t.totalAttempts, `${t.totalQuestions} questions answered`)}${card('Average set score', t.averageSetScore, 'Mini-sets are not official scaled scores.')}${card('Critical Thinking', `${t.criticalAccuracy}%`, '')}${card('Numerical Reasoning', `${t.problemAccuracy}%`, '')}</section><section class="panel"><h3>Accuracy trend</h3>${trend(t.recentTrend)}</section><section class="grid"><section class="panel"><h3>By type</h3>${bars(t.byType)}</section><section class="panel"><h3>By sub-type</h3>${bars(t.byPattern)}</section></section><section class="panel"><h3>Repeat mistake signals</h3>${repeatMistakesHtml(t)}</section><section class="panel"><h3>Historical test sessions</h3>${sessionHistoryHtml()}</section>`;
+  return `<header class="top"><div><p class="eyebrow">TARA Assessment Analytics</p><h2>${t.overallAccuracy}% overall accuracy</h2><p class="muted"></p></div><button data-action="start-recommended-tara">Practise recommended area</button></header>${taraRecommendationHtml(t)}<section class="grid">${card('Total attempts', t.totalAttempts, `${t.totalQuestions} questions answered`)}${card('Average set score', t.averageSetScore, 'Mini-sets are not official scaled scores.')}${card('Critical Thinking', `${t.criticalAccuracy}%`, '')}${card('Numerical Reasoning', `${t.problemAccuracy}%`, '')}</section><section class="panel"><h3>Accuracy trend</h3>${trend(t.recentTrend || [])}</section><section class="grid"><section class="panel"><h3>By type</h3>${bars(t.byType)}</section><section class="panel"><h3>By sub-type</h3>${bars(t.byPattern)}</section></section><section class="panel"><h3>Repeat mistake signals</h3>${repeatMistakesHtml(t)}</section><section class="panel"><h3>Historical test sessions</h3>${sessionHistoryHtml()}</section>`;
 }
 
 function taraRecommendationHtml(t) {
@@ -780,7 +802,7 @@ function repeatMistakesHtml(t) {
 
 function academicsHtml() {
   const tasks = schoolTasks().filter(t => (state.schoolSubject === 'all' || t.subject_id === state.schoolSubject) && (state.schoolStatus === 'all' || (t.status || 'completed') === state.schoolStatus));
-  return `<header class="top"><div><p class="eyebrow">A-Level Rigour</p><h2>Homework & assessments</h2></div></header>
+  return `<header class="top"><div><h3>Homework & assessments</h3></div></header>
     <section class="panel"><form data-action="school-filter" class="form-grid"><label>Subject<select name="subject"><option value="all">All subjects</option>${state.data.subjects.map(s => `<option value="${s.id}" ${sel(s.id,state.schoolSubject)}>${escapeHtml(s.name)}</option>`).join('')}</select></label>
     <label>Status<select name="status">${['all','not_started','in_progress','completed'].map(s => `<option value="${s}" ${sel(s,state.schoolStatus)}>${label(s)}</option>`).join('')}</select></label><button>Filter tasks</button></form></section>
     <details class="panel"><summary>Add homework or assessment</summary>${schoolTaskForm()}</details>
@@ -1155,53 +1177,9 @@ function recentRows(rows, dateField) {
   return [...rows].sort((a, b) => String(b[dateField] || b.created_at || '').localeCompare(String(a[dateField] || a.created_at || '')));
 }
 
-function parentHtml() {
-  if (state.data.parentStudents?.length) return parentLinkedStudentsHtml();
-  const tasks = schoolTasks();
-  return `<header class="top"><div><p class="eyebrow">Parent / Coach View</p><h2>Progress summary</h2></div></header>
-    <section class="grid">${card('School tasks', tasks.filter(t => (t.status || 'completed') !== 'completed').length,'Still to complete')}${card('Completed',tasks.filter(t => (t.status || 'completed') === 'completed').length,'Homework and assessments')}${card('TARA',state.data.tara.overallAccuracy+'%',state.data.tara.totalQuestions+' questions answered')}</section>
-    ${digestPreviewHtml()}<section class="panel"><h3>Privacy</h3><p>Private student reflections are excluded from this summary.</p></section>`;
-}
-
-function parentLinkedStudentsHtml() {
-  return `<header class="top"><div><p class="eyebrow">Parent / Coach View</p><h2>Linked student summaries</h2><p class="muted">Read-only progress. Journal reflections and Oxford reasoning responses are not shown.</p></div></header>${state.data.parentStudents.map(parentStudentCardHtml).join('')}<section class="panel"><h3>Privacy note</h3><p class="muted">Parents see performance summaries, weekly tasks, academic grades and milestones. Private student reflections stay out of this view.</p></section>`;
-}
-
-function parentStudentCardHtml(student) {
-  const tasks = student.tasks || [];
-  const completed = tasks.filter((task) => task.status === 'completed');
-  const open = tasks.filter((task) => !['completed', 'skipped'].includes(task.status));
-  const weakTopics = student.subjects.flatMap((subject) => (subject.academic_topics || [])
-    .filter((topic) => ['weak', 'developing'].includes(topic.mastery_status))
-    .map((topic) => `${subject.name}: ${topic.topic_name}`));
-  const nextMilestones = (student.milestones || []).filter((m) => m.status !== 'completed').slice(0, 3);
-  return `<section class="panel parent-student"><div class="top mini"><div><p class="eyebrow">${escapeHtml(student.profile?.display_name || 'Student')}</p><h3>${escapeHtml(currentTarget(student.profile?.target_course))}</h3></div><span class="pill success">Read-only</span></div><section class="grid six">${card('This week', `${percent(completed.length, tasks.length)}%`, `${completed.length}/${tasks.length} tasks completed<br>${open.length} still open`)}${card('TARA Assessment', `${student.tara.overallAccuracy}%`, `${student.tara.totalQuestions} questions answered<br>Weakest: ${student.tara.weakestSubtype?.name || 'Not enough data'}`)}${card('A-Level', '', student.subjects.map((s)=>`${s.name}: ${s.predicted_grade || 'Not set'}`).join('<br>'))}${card('Weak topics', weakTopics.length, weakTopics.slice(0, 4).map(escapeHtml).join('<br>') || 'None recorded')}${card('Upcoming milestones', nextMilestones.length, nextMilestones.map((m)=>`${escapeHtml(m.title)} · ${formatDate(m.target_date)}`).join('<br>') || 'No open milestones')}${card('Current focus', '', student.programme?.weekly_focus || 'No active weekly programme')}</section></section>`;
-}
-
 function profileHtml() {
-  const p = {...state.data.profile,target_course:currentTarget(state.data.profile?.target_course)};
-  return `<header class="top"><div><p class="eyebrow">Profile</p><h2>Student setup</h2></div></header><section class="panel"><form data-action="save-profile" class="form-grid"><label>Display name<input name="display_name" value="${escapeAttr(p.display_name || '')}"></label><label>School<input name="school" value="${escapeAttr(p.school || '')}"></label><label>Student email<input value="${escapeAttr(state.user.email || '')}" disabled></label><label>Parent email<input name="parent_email" type="email" value="${escapeAttr(p.parent_email || '')}" placeholder="parent@example.com"></label><label>School year<input name="current_school_year" value="${escapeAttr(p.current_school_year || 'Year 12')}"></label><label>Application year<input name="application_year" type="number" value="${escapeAttr(p.application_year || '')}"></label><label>Target course<input name="target_course" value="${escapeAttr(p.target_course || 'Oxford Philosophy, Politics and Economics')}"></label><label>Target university<input name="target_university" value="${escapeAttr(p.target_university || 'University of Oxford')}"></label><label>Daily parent digest time<input name="parent_digest_time" type="time" value="${escapeAttr(formatTime(p.parent_digest_time || '06:00'))}"></label><label class="checkline"><input name="parent_digest_enabled" type="checkbox" value="true" ${p.parent_digest_enabled ? 'checked' : ''}> Send daily parent digest</label><p class="muted span-all">The digest summarises the previous calendar day. Scheduled email delivery needs the later Supabase Edge Function/email-provider step; the preview below is available now.</p><button>Save profile</button></form></section>${ambitionsHtml()}${studentReminderSettingsHtml()}${passwordSettingsHtml()}${digestPreviewHtml()}`;
-}
-
-function digestPreviewHtml() {
-  const p = state.data.profile || {};
-  const digest = buildDailyDigest(state.data, previousLocalDate());
-  return `<section class="panel digest-preview"><div class="top mini"><div><p class="eyebrow">Parent Daily Digest Preview</p><h3>${formatLongDate(digest.date)} summary</h3></div><span class="pill ${p.parent_digest_enabled ? 'success' : 'low'}">${p.parent_digest_enabled ? 'Enabled' : 'Off'}</span></div><p class="muted">${p.parent_email ? `Would be sent to ${escapeHtml(p.parent_email)} around ${escapeHtml(formatTime(p.parent_digest_time || '06:00'))}.` : 'Add a parent email in Profile before scheduled digest emails can be sent.'}</p>${digest.hasActivity ? digestSummaryHtml(digest) : '<p class="callout">No activity was recorded for the previous day, so the production digest would normally send nothing.</p>'}</section>`;
-}
-
-function digestSummaryHtml(digest) {
-  return `<div class="digest-grid">
-    ${digestBlock('TARA Assessment', digest.tara.totalSets ? `${digest.tara.totalSets} set${digest.tara.totalSets === 1 ? '' : 's'} · ${digest.tara.correct}/${digest.tara.totalQuestions} correct · ${digest.tara.accuracy}%` : 'No TARA Assessment set completed.')}
-    ${digestBlock('Weakest Sub-type', digest.tara.weakSubtypes[0] ? `${escapeHtml(digest.tara.weakSubtypes[0].name)} · ${digest.tara.weakSubtypes[0].accuracy}%` : 'No weak sub-type identified yesterday.')}
-    ${digestBlock('Plan Tracker', `${digest.studyPlan.logs.length} blocks logged · ${digest.studyPlan.green}/${digest.studyPlan.amber}/${digest.studyPlan.red} green/amber/red`)}
-    ${digestBlock('Academics', digest.academics.length ? digest.academics.map((item) => `${escapeHtml(item.subject_name)}: ${escapeHtml(item.assessment_name || item.topic || 'assessment')} ${item.score != null ? `${escapeHtml(item.score)}/${escapeHtml(item.max_score)}` : escapeHtml(label(item.status || 'completed'))}`).join('<br>') : 'No academic result added.')}
-
-    ${digestBlock('Suggested Focus', digest.recommendations.map((item) => escapeHtml(item)).join('<br>') || 'Keep logging your study plan and school tasks.')}
-  </div>`;
-}
-
-function digestBlock(title, body) {
-  return `<article class="digest-block"><b>${title}</b><p>${body}</p></article>`;
+  const p=state.data.profile || {};
+  return `<header class="top"><h2>Settings</h2></header><section class="panel"><form data-action="save-profile" class="form-grid"><label>Display name<input name="display_name" value="${escapeAttr(p.display_name || '')}"></label><label>School year<input name="current_school_year" value="${escapeAttr(p.current_school_year || 'Year 12')}"></label><button>Save profile</button><p class="form-status" role="status"></p></form></section>${studentReminderSettingsHtml()}${passwordSettingsHtml()}`;
 }
 
 function taraFilterHtml() {
@@ -1306,15 +1284,15 @@ async function startTara() {
   state.notice = filtered.length < 5
     ? { type: 'info', message: `Only ${filtered.length} question${filtered.length === 1 ? '' : 's'} matched those filters, so this set is shorter than 5.` }
     : { type: 'success', message: `Started a filtered set from ${filtered.length} matching questions.` };
-  state.practice = { set, index: 0, answers: {}, startedAt: new Date().toISOString(), report: false };
-  state.view = 'tara';
+  state.practice = { set, index: 0, answers: {}, startedAt: new Date().toISOString(), report: false, mode: state.practiceMode };
+  state.view = 'tara'; state.taraTab='practice';
 }
 
 async function startSmartTara() {
   await ensureQuestionBankLoaded();
   const pool = smartQuestionPool();
-  state.practice = { set: pool.slice(0,5), index: 0, answers: {}, startedAt: new Date().toISOString(), report: false };
-  state.view = 'tara';
+  state.practice = { set: pool.slice(0,5), index: 0, answers: {}, startedAt: new Date().toISOString(), report: false, mode: state.practiceMode };
+  state.view = 'tara'; state.taraTab='practice';
 }
 
 async function startRecommendedTara() {
@@ -1334,9 +1312,9 @@ async function startRetryTara() {
     state.view = 'tara';
     return;
   }
-  state.practice = { set: shuffle(pool).slice(0, Math.min(5, pool.length)), index: 0, answers: {}, startedAt: new Date().toISOString(), report: false };
+  state.practice = { set: shuffle(pool).slice(0, Math.min(5, pool.length)), index: 0, answers: {}, startedAt: new Date().toISOString(), report: false, mode: state.practiceMode };
   state.notice = { type: 'success', message: `Retrying ${Math.min(5, pool.length)} previously missed question${Math.min(5, pool.length) === 1 ? '' : 's'}.` };
-  state.view = 'tara';
+  state.view = 'tara'; state.taraTab='practice';
 }
 
 function missedQuestionPool() {
@@ -1376,6 +1354,10 @@ function smartQuestionPool() {
 }
 
 async function submitTara() {
+  if(state.practice.saving)return;
+  if(state.practice.set.some(q=>!state.practice.answers[q.id])){alert('Answer every question before submitting.');return;}
+  state.practice.saving=true;
+  try {
   const responses = state.practice.set.map((q) => ({
     paper_year: q.paper_year,
     question_number: q.question_number,
@@ -1389,8 +1371,10 @@ async function submitTara() {
   await saveAttempt(state.user, state.practice.set, responses, state.practice.startedAt);
   state.practice.report = true;
   state.data = await bootstrap(state.user);
-  state.view = 'tara';
+  state.view = 'tara'; state.taraTab='practice';
   render();
+  } catch(error) {alert('Could not finish saving the set. '+friendlyError(error));}
+  finally {state.practice.saving=false;}
 }
 
 app.addEventListener('input', event => handleStudyInput(event,state.data?.studyPlanLogs || []));
@@ -1426,13 +1410,13 @@ app.addEventListener('click', async (event) => {
   }
   if (target.hasAttribute('data-log-block')) {
     const [date,from,to,activity]=JSON.parse(target.dataset.logBlock);
-    state.planMode='date';state.planDate=date;state.extraBlock=null;state.view='programme';render();
+    state.planMode='date';state.planDate=date;state.extraBlock=null;state.planTab='blocks';state.view='programme';render();
     const form=[...app.querySelectorAll('[data-action="save-study-log"]')].find(f=>f.elements.start_time.value===from && f.elements.end_time.value===to && f.elements.planned_activity.value===activity);
     // A topic's input named "focus" shadows HTMLFormElement.focus.
     if(form){const block=form.closest('.tracker-block');if(block)block.open=true;form.tabIndex=-1;HTMLElement.prototype.focus.call(form,{preventScroll:true});form.scrollIntoView({block:'start'});}
     return;
   }
-  if (target.hasAttribute('data-today-plan')) { state.planMode='date';state.planDate=state.reportDate || todayInput();state.extraBlock=null;state.view='programme';render();return; }
+  if (target.hasAttribute('data-today-plan')) { state.planMode='date';state.planDate=state.reportDate || todayInput();state.extraBlock=null;state.planTab='blocks';state.view='programme';render();return; }
   if(target.hasAttribute('data-report-today')){state.reportDate=null;render();return;}
   if(target.hasAttribute('data-report-yesterday')){const d=new Date();d.setDate(d.getDate()-1);state.reportDate=dateInput(d);render();return;}
   if(target.hasAttribute('data-report-refresh')){
@@ -1451,8 +1435,22 @@ app.addEventListener('click', async (event) => {
     return;
   }
   if (target.dataset.weekShift) { const date=new Date((state.reportDate || todayInput())+'T12:00:00'); date.setDate(date.getDate()+Number(target.dataset.weekShift)); state.reportDate=`${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`; render(); return; }
-  if (target.dataset.view) { state.view = target.dataset.view; render(); window.scrollTo(0,0); return; }
-  if (target.dataset.answer) { state.practice.answers[state.practice.set[state.practice.index].id] = target.dataset.answer; render(); return; }
+  if (target.dataset.planTab || target.dataset.taraTab || target.dataset.reportMode || target.dataset.practiceMode || target.dataset.view) {
+    if(document.querySelector('[data-unsaved]') && !confirm('Leave without saving your changes?'))return;
+    if(target.dataset.planTab){state.planTab=target.dataset.planTab;state.view='programme';}
+    if(target.dataset.taraTab){state.taraTab=target.dataset.taraTab;state.view='tara';}
+    if(target.dataset.reportMode)state.reportMode=target.dataset.reportMode;
+    if(target.dataset.practiceMode)state.practiceMode=target.dataset.practiceMode;
+    if(target.dataset.view){
+      const view=target.dataset.view;
+      if(view==='dashboard')state.reportDate=null;
+      if(view==='academics'){state.view='programme';state.planTab='tasks';}
+      else if(view==='analytics'){state.view='tara';state.taraTab='analytics';}
+      else state.view=view;
+    }
+    render(); window.scrollTo(0,0); return;
+  }
+  if (target.dataset.answer) { const id=state.practice.set[state.practice.index].id; if(state.practice.mode!=='test' && state.practice.answers[id])return; state.practice.answers[id] = target.dataset.answer; render(); return; }
   if (target.dataset.topicFilter) { state.academicTopicFilter = target.dataset.topicFilter; render(); return; }
   if (target.dataset.journalMode) { state.journalMode = target.dataset.journalMode; render(); return; }
   if (target.dataset.fillPrompt) { fillPrompt(target.dataset.fillPrompt, target.dataset.prompt); return; }
@@ -1472,7 +1470,7 @@ app.addEventListener('click', async (event) => {
       // Saved responses remain readable when the question bank is unavailable.
     }
     state.reviewAttemptId = attemptId;
-    state.view = 'analytics';
+    state.view = 'tara';
     render();
     const reviewButton = app.querySelector(`[data-review-attempt="${CSS.escape(attemptId)}"]`);
     reviewButton?.focus({preventScroll:true});
@@ -1480,6 +1478,7 @@ app.addEventListener('click', async (event) => {
     return;
   }
   const action = target.dataset.action;
+  if(action==='practice-setup'){state.practice=null;state.taraTab='practice';render();return;}
   if (action === 'signout') { try {await signOut();location.reload();} catch(error){state.notice={type:'error',message:friendlyError(error)};alert('Sign out failed. '+friendlyError(error));} }
   if (action === 'start-tara') { try { await startTara(); } catch {} render(); }
   if (action === 'start-smart') { try { await startSmartTara(); } catch {} render(); }
@@ -1535,6 +1534,7 @@ app.addEventListener('blur', async (event) => {
 }, true);
 
 app.addEventListener('submit', async (event) => {
+  if(event.target.matches('[data-planner-form]'))return;
   event.preventDefault();
   const form = event.target;
   const values = Object.fromEntries(new FormData(form).entries());
@@ -1853,9 +1853,7 @@ function writeMagicLinkRecords(records) {
 function normalizeProfilePayload(values) {
   return {
     ...values,
-    parent_email: normalizeEmail(values.parent_email),
-    parent_digest_enabled: values.parent_digest_enabled === 'true',
-    application_year: values.application_year ? Number(values.application_year) : null
+
   };
 }
 

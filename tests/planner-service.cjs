@@ -1,0 +1,23 @@
+const assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm'),path=require('node:path');
+const root=path.resolve(__dirname,'..'),calls=[];
+const supabase={from(table){calls.push(['from',table]);const q={select(){return q},eq(k,v){calls.push(['eq',k,v]);return q},order(){return q},insert(row){calls.push(['insert',row]);return q},update(row){calls.push(['update',row]);return q},then(resolve){return Promise.resolve({data:[],error:null}).then(resolve)}};return q;}};
+const context=vm.createContext({supabase});
+for(const file of ['studentStudyPlan.js','plannerService.js'])vm.runInContext(fs.readFileSync(path.join(root,'src',file),'utf8').replace(/^import .*;$/gm,'').replaceAll('export ',''),context);
+const run=s=>vm.runInContext(s,context);
+run("configureStudyPlans([{effective_from:'2026-10-13',single_day:false,blocks:[{day:'Tuesday',from:'10:00',to:'11:00',activity:'Maths'}]},{effective_from:'2026-10-20',single_day:true,blocks:[]}])");
+assert.equal(run("studyPlanForDate('2026-10-12').effectiveFrom"),'2026-09-23');
+assert.equal(run("studyPlanForDate('2026-10-13').weekdays[0].Tuesday"),'Maths');
+assert.equal(run("studyPlanForDate('2026-10-20').weekdays.length"),0);
+assert.equal(run("studyPlanForDate('2026-10-27').weekdays[0].Tuesday"),'Maths');
+assert.throws(()=>run("validateBlocks([{day:'Tuesday',from:'25:00',to:'26:00',activity:'Maths'}])"),/valid/);
+assert.throws(()=>run("validateBlocks([{day:'Tuesday',from:'10:00',to:'11:00',activity:'Maths'},{day:'Tuesday',from:'10:30',to:'11:30',activity:'Physics'}])"),/Overlapping/);
+assert.equal(run("validateBlocks([]).length"),0);
+(async()=>{
+ await run("saveBlockTask('student-a',{title:'Revise',status:'completed'},'task-a')");
+ assert.ok(calls.some(c=>c[0]==='eq' && c[1]==='user_id' && c[2]==='student-a'));
+ assert.ok(calls.some(c=>c[0]==='eq' && c[1]==='id' && c[2]==='task-a'));
+ calls.length=0;
+ await run("loadPlanner('student-a')");
+ assert.equal(calls.filter(c=>c[0]==='eq' && c[1]==='user_id' && c[2]==='student-a').length,2);
+ console.log('PASS timetable versions, exception expiry, time validation, overlap rejection and owner-scoped service queries (not live RLS)');
+})().catch(e=>{console.error(e);process.exitCode=1;});

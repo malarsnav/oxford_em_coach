@@ -28,7 +28,7 @@ const server = http.createServer((req,res)=>{
       await page.route('**/src/dataService.js',r=>r.fulfill({contentType:'text/javascript',body:mockData}));
       await page.route('**/src/supabaseClient.js',r=>r.fulfill({contentType:'text/javascript',body:'export const supabase = {};'}));
       await page.goto(`http://127.0.0.1:${server.address().port}/oxford_em_coach/`);
-      await page.locator('nav [data-view="analytics"]').click();
+      await page.locator('nav [data-view="tara"]').click();await page.locator('[data-tara-tab="history"]').click();
       const first=page.locator('[data-review-attempt="first"]');
       await first.click();
       await page.locator('#session-review-first .session-review').waitFor();

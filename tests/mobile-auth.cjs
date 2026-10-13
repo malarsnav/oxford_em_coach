@@ -41,6 +41,7 @@ const server=http.createServer((req,res)=>{
       await page.route('**/src/supabaseClient.js',r=>r.fulfill({contentType:'text/javascript',body:sdk}));
       await page.route('**/src/dataService.js',r=>r.fulfill({contentType:'text/javascript',body:service}));
       await page.clock.setFixedTime(new Date('2026-09-17T12:00:00Z'));
+      page.on('dialog',dialog=>dialog.accept());
       await page.goto(url);
       if(!mobile){await page.getByRole('button',{name:'Send magic link',exact:true}).waitFor();await page.getByRole('button',{name:'Use password instead',exact:true}).click();}
       else assert.equal(await page.getByRole('button',{name:'Send magic link',exact:true}).count(),0);
@@ -49,22 +50,22 @@ const server=http.createServer((req,res)=>{
       await login.locator('[name=password]').fill('wrong-password');await login.getByRole('button',{name:'Sign in',exact:true}).click();
       await login.locator('.form-status').getByText(/Invalid login credentials/).waitFor();
       await login.locator('[name=password]').fill('a-test-password-123');await login.getByRole('button',{name:'Sign in',exact:true}).click();
-      await page.getByRole('button',{name:'Dashboard',exact:true}).waitFor();
+      await page.locator('nav').getByRole('button',{name:'Today',exact:true}).waitFor();
       assert.equal(await page.evaluate(()=>window.authCalls.includes('magic')),false);
-      await page.reload();await page.getByRole('button',{name:'Dashboard',exact:true}).waitFor();
+      await page.reload();await page.locator('nav').getByRole('button',{name:'Today',exact:true}).waitFor();
       assert.deepEqual(await page.evaluate(()=>window.authCalls),[]);
-      await page.getByRole('button',{name:'Profile',exact:true}).click();
+      await page.getByRole('button',{name:'Settings',exact:true}).click();
       const setup=page.locator('[data-action="set-password"]');
       await setup.locator('[name=password]').fill('a-test-password-123');await setup.locator('[name=confirmation]').fill('different-password');
       await setup.getByRole('button').click();await setup.getByText(/Passwords do not match/).waitFor();
       await setup.locator('[name=confirmation]').fill('a-test-password-123');await setup.getByRole('button').click();
       await setup.getByText(/Password saved/).waitFor();assert.equal(await setup.locator('[name=password]').inputValue(),'');
-      await page.getByRole('button',{name:'Dashboard',exact:true}).click();
+      await page.locator('nav').getByRole('button',{name:'Today',exact:true}).click();
       await page.evaluate(()=>{window.remoteLogs=[{log_date:'2026-09-17',start_time:'07:00',end_time:'07:30',planned_activity:'EPQ',rag_status:'green'}];});
       await page.clock.setFixedTime(new Date('2026-09-17T12:01:00Z'));
       await page.evaluate(()=>window.dispatchEvent(new Event('focus')));
       await page.getByText('1/5 planned study blocks logged today',{exact:true}).waitFor();
-      await page.getByRole('button',{name:'Plan Tracker',exact:true}).click();
+      await page.getByRole('button',{name:'Plan',exact:true}).click();
       await page.locator('.tracker-block > summary').first().click();
       await page.locator('.tracker-block').first().locator('[name=project_title]').fill('Unsaved EPQ draft');
       const before=await page.evaluate(()=>window.bootstraps);
@@ -72,7 +73,7 @@ const server=http.createServer((req,res)=>{
       await page.evaluate(()=>window.dispatchEvent(new Event('focus')));
       assert.equal(await page.evaluate(()=>window.bootstraps),before);
       assert.equal(await page.locator('[name=project_title]').inputValue(),'Unsaved EPQ draft');
-      await page.getByRole('button',{name:'Dashboard',exact:true}).click();
+      await page.locator('nav').getByRole('button',{name:'Today',exact:true}).click();
       await page.evaluate(()=>{window.failBootstrap=true;window.dispatchEvent(new Event('online'));});
       await page.getByText(/Refresh failed. Your saved progress/).waitFor();
       await page.getByText('1/5 planned study blocks logged today',{exact:true}).waitFor();
@@ -86,8 +87,8 @@ const server=http.createServer((req,res)=>{
       await page.evaluate(()=>localStorage.setItem('mock-session','yes'));await page.goto(url+'?account=recovery');
       await page.getByRole('heading',{name:'Reset password',exact:true}).waitFor();
       await page.locator('[name=password]').fill('a-test-password-123');await page.locator('[name=confirmation]').fill('a-test-password-123');await page.getByRole('button',{name:'Save password',exact:true}).click();
-      await page.getByRole('button',{name:'Dashboard',exact:true}).waitFor();assert.equal(new URL(page.url()).search,'');
-      await page.getByRole('button',{name:'Profile',exact:true}).click();
+      await page.locator('nav').getByRole('button',{name:'Today',exact:true}).waitFor();assert.equal(new URL(page.url()).search,'');
+      await page.getByRole('button',{name:'Settings',exact:true}).click();
       await page.locator('[data-action="set-password"]').screenshot({path:path.join(root,`../work/password-settings-${mobile?'mobile':'desktop'}.png`)});
       assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
       assert.deepEqual(errors,[]);await page.close();

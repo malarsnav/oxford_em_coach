@@ -1,6 +1,7 @@
 import { supabase, hasSupabaseConfig } from './supabaseClient.js';
 import { normalizeResponseTags } from './tagTaxonomy.js';
 import { currentTarget } from './preparationContext.js';
+import { loadPlanner } from './plannerService.js';
 
 const localKey = 'oxford-em-coach-demo';
 
@@ -50,26 +51,17 @@ export async function requestPasswordReset(email) {
 
 export async function bootstrap(user) {
   if (!supabase) return localBootstrap();
-  await claimParentLinks();
   await ensureProfile(user);
   await seedSubjects(user.id);
-  await seedMilestones(user.id);
-  const [profile, tara, programme, subjects, journal, reasoning, milestones, weeklyReviews, interviews, studyPlanLogs, parentStudents] = await Promise.all([
+  const [profile, tara, subjects, studyPlanLogs, reminderPreferences] = await Promise.all([
     single('user_profiles', 'user_id', user.id),
     getTaraAnalytics(user.id),
-    getCurrentProgramme(user.id),
     getSubjects(user.id),
-    list('journal_entries', user.id, 'date_completed', false),
-    list('oxford_reasoning_sessions', user.id, 'date', false),
-    list('milestones', user.id, 'target_date', true),
-    list('weekly_reviews', user.id, 'week_start', false),
-    list('interview_sessions', user.id, 'session_date', false),
     optionalList('study_plan_logs', user.id, 'log_date', true),
-    getParentStudentSummaries(user.id)
+    getStudentReminderPreferences(user)
   ]);
-  const data = buildState({ profile, tara, programme, subjects, journal, reasoning, milestones, weeklyReviews, interviews, studyPlanLogs, parentStudents });
-  data.reminderPreferences = await getStudentReminderPreferences(user);
-  return data;
+  const planner=await loadPlanner(user.id);
+  return { profile, tara, subjects, studyPlanLogs, reminderPreferences, planner };
 }
 
 async function getStudentReminderPreferences(user) {
@@ -143,11 +135,9 @@ export async function updateProfile(user, patch) {
   if (isMissingDigestColumn(error)) {
     const { error: retryError } = await supabase.from('user_profiles').upsert(stripDigestColumns(row), { onConflict: 'user_id' });
     if (retryError) throw retryError;
-    await upsertParentLink(user.id, row.parent_email);
     return;
   }
   if (error) throw error;
-  await upsertParentLink(user.id, row.parent_email);
 }
 
 export async function createProgramme(user, draft, replaceCurrent = false) {
@@ -399,11 +389,14 @@ async function getSubjects(userId) {
 }
 
 async function getTaraAnalytics(userId) {
-  const [{ data: attempts }, { data: responses }, { data: errors }] = await Promise.all([
+  const results = await Promise.all([
     supabase.from('attempts').select('*').eq('user_id', userId).order('completed_at', { ascending: false }),
     supabase.from('responses').select('*').eq('user_id', userId).order('created_at', { ascending: false }),
     supabase.from('tara_error_analysis').select('*').eq('user_id', userId).order('created_at', { ascending: false })
   ]);
+  const failure=results.find(result=>result.error);
+  if(failure)throw failure.error;
+  const [{ data: attempts }, { data: responses }, { data: errors }]=results;
   return summarizeTara(attempts || [], responses || [], errors || []);
 }
 
@@ -449,47 +442,6 @@ function studyPlanLogKey(row) {
   return [row.user_id, row.log_date, row.start_time, row.end_time, row.planned_activity].join('|');
 }
 
-async function claimParentLinks() {
-  if (!supabase) return;
-  const { error } = await supabase.rpc('claim_parent_links');
-  if (error && !/claim_parent_links|schema cache|function/i.test(error.message || '')) throw error;
-}
-
-async function upsertParentLink(studentUserId, parentEmail) {
-  const email = String(parentEmail || '').trim().toLowerCase();
-  if (!supabase || !email) return;
-  const { error } = await supabase.from('student_parent_links').upsert({
-    student_user_id: studentUserId,
-    parent_email: email,
-    status: 'invited'
-  }, { onConflict: 'student_user_id,parent_email', ignoreDuplicates: true });
-  if (error && !/student_parent_links|schema cache|relation/i.test(error.message || '')) throw error;
-}
-
-async function getParentStudentSummaries(parentUserId) {
-  const { data: links, error } = await supabase
-    .from('student_parent_links')
-    .select('*')
-    .eq('parent_user_id', parentUserId)
-    .eq('status', 'active');
-  if (error) {
-    if (/student_parent_links|schema cache|relation/i.test(error.message || '')) return [];
-    throw error;
-  }
-  return Promise.all((links || []).map(async (link) => {
-    const userId = link.student_user_id;
-    const [profile, tara, programme, subjects, milestones] = await Promise.all([
-      single('user_profiles', 'user_id', userId),
-      getTaraAnalytics(userId),
-      getCurrentProgramme(userId),
-      getSubjects(userId),
-      list('milestones', userId, 'target_date', true)
-    ]);
-    const tasks = programme?.weekly_tasks || [];
-    return { link, profile, tara, programme, tasks, subjects, milestones };
-  }));
-}
-
 async function ensureProfile(user) {
   const existing = await single('user_profiles', 'user_id', user.id);
   if (existing) return;
@@ -498,9 +450,7 @@ async function ensureProfile(user) {
     display_name: user.email?.split('@')[0],
     target_course: 'Oxford Philosophy, Politics and Economics',
     target_university: 'University of Oxford',
-    current_school_year: 'Year 12',
-    parent_digest_enabled: false,
-    parent_digest_time: '06:00'
+    current_school_year: 'Year 12'
   };
   const { error } = await supabase.from('user_profiles').insert(row);
   if (isMissingDigestColumn(error)) {
@@ -513,7 +463,7 @@ async function ensureProfile(user) {
 
 async function seedSubjects(userId) {
   for (const subject of ['Mathematics', 'Economics', 'Physics', 'History']) {
-    await supabase.from('subjects').upsert({ user_id: userId, name: subject, target_grade: subject === 'Mathematics' || subject === 'Economics' ? 'A*' : 'A', current_estimated_grade: 'Not set', predicted_grade: 'Not set' }, { onConflict: 'user_id,name' });
+    await supabase.from('subjects').upsert({ user_id: userId, name: subject, target_grade: subject === 'Mathematics' || subject === 'Economics' ? 'A*' : 'A', current_estimated_grade: 'Not set', predicted_grade: 'Not set' }, { onConflict: 'user_id,name', ignoreDuplicates: true });
   }
 }
 

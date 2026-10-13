@@ -1,5 +1,6 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { loggingEvidence, londonClock, reminderDue, studentReminderText } from '../../../src/preparationSignals.js';
+import { configureStudyPlans } from '../../../src/studentStudyPlan.js';
 
 const json=(body:unknown,status=200)=>new Response(JSON.stringify(body),{status,headers:{'Content-Type':'application/json'}});
 
@@ -20,8 +21,11 @@ Deno.serve(async(request)=>{
     let sent=0,skipped=0,failed=0;
     for(const preference of preferences || []) {
       const userId=preference.user_id;
+      const {data:plans,error:planError}=await db.from('study_plan_versions').select('*').eq('user_id',userId);
+      if(planError){failed++;continue;}
       const {data:logs,error:logError}=await db.from('study_plan_logs').select('log_date,start_time,end_time,planned_activity,details').eq('user_id',userId).eq('log_date',date);
       if(logError){failed++;continue;} // Missing database data must never be treated as missing study.
+      configureStudyPlans(plans || []);
       const evidence=loggingEvidence(logs || [],now,1);
       if(!evidence.todayMissing){skipped++;continue;}
       const {data:auth,error:authError}=await db.auth.admin.getUserById(userId);
