@@ -1569,3 +1569,7 @@ button { font-weight:600; }
 .work-exams article, .work-summary article { padding: 12px 0; border-bottom: 1px solid #e5e7eb; overflow-wrap: anywhere; }
 .work-summary details { padding: 12px 0; }
 .work-exams summary, .work-summary summary { cursor: pointer; padding: 8px 0; }
+.deviation-row { display:grid; grid-template-columns:minmax(120px,1fr) minmax(0,2fr); gap:16px; padding:16px 0; border-bottom:1px solid #d8dce2; overflow-wrap:anywhere; }
+.deviation-day { padding:12px 0; }
+.deviation-day > summary { cursor:pointer; padding:12px 0; }
+@media(max-width:600px) { .deviation-row { grid-template-columns:1fr; gap:4px; } }

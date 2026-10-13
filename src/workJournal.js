@@ -44,7 +44,7 @@ export function dailyWorkPayload(values,logs,blocks) {
   if((score!==null&&(!Number.isFinite(score)||score<0||max===null||score>max))||(max!==null&&(!Number.isFinite(max)||max<=0)))throw new Error('Enter a valid score and total marks.');
   const candidates=blocks.filter(b=>b.from===values.start_time&&b.to===values.end_time&&areaFor(b.activity)===values.subject);
   const activity=candidates[0]?.activity||values.subject;
-  if(logs.some(l=>l.log_date===values.log_date&&l.start_time.slice(0,5)===values.start_time&&l.end_time.slice(0,5)===values.end_time&&l.planned_activity===activity))throw new Error('This work block is already logged. Edit it in Plan to avoid replacing your existing entry.');
+  if(logs.some(l=>l.log_date===values.log_date&&l.start_time.slice(0,5)===values.start_time&&l.end_time.slice(0,5)===values.end_time&&l.planned_activity===activity))throw new Error('This work block is already logged. No changes were saved to your existing entry.');
   return {log_date:values.log_date,day_name:new Date(values.log_date+'T12:00:00').toLocaleDateString('en-GB',{weekday:'long'}),start_time:values.start_time,end_time:values.end_time,planned_activity:activity,
     topics_covered:values.mode==='learn'?values.topics:null,topics_practised:values.mode==='practise'?values.topics:null,topics_assessed:values.mode==='assess'?values.topics+(score!==null?` (${score}/${max})`:''):null,
     reflection:values.mode==='reflect'?values.topics+'\n'+values.reflection:values.reflection,rag_status:values.rag_status,

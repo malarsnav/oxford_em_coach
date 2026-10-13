@@ -2,7 +2,7 @@ import { PLAN_DAYS, savePlanVersion, saveBlockTask } from './plannerService.js';
 import { studyPlanForDate } from './studentStudyPlan.js';
 
 const esc=value=>String(value ?? '').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;');
-const unavailable='<p class="callout">Timetable editing and block tasks need migration 009_student_workspace.sql. Existing progress logging remains available.</p>';
+const unavailable='<p class="callout">Timetable editing needs migration 009_student_workspace.sql. Existing progress logging remains available.</p>';
 export function timetableEditorHtml(planner,today) {
   if(!planner?.available)return unavailable;
   const plan=studyPlanForDate(today);

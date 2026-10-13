@@ -8,6 +8,7 @@ import { STUDY_AREAS, areaFor, displayActivity, availabilityHtml, richStudyField
 import { saveSchoolTask, schoolAttachmentUrl } from './schoolTaskService.js';
 import { dailyStudyReport, weeklyStudyReport } from './dailyStudyReport.js';
 import { todayWorkHtml, dailyWorkPayload, workSummaryHtml, workPeriod } from './workJournal.js';
+import { deviationHtml } from './planDeviation.js';
 import { timetableEditorHtml, blockTasksHtml, installPlannerUi } from './plannerUi.js';
 import { logArea, deviationFields, handleDeviation, collectDeviation } from './planTracking.js';
 import { questionBankManifest } from './questionBankManifest.generated.js';
@@ -46,7 +47,7 @@ const state = {
   practice: null,
   notice: null,
   reviewAttemptId: null,
-  planTab: 'blocks', taraTab: 'practice', reportMode: 'week', practiceMode: 'learn',
+  planTab: 'timetable', taraTab: 'practice', reportMode: 'week', practiceMode: 'learn',
   academicTopicFilter: 'all',
   schoolSubject: 'all', schoolStatus: 'all',
   extraBlock: null, reportDate: null, lastRefresh: null, refreshing: false, refreshError: '',
@@ -178,7 +179,7 @@ function progressHtml() {
   return `<header class="top"><h2>Progress</h2></header>
     <div class="segmented" aria-label="Report period">${['day','week','month'].map(mode=>`<button data-report-mode="${mode}" aria-pressed="${state.reportMode===mode}">${{day:'Daily',week:'Weekly',month:'Monthly'}[mode]}</button>`).join('')}</div>
     <section class="report-controls"><label>${state.reportMode==='week'?'Week containing':'Date'}<input type="date" data-report-date value="${day}"></label><div class="row"><button class="ghost" data-week-shift="${state.reportMode==='week'?-7:-1}">Previous</button><button class="ghost" data-report-today>Current</button><button class="ghost" data-week-shift="${state.reportMode==='week'?7:1}">Next</button></div></section>
-    ${workSummaryHtml(state.data.studyPlanLogs||[],day,state.reportMode)}${taskProgressHtml(period.from,period.to)}${state.reportMode==='month'?'':state.reportMode==='week'?weeklyReportHtml(week):dailyReportHtml(dailyStudyReport(state.data.studyPlanLogs || [],new Date(),day))}`;
+    ${workSummaryHtml(state.data.studyPlanLogs||[],day,state.reportMode)}${deviationHtml(state.data.studyPlanLogs||[],day,state.reportMode)}`;
 }
 
 function taskProgressHtml(from,to=from) {
@@ -341,8 +342,8 @@ function thinkingPillarHtml() {
 }
 
 function programmeHtml() {
-  const tabs=[['blocks','Study blocks'],['tasks','Tasks'],['timetable','Timetable']];
-  return `<header class="top"><h2>Plan</h2></header><div class="segmented">${tabs.map(([key,title])=>`<button data-plan-tab="${key}" aria-pressed="${state.planTab===key}">${title}</button>`).join('')}</div>${noticeHtml()}${state.planTab==='tasks'?academicsHtml():state.planTab==='timetable'?studyRhythmHtml():studyPlanProgressHtml()}`;
+  const tabs=[['timetable','Timetable'],['comparison','Planned vs actual']];
+  return `<header class="top"><h2>Plan</h2></header><div class="segmented">${tabs.map(([key,title])=>`<button data-plan-tab="${key}" aria-pressed="${state.planTab===key}">${title}</button>`).join('')}</div>${noticeHtml()}<label>Date<input type="date" data-comparison-date value="${state.planDate}"></label>${state.planTab==='timetable'?studyRhythmHtml():deviationHtml(state.data.studyPlanLogs||[],state.planDate)}`;
 }
 
 function studyRhythmSummaryHtml() {
@@ -1389,6 +1390,7 @@ app.addEventListener('input', event => {
   if(form && /^(save-|add-|update-|set-password)/.test(form.dataset.action || ''))form.dataset.unsaved='true';
 });
 app.addEventListener('change', event => {
+  if(event.target.matches('[data-comparison-date]')&&event.target.value){state.planDate=event.target.value;state.planMode='date';render();return;}
   const form=event.target.closest('form');
   if(form && /^(save-|add-|update-|set-password)/.test(form.dataset.action || ''))form.dataset.unsaved='true';
 });

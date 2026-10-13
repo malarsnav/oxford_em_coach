@@ -1,0 +1,21 @@
+const assert=require('node:assert/strict');
+(async()=>{
+ const {configureStudyPlans}=await import('../src/studentStudyPlan.js');
+ const {planDeviation}=await import('../src/planDeviation.js');
+ configureStudyPlans([{effective_from:'2026-10-13',blocks:[{day:'Tuesday',from:'09:00',to:'10:00',activity:'Maths'},{day:'Tuesday',from:'10:00',to:'11:00',activity:'Physics'}]}]);
+ const log=(from,to,activity,details={})=>({log_date:'2026-10-13',start_time:from,end_time:to,planned_activity:activity,details});
+ const report=logs=>planDeviation(logs,'2026-10-13',new Date('2026-10-13T12:00:00'));
+ assert.equal(report([]).rows[0].status,'No work logged');
+ assert.equal(report([log('09:00','10:00','Maths')]).rows[0].status,'As planned');
+ assert.equal(report([log('09:00','10:00','Economics')]).rows[0].different,60);
+ assert.equal(report([log('09:30','10:30','Maths')]).rows[0].same,30);
+ assert.equal(report([log('09:30','10:30','Maths')]).rows[1].different,30);
+ assert.equal(report([log('09:00','09:30','Maths'),log('09:30','10:00','Maths')]).rows[0].same,60);
+ const overlap=report([log('09:00','10:00','Maths'),log('09:30','10:00','Maths')]).rows[0];
+ assert.equal(overlap.covered,60);assert.equal(overlap.status,'Overlapping logs');
+ assert.equal(report([log('08:30','09:30','Maths')]).outside[0].minutes,30);
+ assert.equal(report([log('09:00','10:00','Maths',{outcome:'skipped'})]).rows[0].status,'Recorded as skipped');
+ assert.equal(report([log('09:00','10:00','Maths',{actual_activity:'History',actual_from:'12:00',actual_to:'13:00'})]).outside[0].subject,'History');
+ assert.equal(planDeviation([],'2026-10-13',new Date('2026-10-13T08:00:00')).rows[0].status,'Upcoming');
+ console.log('PASS deviations: exact/partial/changed, spanning slots, split/overlapping logs, actual times, skipped and upcoming.');
+})().catch(e=>{console.error(e);process.exitCode=1;});

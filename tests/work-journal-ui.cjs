@@ -27,7 +27,17 @@ const server=http.createServer((req,res)=>{const file=path.join(root,req.url.spl
   await page.screenshot({path:path.join(root,`../work/work-journal-${width}.png`),fullPage:true});
   assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
   await page.getByRole('button',{name:'Progress',exact:true}).click();await page.getByRole('button',{name:'Monthly',exact:true}).click();await page.getByText('2026-10-01 to 2026-10-31',{exact:true}).waitFor();await page.getByText('Maths · 1 entries · 45 recorded minutes',{exact:true}).waitFor();
-  await page.getByRole('button',{name:'Next',exact:true}).click();await page.getByText('No work recorded for this period.',{exact:true}).waitFor();assert.deepEqual(errors,[]);await page.close();
+  await page.getByRole('button',{name:'Next',exact:true}).click();await page.getByText('No work recorded for this period.',{exact:true}).waitFor();
+  await page.getByRole('button',{name:'Plan',exact:true}).click();
+  assert.deepEqual(await page.locator('[data-plan-tab]').allTextContents(),['Timetable','Planned vs actual']);
+  assert.equal(await page.locator('[data-action=save-school-task],.tracker-block').count(),0);
+  await page.getByRole('button',{name:'Planned vs actual',exact:true}).click();
+  await page.getByText('As planned',{exact:true}).waitFor();
+  await page.locator('[data-comparison-date]').fill('2026-10-14');
+  assert.equal(await page.getByText('As planned',{exact:true}).count(),0);
+  await page.screenshot({path:path.join(root,`../work/plan-deviation-${width}.png`),fullPage:true});
+  assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
+  assert.deepEqual(errors,[]);await page.close();
  }
  console.log('PASS Today work/exam saves, refresh persistence and monthly reporting at mobile/desktop widths (mock backend).');
 }finally{await browser?.close();server.close();}})().catch(e=>{console.error(e);process.exitCode=1;});
